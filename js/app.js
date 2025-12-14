@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.4.2 (Full Features: Edit, History, Exchange View)
+// js/app.js - Versija 1.4.3 (Visible Notes Fix)
 
 let coinsList = [];
 let transactions = [];
@@ -8,7 +8,7 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.4.2");
+    console.log("App started v1.4.3");
     
     // Auth Listener
     _supabase.auth.onAuthStateChange((event, session) => {
@@ -186,7 +186,7 @@ async function fetchPriceForForm() {
     btn.innerText = oldText;
 }
 
-// --- RENDER JOURNAL (Updated for Exchange & Notes) ---
+// --- RENDER JOURNAL (Visible Notes) ---
 function renderJournal() {
     const tbody = document.getElementById('journal-body');
     if (!tbody) return;
@@ -209,18 +209,20 @@ function renderJournal() {
         
         // Elementai
         const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
-        const notesIcon = tx.notes ? `<i class="fa-regular fa-note-sticky text-primary-400 ml-1 cursor-help" title="${tx.notes}"></i>` : '';
         const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
+
+        // PASTABOS: Rodomos visada kaip tekstas
+        const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1 leading-tight"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
 
         row.innerHTML = `
             <td class="px-4 py-3 align-top border-b border-gray-800/30">
                 <div class="font-bold text-gray-200 text-sm flex items-center flex-wrap">
                     ${tx.coin_symbol} 
-                    ${notesIcon}
                     ${method}
                 </div>
                 ${exchangeName}
-                <div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>
+                <div class="text-[10px] text-gray-600 mt-0.5 mb-1">${dateStr}</div>
+                ${notesDisplay}
             </td>
             
             <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
