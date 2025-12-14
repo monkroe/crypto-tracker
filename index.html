@@ -32,7 +32,7 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-gray-950 text-gray-200 font-sans pb-32">
+<body class="bg-gray-950 text-gray-200 font-sans pb-10">
 
     <header class="fixed top-0 w-full bg-gray-900/95 backdrop-blur border-b border-gray-800 z-40 transition-all duration-300" id="main-header">
         <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
@@ -47,7 +47,7 @@
         </div>
     </header>
 
-    <main class="max-w-md mx-auto px-4 pt-20 space-y-5">
+    <main class="max-w-md mx-auto px-4 pt-20 space-y-5 min-h-screen">
 
         <section class="grid grid-cols-1 gap-4">
             <div class="bg-gray-900 rounded-2xl border border-gray-800 p-4 shadow-lg relative overflow-hidden">
@@ -108,11 +108,23 @@
             </div>
         </section>
 
-        <section class="text-center pt-2 pb-6">
+        <section class="text-center pt-2">
             <button onclick="document.getElementById('new-coin-modal').classList.remove('hidden')" class="text-[10px] text-gray-600 hover:text-gray-400 underline decoration-gray-700 underline-offset-4">
                 Missing a coin? Add it here.
             </button>
         </section>
+
+        <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
+            <p class="text-[11px] text-gray-500">
+                Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help
+            </p>
+            <p class="text-[10px] text-gray-600">
+                &copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.
+            </p>
+            <p class="text-[9px] font-mono text-gray-700 pt-1">
+                Version 1.0.0
+            </p>
+        </footer>
 
     </main>
 
@@ -186,6 +198,9 @@
     </div>
 
     <script>
+        // Automatinis metų atnaujinimas
+        document.getElementById('auto-year').textContent = new Date().getFullYear();
+
         // Modal logic (paprasta UI logika, kad veiktų iškart)
         function openModal() { document.getElementById('add-modal').classList.remove('hidden'); }
         function closeModal() { document.getElementById('add-modal').classList.add('hidden'); }
