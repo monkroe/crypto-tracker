@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.8 (Ištaisyta validacija ir datos formatavimas)
+// js/app.js - Versija 1.7.9 (Pilnas funkcijų atkūrimas)
 
-const APP_VERSION = '1.7.8';
+const APP_VERSION = '1.7.9';
 
 let coinsList = [];
 let transactions = [];
@@ -279,19 +279,23 @@ function updateDashboard() {
     const holdings = {};
     let totalInvested = 0;
     
+    // Apskaičiuojame turimus kiekius ir investuotą sumą
     transactions.forEach(tx => {
         if (!holdings[tx.coin_symbol]) {
             holdings[tx.coin_symbol] = { qty: 0, invested: 0 };
         }
         
+        const amount = Number(tx.amount);
+        const cost = Number(tx.total_cost_usd);
+
         if (tx.type === 'Buy') {
-            holdings[tx.coin_symbol].qty += Number(tx.amount);
-            holdings[tx.coin_symbol].invested += Number(tx.total_cost_usd);
-            totalInvested += Number(tx.total_cost_usd);
+            holdings[tx.coin_symbol].qty += amount;
+            holdings[tx.coin_symbol].invested += cost;
+            totalInvested += cost;
         } else {
-            holdings[tx.coin_symbol].qty -= Number(tx.amount);
-            holdings[tx.coin_symbol].invested -= Number(tx.total_cost_usd);
-            totalInvested -= Number(tx.total_cost_usd);
+            holdings[tx.coin_symbol].qty -= amount;
+            holdings[tx.coin_symbol].invested -= cost;
+            totalInvested -= cost;
         }
     });
     
@@ -330,7 +334,10 @@ function populateCoinSelect(holdings) {
     const deleteSelect = document.getElementById('delete-coin-select');
     if (!select || !deleteSelect) return;
     
+    // Transakcijos pasirinkimo laukas
     select.innerHTML = '';
+    
+    // Trinimo pasirinkimo laukas
     deleteSelect.innerHTML = '<option value="">-- Pasirinkite --</option>';
 
     if (coinsList.length === 0) {
@@ -486,7 +493,6 @@ async function handleTxSubmit(e) {
     const dStr = document.getElementById('tx-date-input').value; 
     const tStr = document.getElementById('tx-time-input').value || '00:00'; 
     
-    // **PATAISYTA VALIDACIJA**: Patikrina ne tik NaN, bet ir neleidžia 0 reikšmių kritiniuose laukuose
     const amount = parseFloat(rawAmount);
     const price = parseFloat(rawPrice);
     const total = parseFloat(rawTotal);
@@ -509,7 +515,7 @@ async function handleTxSubmit(e) {
         exchange: document.getElementById('tx-exchange').value || null,
         method: document.getElementById('tx-method').value,
         notes: document.getElementById('tx-notes').value || null,
-        amount: amount, // Naudojame jau konvertuotas reikšmes
+        amount: amount, 
         price_per_coin: price,
         total_cost_usd: total
     };
