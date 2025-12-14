@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.3.3 (Su Validacija ir Klaidų Pranešimais)
+// js/app.js - Versija 1.3.6 (Skaičiuotuvas veikia į abi puses)
 
 let coinsList = [];
 let transactions = [];
@@ -8,17 +8,15 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.3.3");
+    console.log("App started v1.3.6");
 
-    // AUTH LISTENER: Tai yra pagrindinis "sargas"
+    // AUTH LISTENER
     _supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
-            // Vartotojas prisijungė
             document.getElementById('auth-screen').classList.add('hidden');
             document.getElementById('app-content').classList.remove('hidden');
             loadAllData();
         } else {
-            // Vartotojas atsijungė
             document.getElementById('auth-screen').classList.remove('hidden');
             document.getElementById('app-content').classList.add('hidden');
             clearData();
@@ -26,25 +24,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     setupAuthHandlers();
-    setupCalculator();
-    setupAppListeners();
+    setupAppListeners(); // Čia dabar įjungiamas ir skaičiuotuvas
 });
 
-// --- AUTH HANDLERS (SU VALIDACIJA) ---
+// --- AUTH HANDLERS ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
     const errText = document.getElementById('auth-error');
 
-    // Pagalbinė funkcija patikrinimui
     function validateInputs() {
         const email = emailInput.value.trim();
         const pass = passInput.value.trim();
-        
         if (!email || !pass) {
             errText.textContent = "⚠️ Prašome įvesti el. paštą ir slaptažodį.";
             errText.classList.remove('hidden');
-            // Pridedame raudoną rėmelį laikinai
             emailInput.classList.add('border-red-500');
             passInput.classList.add('border-red-500');
             setTimeout(() => {
@@ -56,20 +50,15 @@ function setupAuthHandlers() {
         return true;
     }
 
-    // PRISIJUNGIMAS (LOGIN)
     document.getElementById('btn-login').addEventListener('click', async () => {
         if (!validateInputs()) return;
-
         const btn = document.getElementById('btn-login');
         const originalText = btn.innerText;
-        
         try {
             errText.classList.add('hidden');
             btn.innerText = "Jungiama...";
             btn.disabled = true;
-            
             await userLogin(emailInput.value, passInput.value);
-            // Jei pavyko, onAuthStateChange viską sutvarkys
         } catch (e) {
             errText.textContent = "Klaida: " + e.message;
             errText.classList.remove('hidden');
@@ -78,18 +67,14 @@ function setupAuthHandlers() {
         }
     });
 
-    // REGISTRACIJA (SIGN UP)
     document.getElementById('btn-signup').addEventListener('click', async () => {
         if (!validateInputs()) return;
-
         const btn = document.getElementById('btn-signup');
         const originalText = btn.innerText;
-
         try {
             errText.classList.add('hidden');
             btn.innerText = "Registruojama...";
             btn.disabled = true;
-
             await userSignUp(emailInput.value, passInput.value);
             alert("Registracija sėkminga! Sistema jus prijungia...");
         } catch (e) {
@@ -100,7 +85,6 @@ function setupAuthHandlers() {
         }
     });
 
-    // ATSIJUNGIMAS (LOGOUT)
     document.getElementById('btn-logout').addEventListener('click', async () => {
         await userSignOut();
     });
@@ -117,13 +101,72 @@ function clearData() {
 function setupAppListeners() {
     const form = document.getElementById('add-tx-form');
     if (form) {
+        // Klonuojame formą, kad išvalytume senus listenerius
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
+        
+        // Prijungiame Submit funkciją
         newForm.addEventListener('submit', handleTxSubmit);
+
+        // SVARBU: Iš naujo prijungiame skaičiuotuvą prie naujos formos!
+        setupCalculator();
     }
+
+    // Kiti mygtukai
+    const btnSaveCoin = document.getElementById('btn-save-coin');
+    const btnDelCoin = document.getElementById('btn-delete-coin');
+    const btnFetch = document.getElementById('btn-fetch-price');
+
+    // Nuimame senus listenerius (jei būtų) ir dedame naujus, naudojant klonavimo triuką arba paprastai
+    // Čia paprastai, nes šie mygtukai nesikeičia
+    btnSaveCoin.replaceWith(btnSaveCoin.cloneNode(true));
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
+
+    btnDelCoin.replaceWith(btnDelCoin.cloneNode(true));
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
+
+    btnFetch.replaceWith(btnFetch.cloneNode(true));
     document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
+}
+
+// --- SKAIČIUOTUVAS (The Brains) ---
+function setupCalculator() {
+    const amountIn = document.getElementById('tx-amount');
+    const priceIn = document.getElementById('tx-price');
+    const totalIn = document.getElementById('tx-total');
+    
+    if (!amountIn || !priceIn || !totalIn) return;
+    
+    // 1. Jei keičiamas Kiekis (Amount) arba Kaina (Price) -> Skaičiuojame Total
+    function calculateTotal() {
+        const amount = parseFloat(amountIn.value);
+        const price = parseFloat(priceIn.value);
+        
+        if (!isNaN(amount) && !isNaN(price)) {
+            const total = amount * price;
+            // Rodo 2 skaičius po kablelio, bet nenaudojame toFixed, kad liktų skaičius inpute
+            totalIn.value = Math.round(total * 100) / 100; 
+        }
+    }
+    
+    // 2. Jei keičiama Suma (Total Cost) -> Skaičiuojame Kiekį (Amount)
+    function calculateAmount() {
+        const total = parseFloat(totalIn.value);
+        const price = parseFloat(priceIn.value);
+        
+        if (!isNaN(total) && !isNaN(price) && price !== 0) {
+            const amount = total / price;
+            // Kiekį rodome tiksliau (pvz. 6 skaičiai po kablelio)
+            amountIn.value = parseFloat(amount.toFixed(6));
+        }
+    }
+
+    // Prijungiame logiką
+    amountIn.addEventListener('input', calculateTotal);
+    priceIn.addEventListener('input', calculateTotal); // Keičiant kainą, keičiasi total (pagal amount)
+    
+    // Jei vartotojas pats įrašo Total Cost, mes perskaičiuojame Amount
+    totalIn.addEventListener('input', calculateAmount);
 }
 
 // --- DATA LOADING ---
@@ -182,7 +225,10 @@ async function fetchLivePriceForForm() {
         
         const priceInput = document.getElementById('tx-price');
         priceInput.value = price;
+        
+        // Iššaukiame įvykį, kad suveiktų skaičiuotuvas
         priceInput.dispatchEvent(new Event('input'));
+        
     } catch (e) { alert("Busy. Try later."); }
     btn.innerText = oldText;
 }
@@ -344,29 +390,6 @@ function renderChart(invested, current) {
         data: { labels: ['Invested', 'Current'], datasets: [{ data: [invested, current], borderColor: '#2dd4bf', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#1f2937', pointBorderColor: '#2dd4bf' }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
     });
-}
-
-function setupCalculator() {
-    const amountIn = document.getElementById('tx-amount');
-    const priceIn = document.getElementById('tx-price');
-    const totalIn = document.getElementById('tx-total');
-    if (!amountIn) return;
-    
-    function updateTotal() {
-        const a = parseFloat(amountIn.value);
-        const p = parseFloat(priceIn.value);
-        if (!isNaN(a) && !isNaN(p)) totalIn.value = (a * p).toFixed(2);
-    }
-    
-    function updateAmount() {
-        const t = parseFloat(totalIn.value);
-        const p = parseFloat(priceIn.value);
-        if (!isNaN(t) && !isNaN(p) && p !== 0) amountIn.value = (t / p).toFixed(6);
-    }
-    
-    amountIn.addEventListener('input', updateTotal);
-    priceIn.addEventListener('input', updateTotal);
-    totalIn.addEventListener('input', updateAmount);
 }
 
 async function handleTxSubmit(e) {
