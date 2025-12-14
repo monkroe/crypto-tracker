@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.3.0 (Fix Save & Types)
+// js/app.js - Versija 1.3.0 (Fixed Calc & Types)
 
 let coinsList = [];
 let transactions = [];
@@ -12,10 +12,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAllData();
     setupCalculator();
     
-    // Listeners
+    // Listeners (Klausikliai)
     const form = document.getElementById('add-tx-form');
     if (form) {
-        // Pašaliname senus listenerius (dėl visa ko) ir dedame naują
+        // Pašaliname senus listenerius ir dedame naują
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
@@ -245,63 +245,67 @@ function setupCalculator() {
     const priceIn = document.getElementById('tx-price');
     const totalIn = document.getElementById('tx-total');
     if (!amountIn) return;
+    
+    // Keičiant Amount arba Price -> Skaičiuojame Total
     function updateTotal() {
         const a = parseFloat(amountIn.value);
         const p = parseFloat(priceIn.value);
         if (!isNaN(a) && !isNaN(p)) totalIn.value = (a * p).toFixed(2);
     }
+    
+    // Keičiant Total -> Skaičiuojame Amount (SVARBU!)
     function updateAmount() {
         const t = parseFloat(totalIn.value);
         const p = parseFloat(priceIn.value);
         if (!isNaN(t) && !isNaN(p) && p !== 0) amountIn.value = (t / p).toFixed(6);
     }
+    
     amountIn.addEventListener('input', updateTotal);
     priceIn.addEventListener('input', updateTotal);
-    totalIn.addEventListener('input', updateAmount);
+    totalIn.addEventListener('input', updateAmount); // 'input' užtikrina, kad veikia iškart rašant
 }
 
-// --- SAVE TRANSACTION HANDLER ---
+// HANDLERS
 async function handleTxSubmit(e) {
-    e.preventDefault(); // Sustabdyti formos perkrovimą
+    e.preventDefault();
     const btn = document.getElementById('btn-save');
     const originalText = btn.innerHTML;
     btn.innerHTML = 'Saving...';
     btn.disabled = true;
 
-    // 1. Paimame reikšmes
+    // 1. Paimame duomenis
     const rawAmount = document.getElementById('tx-amount').value;
     const rawPrice = document.getElementById('tx-price').value;
     const rawTotal = document.getElementById('tx-total').value;
 
-    // 2. Konvertuojame į skaičius (BŪTINA SUPABASE)
+    // 2. Konvertuojame į skaičius (BŪTINA!)
     const txData = {
         date: document.getElementById('tx-date').value,
         type: document.getElementById('tx-type').value,
         coin_symbol: document.getElementById('tx-coin').value,
         exchange: document.getElementById('tx-exchange').value,
-        amount: parseFloat(rawAmount),          // <--- Čia buvo problema?
-        price_per_coin: parseFloat(rawPrice),   // <--- Priverstinis skaičius
-        total_cost_usd: parseFloat(rawTotal)    // <--- Priverstinis skaičius
+        amount: parseFloat(rawAmount),
+        price_per_coin: parseFloat(rawPrice),
+        total_cost_usd: parseFloat(rawTotal)
     };
 
-    // 3. Patikriname, ar skaičiai teisingi
+    // 3. Patikriname
     if (isNaN(txData.amount) || isNaN(txData.price_per_coin)) {
-        alert("Prašome įvesti teisingus skaičius!");
+        alert("Klaida: Netinkami skaičiai.");
         btn.innerHTML = originalText;
         btn.disabled = false;
         return;
     }
 
     const success = await saveTransaction(txData);
+    if (success) { 
+        closeModal('add-modal'); 
+        e.target.reset(); 
+        document.getElementById('tx-date').valueAsDate = new Date(); 
+        await loadAllData(); 
+    } 
+    // Jei nesėkmė - supabase.js parodys alert su priežastimi
     
-    if (success) {
-        closeModal('add-modal');
-        e.target.reset();
-        document.getElementById('tx-date').valueAsDate = new Date();
-        await loadAllData();
-    }
-    // Jei nesėkmė - alert bus parodytas iš supabase.js
-
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
