@@ -1,22 +1,28 @@
-// js/app.js - Versija 1.2.0 (Delete Coin Feature)
+// js/app.js - Versija 1.3.0 (Fix Save & Types)
 
 let coinsList = [];
 let transactions = [];
 let goals = [];
 let prices = {};
 let myChart = null;
-
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.2.0");
+    console.log("App started v1.3.0");
     await loadAllData();
     setupCalculator();
     
-    // Mygtukai
-    document.getElementById('add-tx-form').addEventListener('submit', handleTxSubmit);
+    // Listeners
+    const form = document.getElementById('add-tx-form');
+    if (form) {
+        // Pašaliname senus listenerius (dėl visa ko) ir dedame naują
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        newForm.addEventListener('submit', handleTxSubmit);
+    }
+
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
-    document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit); // Naujas!
+    document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
     document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
 });
 
@@ -38,8 +44,8 @@ async function loadAllData() {
         await fetchPrices();
         const holdings = updateDashboard();
         
-        populateCoinSelect(holdings);     // "Add Transaction" sąrašas
-        populateDeleteSelect();           // "Delete Coin" sąrašas (Naujas)
+        populateCoinSelect(holdings);
+        populateDeleteSelect();
         renderJournal();
 
     } catch (e) {
@@ -72,6 +78,7 @@ async function fetchLivePriceForForm() {
         const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
         const data = await res.json();
         const price = data[coin.coingecko_id].usd;
+        
         const priceInput = document.getElementById('tx-price');
         priceInput.value = price;
         priceInput.dispatchEvent(new Event('input'));
@@ -79,7 +86,7 @@ async function fetchLivePriceForForm() {
     btn.innerText = oldText;
 }
 
-// UI HELPERS
+// UI & FORMATTING
 function formatMoney(amount) {
     const num = Number(amount);
     if (num === 0) return '$0.00';
@@ -115,15 +122,11 @@ function populateCoinSelect(holdings = {}) {
     if (currentVal) select.value = currentVal;
 }
 
-// NAUJA: Užpildo trynimo sąrašą tik abėcėlės tvarka
 function populateDeleteSelect() {
     const select = document.getElementById('delete-coin-select');
     if (!select) return;
     select.innerHTML = '';
-    
-    // Rūšiuojame paprastai
     const sorted = [...coinsList].sort((a, b) => a.symbol.localeCompare(b.symbol));
-    
     sorted.forEach(coin => {
         const option = document.createElement('option');
         option.value = coin.symbol;
@@ -257,25 +260,48 @@ function setupCalculator() {
     totalIn.addEventListener('input', updateAmount);
 }
 
-// HANDLERS
+// --- SAVE TRANSACTION HANDLER ---
 async function handleTxSubmit(e) {
-    e.preventDefault();
+    e.preventDefault(); // Sustabdyti formos perkrovimą
     const btn = document.getElementById('btn-save');
     const originalText = btn.innerHTML;
     btn.innerHTML = 'Saving...';
     btn.disabled = true;
+
+    // 1. Paimame reikšmes
+    const rawAmount = document.getElementById('tx-amount').value;
+    const rawPrice = document.getElementById('tx-price').value;
+    const rawTotal = document.getElementById('tx-total').value;
+
+    // 2. Konvertuojame į skaičius (BŪTINA SUPABASE)
     const txData = {
         date: document.getElementById('tx-date').value,
         type: document.getElementById('tx-type').value,
         coin_symbol: document.getElementById('tx-coin').value,
         exchange: document.getElementById('tx-exchange').value,
-        amount: document.getElementById('tx-amount').value,
-        price_per_coin: document.getElementById('tx-price').value,
-        total_cost_usd: document.getElementById('tx-total').value
+        amount: parseFloat(rawAmount),          // <--- Čia buvo problema?
+        price_per_coin: parseFloat(rawPrice),   // <--- Priverstinis skaičius
+        total_cost_usd: parseFloat(rawTotal)    // <--- Priverstinis skaičius
     };
+
+    // 3. Patikriname, ar skaičiai teisingi
+    if (isNaN(txData.amount) || isNaN(txData.price_per_coin)) {
+        alert("Prašome įvesti teisingus skaičius!");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
+    }
+
     const success = await saveTransaction(txData);
-    if (success) { closeModal('add-modal'); e.target.reset(); document.getElementById('tx-date').valueAsDate = new Date(); await loadAllData(); } 
-    else { alert("Save failed. Check Supabase Policies!"); }
+    
+    if (success) {
+        closeModal('add-modal');
+        e.target.reset();
+        document.getElementById('tx-date').valueAsDate = new Date();
+        await loadAllData();
+    }
+    // Jei nesėkmė - alert bus parodytas iš supabase.js
+
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
@@ -289,21 +315,16 @@ async function handleNewCoinSubmit() {
     await loadAllData();
 }
 
-// NAUJA: Trynimo logika
 async function handleDeleteCoinSubmit() {
     const sym = document.getElementById('delete-coin-select').value;
     if (!sym) return;
     if (!confirm(`Are you sure you want to delete ${sym}?`)) return;
-
     const btn = document.getElementById('btn-delete-coin');
     btn.innerText = "Deleting...";
-    
     const success = await deleteSupportedCoin(sym);
     if (success) {
         closeModal('delete-coin-modal');
         await loadAllData();
-    } else {
-        alert("Failed to delete coin.");
     }
     btn.innerText = "Delete";
 }
