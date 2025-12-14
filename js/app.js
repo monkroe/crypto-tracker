@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.6.4 (Fix: Delete Goal with Coin)
+// js/app.js - Versija 1.6.6 (Auto-Calculate Price from Amount & Total)
 
-const APP_VERSION = '1.6.4';
+const APP_VERSION = '1.6.6';
 
 let coinsList = [];
 let transactions = [];
@@ -94,7 +94,7 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
-// --- SKAIČIUOTUVAS ---
+// --- SKAIČIUOTUVAS (PATAISYTA LOGIKA) ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -107,33 +107,51 @@ function setupCalculator() {
         return isNaN(v) ? 0 : v;
     };
 
-    // 1. Keičiant KIEKĮ
+    // 1. Keičiant KIEKĮ (Amount)
     amountIn.addEventListener('input', () => {
         const a = val(amountIn);
         const p = val(priceIn);
         const t = val(totalIn);
-        if (p > 0) totalIn.value = (a * p).toFixed(2);
-        else if (t > 0 && a > 0) priceIn.value = (t / a).toFixed(8);
+
+        // Jei kaina tuščia (0), bet turime Sumą -> Skaičiuojame Kainą (JŪSŲ PRAŠYMAS)
+        if (p === 0 && t > 0 && a > 0) {
+            priceIn.value = (t / a).toFixed(8);
+        }
+        // Jei kaina yra -> Skaičiuojame Sumą
+        else if (p > 0) {
+            totalIn.value = (a * p).toFixed(2);
+        }
     });
 
-    // 2. Keičiant KAINĄ
+    // 2. Keičiant KAINĄ (Price)
     priceIn.addEventListener('input', () => {
         const p = val(priceIn);
         const a = val(amountIn);
         const t = val(totalIn);
-        if (a > 0) totalIn.value = (a * p).toFixed(2);
-        else if (t > 0 && p > 0) amountIn.value = (t / p).toFixed(6);
+        
+        // Jei turime Sumą -> Perskaičiuojame Kiekį (išlaikome fiksuotą biudžetą)
+        if (t > 0 && p > 0) {
+            amountIn.value = (t / p).toFixed(6);
+        }
+        // Jei neturime Sumos, bet turime Kiekį -> Skaičiuojame Sumą
+        else if (a > 0) {
+             totalIn.value = (a * p).toFixed(2);
+        }
     });
 
-    // 3. Keičiant SUMĄ
+    // 3. Keičiant SUMĄ (Total Cost)
     totalIn.addEventListener('input', () => {
         const t = val(totalIn);
         const p = val(priceIn);
         const a = val(amountIn);
-        if (p > 0) {
-            amountIn.value = (t / p).toFixed(6);
-        } else if (a > 0) {
+        
+        // Jei kaina tuščia (0), bet turime Kiekį -> Skaičiuojame Kainą
+        if (p === 0 && a > 0 && t > 0) {
             priceIn.value = (t / a).toFixed(8);
+        }
+        // Jei kaina yra -> Skaičiuojame Kiekį (Standartinis pirkimas už sumą)
+        else if (p > 0) {
+            amountIn.value = (t / p).toFixed(6);
         }
     });
 }
@@ -290,6 +308,7 @@ async function fetchPriceForForm() {
         if (price > 0) {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
+            // TRIGGER INPUT TO RECALCULATE
             priceInput.dispatchEvent(new Event('input'));
         }
     } catch (e) { console.error(e); alert("Nepavyko gauti kainos."); }
@@ -349,7 +368,6 @@ async function handleTxSubmit(e) {
     btn.innerText = oldText; btn.disabled = false;
 }
 
-// --- PAKEITIMAS ČIA: TRYNIMAS SU TIKSLU ---
 async function handleDeleteCoinSubmit() {
     const select = document.getElementById('delete-coin-select');
     const sym = select.value;
@@ -358,23 +376,10 @@ async function handleDeleteCoinSubmit() {
     if (confirm(`Ar tikrai norite ištrinti ${sym}? Tai panaikins ir šios monetos tikslus.`)) {
         const { data: { user } } = await _supabase.auth.getUser();
         if (user) {
-            // 1. Ištriname iš "Supported Coins" (Tai darėme ir anksčiau)
             await deleteSupportedCoin(sym);
-            
-            // 2. NAUJA: Ištriname ir iš "Crypto Goals"
-            await _supabase.from('crypto_goals').delete()
-                .eq('user_id', user.id)
-                .eq('coin_symbol', sym);
+            await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
         }
         closeModal('delete-coin-modal');
         await loadAllData();
     }
 }
-
-// ... Kitos pagalbinės funkcijos lieka tokios pat ...
-function updateDashboard() { let holdings = {}; let totalInvested = 0; transactions.forEach(tx => { if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = 0; const amt = Number(tx.amount); const cost = Number(tx.total_cost_usd); if (tx.type === 'Buy') { holdings[tx.coin_symbol] += amt; totalInvested += cost; } else { holdings[tx.coin_symbol] -= amt; totalInvested -= cost; } }); let currentVal = 0; for (const [symbol, amount] of Object.entries(holdings)) { if (amount <= 0.0000001) continue; const coin = coinsList.find(c => c.symbol === symbol); if (coin && prices[coin.coingecko_id]) currentVal += amount * prices[coin.coingecko_id].usd; } document.getElementById('header-total-value').innerText = formatMoney(currentVal); const pnl = currentVal - totalInvested; const pnlEl = document.getElementById('total-pnl'); const pnlPercEl = document.getElementById('total-pnl-percent'); if (pnlEl) { pnlEl.innerText = `${pnl >= 0 ? '+' : ''}${formatMoney(pnl)}`; pnlEl.className = `text-2xl font-bold ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`; } if (pnlPercEl) { let percent = totalInvested > 0 ? (pnl / totalInvested * 100) : 0; pnlPercEl.innerText = `${percent.toFixed(2)}%`; pnlPercEl.className = `text-xs font-bold px-2 py-0.5 rounded bg-gray-800 ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`; } renderGoals(holdings); return holdings; }
-function renderGoals(holdings) { const container = document.getElementById('goals-container'); const section = document.getElementById('goals-section'); if (!container || !section) return; container.innerHTML = ''; if (goals.length === 0) { section.classList.add('hidden'); return; } section.classList.remove('hidden'); goals.forEach(goal => { const current = holdings[goal.coin_symbol] || 0; const target = Number(goal.target_amount); if (target <= 0) return; const pct = Math.min(100, (current / target) * 100); const div = document.createElement('div'); div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl'; div.innerHTML = `<div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-300">${goal.coin_symbol}</span><span class="text-primary-400 font-bold">${pct.toFixed(1)}%</span></div><div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden"><div class="bg-primary-500 h-1.5 rounded-full" style="width: ${pct}%"></div></div><div class="text-[9px] text-gray-500 mt-1 text-right font-mono">${current.toLocaleString()} / ${target.toLocaleString()}</div>`; container.appendChild(div); }); }
-function formatMoney(amount) { const num = Number(amount); if (num === 0) return '$0.00'; if (num < 1 && num > -1) return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 8 }); return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function populateCoinSelect(holdings = {}) { const select = document.getElementById('tx-coin'); if (!select) return; const currentVal = select.value; select.innerHTML = ''; const sortedCoins = [...coinsList].sort((a, b) => a.symbol.localeCompare(b.symbol)); sortedCoins.forEach(coin => { const option = document.createElement('option'); option.value = coin.symbol; const hasBalance = (holdings[coin.symbol] || 0) > 0; option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol; select.appendChild(option); }); if (currentVal) select.value = currentVal; }
-function populateDeleteSelect() { const select = document.getElementById('delete-coin-select'); if (!select) return; select.innerHTML = ''; coinsList.forEach(c => { const o = document.createElement('option'); o.value = c.symbol; o.textContent = c.symbol; select.appendChild(o); }); }
-async function handleNewCoinSubmit() { const sym = document.getElementById('new-coin-symbol').value.toUpperCase(); const id = document.getElementById('new-coin-id').value.toLowerCase(); const target = document.getElementById('new-coin-target').value; if (!sym || !id) return; await saveNewCoin({ symbol: sym, coingecko_id: id, name: sym }); if (target) { const { data: { user } } = await _supabase.auth.getUser(); await _supabase.from('crypto_goals').upsert({ user_id: user.id, coin_symbol: sym, target_amount: Number(target) }, { onConflict: 'user_id, coin_symbol' }); } closeModal('new-coin-modal'); await loadAllData(); }
