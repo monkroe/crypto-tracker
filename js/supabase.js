@@ -1,192 +1,272 @@
-// js/supabase.js - Versija 1.7.5 (Pilna Auth & Data Manager)
+// js/supabase.js - Versija 1.7.6
 
-// ⚠️ SVARBU: Pakeiskite šias reikšmes savo Supabase projekto duomenimis!
+// ======================================
+// 1. SUPABASE KONFIGŪRACIJA
+// ======================================
+// Pakeiskite šiuos duomenis savo projekto raktais!
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
-const SUPABASE_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
+const SUPABASE_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW'; 
 
-// Inicijuojame klientą ir padarome jį pasiekiamą visur (globaliai)
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ==========================================
-// 1. AUTH FUNKCIJOS
-// ==========================================
+// ======================================
+// 2. AUTENTIFIKACIJOS FUNKCIJOS
+// ======================================
 
 async function userSignUp(email, password) {
-    try {
-        const { data, error } = await _supabase.auth.signUp({ email, password });
-        if (error) throw new Error(error.message || 'Registracija nepavyko.');
-        return { data, error: null };
-    } catch (error) {
-        return { data: null, error: error };
-    }
+    return _supabase.auth.signUp({
+        email,
+        password,
+    });
 }
 
 async function userLogin(email, password) {
-    try {
-        const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(error.message || 'Prisijungti nepavyko. Patikrinkite duomenis.');
-        return { data, error: null };
-    } catch (error) {
-        return { data: null, error: error };
-    }
+    return _supabase.auth.signInWithPassword({
+        email,
+        password,
+    });
 }
 
 async function userSignOut() {
     const { error } = await _supabase.auth.signOut();
-    return { error };
+    if (error) {
+        console.error("Logout error:", error);
+    }
 }
 
-// ==========================================
-// 2. DUOMENŲ FUNKCIJOS (CRUD)
-// ==========================================
+
+// ======================================
+// 3. DUOMENŲ FUNKCIJOS (CRUD)
+// ======================================
 
 // --- TRANSAKCIJOS ---
 
 async function getTransactions() {
-    try {
-        const { data: { user } } = await _supabase.auth.getUser();
-        if (!user) return [];
-
-        const { data, error } = await _supabase
-            .from('crypto_transactions')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('date', { ascending: false });
+    const { data: { user } } = await _supabase.auth.getUser();
+    if (!user) return [];
+    
+    const { data, error } = await _supabase
+        .from('crypto_transactions')
+        .select('*')
+        .eq('user_id', user.id);
         
-        if (error) {
-            console.error("Get Tx Error:", error);
-            // Jei RLS klaida, grąžiname tuščią masyvą, o ne null, kad nelūžtų app.js
-            return []; 
-        }
-        return data || [];
-    } catch (e) {
-        console.error("Unexpected error in getTransactions:", e);
+    if (error) {
+        console.error("Error fetching transactions:", error);
         return [];
     }
+    return data;
 }
 
 async function saveTransaction(txData) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
-    
-    const dataWithUser = { ...txData, user_id: user.id };
-
-    const { error } = await _supabase.from('crypto_transactions').insert([dataWithUser]);
-    if (error) { alert("KLAIDA ĮRAŠANT: " + error.message); console.error("Save Error:", error); return false; }
-    return true;
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
+        
+        const dataWithUser = { ...txData, user_id: user.id };
+        
+        const { error } = await _supabase
+            .from('crypto_transactions')
+            .insert([dataWithUser]);
+            
+        if (error) {
+            alert("KLAIDA ĮRAŠANT TRANSAKCIJĄ: " + error.message);
+            console.error("Save Tx Error:", error);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error("Unexpected error in saveTransaction:", e);
+        return false;
+    }
 }
 
 async function updateTransaction(id, txData) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
-
-    const { error } = await _supabase
-        .from('crypto_transactions')
-        .update(txData)
-        .eq('id', id)
-        .eq('user_id', user.id);
-
-    if (error) { alert("KLAIDA ATNAUJINANT: " + error.message); return false; }
-    return true;
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
+        
+        const { error } = await _supabase
+            .from('crypto_transactions')
+            .update(txData)
+            .eq('id', id)
+            .eq('user_id', user.id); // Saugumas
+            
+        if (error) {
+            alert("KLAIDA ATNAUJINANT TRANSAKCIJĄ: " + error.message);
+            console.error("Update Tx Error:", error);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error("Unexpected error in updateTransaction:", e);
+        return false;
+    }
 }
 
 async function deleteTransaction(id) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return false;
-
-    const { error } = await _supabase
-        .from('crypto_transactions')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
-    
-    if (error) { alert("KLAIDA TRINANT: " + error.message); return false; }
-    return true;
-}
-
-// --- MONETOS ---
-
-async function getSupportedCoins() {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
-        if (!user) return [];
-
-        const { data, error } = await _supabase
-            .from('supported_coins')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('symbol', { ascending: true });
+        if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
         
+        const { error } = await _supabase
+            .from('crypto_transactions')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', user.id); // Saugumas
+            
         if (error) {
-            console.error("Get Coins Error:", error);
-            return [];
+            alert("KLAIDA TRINANT TRANSAKCIJĄ: " + error.message);
+            console.error("Delete Tx Error:", error);
+            return false;
         }
-        return data || [];
+        return true;
     } catch (e) {
-        console.error("Unexpected error in getSupportedCoins:", e);
+        console.error("Unexpected error in deleteTransaction:", e);
+        return false;
+    }
+}
+
+
+// --- MONETŲ SĄRAŠAS ---
+
+async function getSupportedCoins() {
+    const { data: { user } } = await _supabase.auth.getUser();
+    if (!user) return [];
+    
+    const { data, error } = await _supabase
+        .from('supported_coins')
+        .select('*')
+        .eq('user_id', user.id);
+        
+    if (error) {
+        console.error("Error fetching supported coins:", error);
         return [];
     }
+    return data;
 }
 
 async function saveNewCoin(coinData) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
 
-    const dataWithUser = { ...coinData, user_id: user.id };
-    const { error } = await _supabase.from('supported_coins').insert([dataWithUser]);
-    
-    if (error) {
-        alert("KLAIDA (New Coin): " + error.message);
+        const dataWithUser = { ...coinData, user_id: user.id };
+        
+        const { error } = await _supabase
+            .from('supported_coins')
+            .insert([dataWithUser]);
+            
+        if (error) {
+            alert("KLAIDA ĮRAŠANT MONETĄ: " + error.message);
+            console.error("Save Coin Error:", error);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error("Unexpected error in saveNewCoin:", e);
         return false;
     }
-    return true;
 }
 
 async function deleteSupportedCoin(symbol) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return false;
-
-    const { error } = await _supabase
-        .from('supported_coins')
-        .delete()
-        .eq('symbol', symbol)
-        .eq('user_id', user.id); 
-
-    if (error) { alert("KLAIDA (Delete Coin): " + error.message); return false; }
-    return true;
-}
-
-// --- TIKSLAMS ---
-
-async function getCryptoGoals() {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
-        if (!user) return [];
+        if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
+        
+        const { error } = await _supabase
+            .from('supported_coins')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('symbol', symbol); 
 
-        const { data, error } = await _supabase
-            .from('crypto_goals')
-            .select('*')
-            .eq('user_id', user.id);
-            
         if (error) {
-            console.error("Goals Error:", error);
-            return [];
+            alert("KLAIDA TRINANT MONETĄ: " + error.message);
+            console.error("Delete Coin Error:", error);
+            return false;
         }
-        return data || [];
+        return true;
     } catch (e) {
-        console.error("Unexpected error in getCryptoGoals:", e);
-        return [];
+        console.error("Unexpected error in deleteSupportedCoin:", e);
+        return false;
     }
 }
 
-async function saveOrUpdateGoal(coinSymbol, targetAmount) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return false;
 
-    const { error } = await _supabase
-        .from('crypto_goals')
-        .upsert({ user_id: user.id, coin_symbol: coinSymbol, target_amount: targetAmount }, { onConflict: 'user_id, coin_symbol' });
+// --- TIKSLAI (GOALS) ---
+
+async function getCryptoGoals() {
+    const { data: { user } } = await _supabase.auth.getUser();
+    if (!user) return [];
     
-    if (error) { alert("KLAIDA (Save Goal): " + error.message); return false; }
-    return true;
+    const { data, error } = await _supabase
+        .from('crypto_goals')
+        .select('*')
+        .eq('user_id', user.id);
+        
+    if (error) {
+        console.error("Error fetching goals:", error);
+        return [];
+    }
+    return data;
+}
+
+async function saveOrUpdateGoal(symbol, target) {
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
+        
+        const goalData = {
+            coin_symbol: symbol,
+            target_amount: target,
+            user_id: user.id
+        };
+
+        const { error } = await _supabase
+            .from('crypto_goals')
+            .upsert(goalData, { onConflict: 'user_id, coin_symbol' }); // Atnaujina, jei egzistuoja
+            
+        if (error) {
+            alert("KLAIDA ĮRAŠANT/ATNAUJINANT TIKSLĄ: " + error.message);
+            console.error("Goal Upsert Error:", error);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error("Unexpected error in saveOrUpdateGoal:", e);
+        return false;
+    }
+}
+
+
+// --- ISTORINĖS KAINOS (NAUJA) ---
+async function saveHistoricalPrice(historyData) {
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) { 
+            alert("Klaida: Vartotojas neprisijungęs."); 
+            return false; 
+        }
+
+        const dataWithUser = { 
+            ...historyData, 
+            user_id: user.id 
+        };
+
+        const { error } = await _supabase
+            .from('crypto_history')
+            .insert([dataWithUser]);
+
+        if (error) {
+            // Unikalumo klaida reiškia, kad jau yra įrašas (tai nėra kritinė klaida)
+            if (error.code !== '23505') { 
+                alert("KLAIDA ĮRAŠANT ISTORINĘ KAINĄ: " + error.message);
+            }
+            console.error("Save History Error:", error);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error("Unexpected error in saveHistoricalPrice:", e);
+        return false;
+    }
 }
