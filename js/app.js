@@ -1,6 +1,4 @@
-// js/app.js - Versija 1.7.2 (Data Access Consistency Fix)
-
-const APP_VERSION = '1.7.2';
+// js/app.js - Versija 1.3.7 (Tri-way Calculator & Methods)
 
 let coinsList = [];
 let transactions = [];
@@ -10,26 +8,16 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // ... (AUTH ir UI HELPERS dalis nepasikeitė)
-    console.log(`App started v${APP_VERSION}`);
-    const versionEl = document.getElementById('app-version');
-    if (versionEl) versionEl.innerText = APP_VERSION;
-    
-    // Check Session
-    const { data: { session } } = await _supabase.auth.getSession();
-    if (session) {
-        showAppScreen();
-        loadAllData();
-    } else {
-        showAuthScreen();
-    }
+    console.log("App started v1.3.7");
 
     _supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            showAppScreen();
-            if (transactions.length === 0) loadAllData();
-        } else if (event === 'SIGNED_OUT') {
-            showAuthScreen();
+        if (session) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-content').classList.remove('hidden');
+            loadAllData();
+        } else {
+            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('app-content').classList.add('hidden');
             clearData();
         }
     });
@@ -38,71 +26,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// --- UI HELPERS ---
-function showAppScreen() {
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-content').classList.remove('hidden');
-}
-
-function showAuthScreen() {
-    document.getElementById('auth-screen').classList.remove('hidden');
-    document.getElementById('app-content').classList.add('hidden');
-}
-
-// --- AUTH ---
+// --- AUTH HANDLERS ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
     const errText = document.getElementById('auth-error');
-    
-    function validate() {
-        if (!emailInput.value.trim() || !passInput.value.trim()) {
-            errText.textContent = "Įveskite el. paštą ir slaptažodį.";
+
+    function validateInputs() {
+        const email = emailInput.value.trim();
+        const pass = passInput.value.trim();
+        if (!email || !pass) {
+            errText.textContent = "⚠️ Prašome įvesti el. paštą ir slaptažodį.";
             errText.classList.remove('hidden');
+            emailInput.classList.add('border-red-500');
+            passInput.classList.add('border-red-500');
+            setTimeout(() => {
+                emailInput.classList.remove('border-red-500');
+                passInput.classList.remove('border-red-500');
+            }, 2000);
             return false;
         }
         return true;
     }
-    
+
     document.getElementById('btn-login').addEventListener('click', async () => {
-        if (!validate()) return;
+        if (!validateInputs()) return;
+        const btn = document.getElementById('btn-login');
+        const originalText = btn.innerText;
         try {
-            const { error } = await userLogin(emailInput.value, passInput.value);
-            if (error) throw error;
+            errText.classList.add('hidden');
+            btn.innerText = "Jungiama...";
+            btn.disabled = true;
+            await userLogin(emailInput.value, passInput.value);
         } catch (e) {
-            errText.textContent = e.message;
+            errText.textContent = "Klaida: " + e.message;
             errText.classList.remove('hidden');
+            btn.innerText = originalText;
+            btn.disabled = false;
         }
     });
-    
+
     document.getElementById('btn-signup').addEventListener('click', async () => {
-        if (!validate()) return;
+        if (!validateInputs()) return;
+        const btn = document.getElementById('btn-signup');
+        const originalText = btn.innerText;
         try {
-            const { error } = await userSignUp(emailInput.value, passInput.value);
-            if (error) throw error;
-            alert("Registracija sėkminga! Patikrinkite el. paštą.");
+            errText.classList.add('hidden');
+            btn.innerText = "Registruojama...";
+            btn.disabled = true;
+            await userSignUp(emailInput.value, passInput.value);
+            alert("Registracija sėkminga! Sistema jus prijungia...");
         } catch (e) {
-            errText.textContent = e.message;
+            errText.textContent = "Registracijos klaida: " + e.message;
             errText.classList.remove('hidden');
+            btn.innerText = originalText;
+            btn.disabled = false;
         }
     });
-    
+
     document.getElementById('btn-logout').addEventListener('click', async () => {
-        if (confirm('Ar tikrai norite atsijungti?')) {
-            await userSignOut();
-        }
+        await userSignOut();
     });
 }
 
 function clearData() {
     document.getElementById('journal-body').innerHTML = '';
     document.getElementById('header-total-value').innerText = '$0.00';
-    document.getElementById('total-pnl').innerText = '$0.00';
-    document.getElementById('total-pnl-percent').innerText = '0.00%';
-    coinsList = [];
-    transactions = [];
-    goals = [];
-    prices = {};
+    document.getElementById('auth-email').value = '';
+    document.getElementById('auth-pass').value = '';
+    document.getElementById('auth-error').classList.add('hidden');
 }
 
 function setupAppListeners() {
@@ -111,719 +103,391 @@ function setupAppListeners() {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
-        setupCalculator();
+        setupCalculator(); // Prijungiame atnaujintą skaičiuotuvą
     }
-    
-    document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
-    document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
-    
+
+    const btnSaveCoin = document.getElementById('btn-save-coin');
+    const btnDelCoin = document.getElementById('btn-delete-coin');
     const btnFetch = document.getElementById('btn-fetch-price');
+
+    btnSaveCoin.replaceWith(btnSaveCoin.cloneNode(true));
+    document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
+
+    btnDelCoin.replaceWith(btnDelCoin.cloneNode(true));
+    document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
+
     btnFetch.replaceWith(btnFetch.cloneNode(true));
-    document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
+    document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
 }
 
-// --- CALCULATOR ---
+// --- PROTINGAS SKAIČIUOTUVAS (3 PUSIŲ LOGIKA) ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
     const totalIn = document.getElementById('tx-total');
     
     if (!amountIn || !priceIn || !totalIn) return;
-
-    const val = (el) => {
-        const v = parseFloat(el.value);
-        return isNaN(v) ? 0 : v;
-    };
-
-    // 1. Keičiant KIEKĮ (Amount)
+    
+    // 1. Keičiant AMOUNT:
+    // Jei yra Price -> skaičiuojame Total.
     amountIn.addEventListener('input', () => {
-        const a = val(amountIn);
-        const p = val(priceIn);
-        const t = val(totalIn);
-
-        if (t > 0 && a > 0) {
-            priceIn.value = (t / a).toFixed(8);
-        } else if (p > 0) {
+        const a = parseFloat(amountIn.value);
+        const p = parseFloat(priceIn.value);
+        if (!isNaN(a) && !isNaN(p)) {
             totalIn.value = (a * p).toFixed(2);
         }
     });
 
-    // 2. Keičiant KAINĄ (Price)
+    // 2. Keičiant PRICE:
+    // Jei yra Amount -> skaičiuojame Total.
     priceIn.addEventListener('input', () => {
-        const p = val(priceIn);
-        const a = val(amountIn);
-        const t = val(totalIn);
-        
-        if (t > 0 && p > 0) {
-            amountIn.value = (t / p).toFixed(6);
-        } else if (a > 0) {
+        const a = parseFloat(amountIn.value);
+        const p = parseFloat(priceIn.value);
+        if (!isNaN(a) && !isNaN(p)) {
             totalIn.value = (a * p).toFixed(2);
         }
     });
 
-    // 3. Keičiant SUMĄ (Total Cost)
+    // 3. Keičiant TOTAL (Svarbiausia dalis Recurring Buy):
+    // Čia sprendžiame, ką skaičiuoti.
     totalIn.addEventListener('input', () => {
-        const t = val(totalIn);
-        const p = val(priceIn);
-        const a = val(amountIn);
-        
-        if (a > 0 && t > 0) {
-            priceIn.value = (t / a).toFixed(8);
-        } else if (p > 0) {
+        const t = parseFloat(totalIn.value);
+        const a = parseFloat(amountIn.value);
+        const p = parseFloat(priceIn.value);
+
+        if (isNaN(t)) return;
+
+        // Jei vartotojas jau įvedė KIEKĮ (pvz. Kraken davė 213.706), o dabar įveda SUMĄ ($10)
+        // Mes apskaičiuojame KAINĄ.
+        if (!isNaN(a) && a !== 0) {
+            priceIn.value = (t / a).toFixed(8); // Didelis tikslumas kainai
+        } 
+        // Jei kiekio nėra, bet yra kaina, skaičiuojame kiekį
+        else if (!isNaN(p) && p !== 0) {
             amountIn.value = (t / p).toFixed(6);
         }
     });
 }
 
-// --- DATA LOADING (PATAISYTA) ---
+// --- DATA LOADING ---
 async function loadAllData() {
+    const journalBody = document.getElementById('journal-body');
+    if (journalBody && transactions.length === 0) journalBody.innerHTML = '<tr><td colspan="3" class="text-center py-6">Loading...</td></tr>';
+
     try {
-        // PAKEITIMAS: Naudojame saugią getCryptoGoals() funkciją iš js/supabase.js
         const [coinsData, txData, goalsData] = await Promise.all([
             getSupportedCoins(),
             getTransactions(),
-            getCryptoGoals() // NAUJAS, SAUGUS KVIETIMAS
+            _supabase.from('crypto_goals').select('*')
         ]);
-        
+
         coinsList = coinsData || [];
         transactions = txData || [];
-        // Saugus goals duomenų priskyrimas
-        goals = goalsData || [];
-        
-        await fetchCurrentPrices();
+        goals = goalsData.data || [];
+
+        await fetchPrices();
         const holdings = updateDashboard();
-        generateHistoryChart();
+        
         populateCoinSelect(holdings);
         populateDeleteSelect();
         renderJournal();
-        renderGoals();
+
     } catch (e) {
-        console.error('Error loading data:', e);
+        console.error("Load Error:", e);
     }
 }
 
-async function fetchCurrentPrices() {
+async function fetchPrices() {
     if (coinsList.length === 0) return;
     const ids = coinsList.map(c => c.coingecko_id).join(',');
-    
     try {
         const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
         if (res.ok) {
             const newPrices = await res.json();
             prices = { ...prices, ...newPrices };
         }
-    } catch (e) {
-        console.warn("Price fetch error:", e);
-    }
+    } catch (e) { console.warn("Price fetch error"); }
 }
 
-// --- DASHBOARD UPDATE ---
-function updateDashboard() {
-    const holdings = {};
-    let totalInvested = 0;
-    
-    // Calculate holdings
-    transactions.forEach(tx => {
-        if (!holdings[tx.coin_symbol]) {
-            holdings[tx.coin_symbol] = { qty: 0, invested: 0 };
-        }
-        
-        if (tx.type === 'Buy') {
-            holdings[tx.coin_symbol].qty += Number(tx.amount);
-            holdings[tx.coin_symbol].invested += Number(tx.total_cost_usd);
-            totalInvested += Number(tx.total_cost_usd);
-        } else {
-            holdings[tx.coin_symbol].qty -= Number(tx.amount);
-            holdings[tx.coin_symbol].invested -= Number(tx.total_cost_usd);
-            totalInvested -= Number(tx.total_cost_usd);
-        }
-    });
-    
-    // Calculate current value
-    let totalValue = 0;
-    Object.entries(holdings).forEach(([sym, data]) => {
-        if (data.qty > 0) {
-            const coin = coinsList.find(c => c.symbol === sym);
-            if (coin && prices[coin.coingecko_id]) {
-                totalValue += data.qty * prices[coin.coingecko_id].usd;
-            }
-        }
-    });
-    
-    // Calculate P&L
-    const pnl = totalValue - totalInvested;
-    const pnlPercent = totalInvested > 0 ? (pnl / totalInvested * 100) : 0;
-    
-    // Update UI
-    document.getElementById('header-total-value').innerText = formatMoney(totalValue);
-    
-    const pnlEl = document.getElementById('total-pnl');
-    pnlEl.innerText = formatMoney(pnl);
-    pnlEl.style.color = pnl >= 0 ? '#2dd4bf' : '#f87171';
-    
-    const pnlPercentEl = document.getElementById('total-pnl-percent');
-    pnlPercentEl.innerText = (pnl >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%';
-    pnlPercentEl.style.backgroundColor = pnl >= 0 ? '#14532d' : '#7f1d1d';
-    pnlPercentEl.style.color = pnl >= 0 ? '#34d399' : '#fca5a5';
-    
-    return holdings;
-}
-
-function formatMoney(value) {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(value);
-}
-
-// --- CHART GENERATION ---
-async function generateHistoryChart() {
-    if (transactions.length === 0) {
-        renderChart([], []);
-        return;
-    }
-    
-    const dates = transactions.map(t => new Date(t.date).getTime());
-    const minDate = new Date(Math.min(...dates));
-    const now = new Date();
-    
-    if (minDate > now) {
-        renderChart(['Now'], [0]);
-        return;
-    }
-    
-    const startTimestamp = Math.floor(minDate.getTime() / 1000);
-    const endTimestamp = Math.floor(Date.now() / 1000);
-    const daysDiff = (endTimestamp - startTimestamp) / (60 * 60 * 24);
-    
-    const fetchChart = async (coinId) => {
-        try {
-            const days = Math.ceil(daysDiff) + 1;
-            const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`);
-            if (!res.ok) throw new Error("Rate Limit");
-            const data = await res.json();
-            return { id: coinId, prices: data.prices };
-        } catch (e) {
-            console.warn(`Chart fetch error for ${coinId}:`, e);
-            return { id: coinId, prices: [] };
-        }
-    };
-    
-    const activeSymbols = [...new Set(transactions.map(t => t.coin_symbol))];
-    const activeCoins = coinsList.filter(c => activeSymbols.includes(c.symbol));
-    const chartsData = [];
-    
-    for (const coin of activeCoins) {
-        // CoinGecko API vėlavimas, kad neviršytų API limitų
-        if (chartsData.length > 0) await new Promise(r => setTimeout(r, 1000));
-        const data = await fetchChart(coin.coingecko_id);
-        chartsData.push(data);
-    }
-    
-    const historyMap = {};
-    chartsData.forEach(item => {
-        const coinSym = coinsList.find(c => c.coingecko_id === item.id)?.symbol;
-        if (!coinSym) return;
-        historyMap[coinSym] = {};
-        item.prices.forEach(([ts, price]) => {
-            const dateStr = new Date(ts).toISOString().split('T')[0];
-            historyMap[coinSym][dateStr] = price;
-        });
-    });
-    
-    const chartLabels = [];
-    const chartData = [];
-    
-    for (let d = new Date(minDate); d <= new Date(); d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        chartLabels.push(dateStr);
-        
-        let dailyValue = 0;
-        const balances = {};
-        
-        transactions.forEach(tx => {
-            const txDate = new Date(tx.date).toISOString().split('T')[0];
-            if (txDate <= dateStr) {
-                if (!balances[tx.coin_symbol]) balances[tx.coin_symbol] = 0;
-                if (tx.type === 'Buy') {
-                    balances[tx.coin_symbol] += Number(tx.amount);
-                } else {
-                    balances[tx.coin_symbol] -= Number(tx.amount);
-                }
-            }
-        });
-        
-        for (const [sym, qty] of Object.entries(balances)) {
-            if (qty > 0) {
-                if (historyMap[sym] && historyMap[sym][dateStr]) {
-                    dailyValue += qty * historyMap[sym][dateStr];
-                } else {
-                    const coin = coinsList.find(c => c.symbol === sym);
-                    if (coin && prices[coin.coingecko_id]) {
-                        dailyValue += qty * prices[coin.coingecko_id].usd;
-                    }
-                }
-            }
-        }
-        chartData.push(dailyValue);
-    }
-    
-    renderChart(chartLabels, chartData);
-}
-
-function renderChart(labels, data) {
-    const ctxEl = document.getElementById('pnlChart');
-    if (!ctxEl) return;
-    
-    if (myChart) myChart.destroy();
-    
-    const ctx = ctxEl.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 200);
-    grad.addColorStop(0, 'rgba(45, 212, 191, 0.3)');
-    grad.addColorStop(1, 'rgba(45, 212, 191, 0.0)');
-    
-    let borderColor = '#2dd4bf';
-    if (data.length > 1 && data[data.length - 1] < data[0]) {
-        borderColor = '#f87171';
-    }
-    
-    myChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                borderColor: borderColor,
-                backgroundColor: grad,
-                borderWidth: 2,
-                fill: true,
-                tension: 0.2,
-                pointRadius: 0,
-                pointHitRadius: 10
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            return formatMoney(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: { display: false },
-                y: { display: false }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
-        }
-    });
-}
-
-// --- JOURNAL RENDERING ---
-function renderJournal() {
-    const tbody = document.getElementById('journal-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (transactions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</td></tr>';
-        return;
-    }
-    
-    const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    sortedTx.forEach(tx => {
-        const row = document.createElement('tr');
-        const isBuy = tx.type === 'Buy';
-        
-        const dateObj = new Date(tx.date);
-        const dateStr = dateObj.toLocaleDateString('lt-LT') + ' ' + 
-                       dateObj.toLocaleTimeString('lt-LT', {hour: '2-digit', minute:'2-digit', hour12: false});
-        
-        const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
-        const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
-        const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1 leading-tight"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
-        
-        row.innerHTML = `
-            <td class="px-4 py-3 align-top border-b border-gray-800/30">
-                <div class="font-bold text-gray-200 text-sm flex items-center flex-wrap">${tx.coin_symbol} ${method}</div>
-                ${exchangeName}
-                <div class="text-[10px] text-gray-600 mt-0.5 mb-1">${dateStr}</div>
-                ${notesDisplay}
-            </td>
-            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
-                <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
-            </td>
-            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
-                <div class="flex justify-end gap-3 mt-2">
-                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-// --- GOALS RENDERING ---
-function renderGoals() {
-    const goalsContainer = document.getElementById('goals-container');
-    const goalsSection = document.getElementById('goals-section');
-    
-    if (!goalsContainer || !goalsSection) return;
-    
-    if (goals.length === 0) {
-        goalsSection.classList.add('hidden');
-        return;
-    }
-    
-    goalsSection.classList.remove('hidden');
-    goalsContainer.innerHTML = '';
-    
-    goals.forEach(goal => {
-        const holdings = {};
-        transactions.forEach(tx => {
-            if (tx.coin_symbol === goal.coin_symbol) {
-                if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = 0;
-                if (tx.type === 'Buy') holdings[tx.coin_symbol] += Number(tx.amount);
-                else holdings[tx.coin_symbol] -= Number(tx.amount);
-            }
-        });
-        
-        const current = holdings[goal.coin_symbol] || 0;
-        const target = Number(goal.target_amount);
-        const progress = target > 0 ? Math.min((current / target) * 100, 100) : 0;
-        
-        const goalEl = document.createElement('div');
-        goalEl.className = 'bg-gray-900 border border-gray-800 rounded-xl p-4';
-        goalEl.innerHTML = `
-            <div class="flex justify-between items-center mb-2">
-                <span class="font-bold text-gray-200">${goal.coin_symbol}</span>
-                <span class="text-xs text-gray-500">${current.toFixed(2)} / ${target.toFixed(0)}</span>
-            </div>
-            <div class="w-full bg-gray-800 rounded-full h-2">
-                <div class="bg-primary-500 h-2 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
-            </div>
-            <div class="text-[10px] text-gray-500 mt-1 text-right">${progress.toFixed(1)}%</div>
-        `;
-        goalsContainer.appendChild(goalEl);
-    });
-}
-
-// --- COIN SELECT POPULATION ---
-function populateCoinSelect(holdings) {
-    const select = document.getElementById('tx-coin');
-    if (!select) return;
-    
-    select.innerHTML = '';
-    
-    // Priority coins first
-    const priorityCoins = coinsList.filter(c => PRIORITY_COINS.includes(c.symbol));
-    const otherCoins = coinsList.filter(c => !PRIORITY_COINS.includes(c.symbol));
-    
-    [...priorityCoins, ...otherCoins].forEach(coin => {
-        const option = document.createElement('option');
-        option.value = coin.symbol;
-        option.textContent = coin.symbol;
-        select.appendChild(option);
-    });
-}
-
-function populateDeleteSelect() {
-    const select = document.getElementById('delete-coin-select');
-    if (!select) return;
-    
-    select.innerHTML = '<option value="">-- Pasirinkite --</option>';
-    
-    coinsList.forEach(coin => {
-        const option = document.createElement('option');
-        option.value = coin.symbol;
-        option.textContent = coin.symbol;
-        select.appendChild(option);
-    });
-}
-
-// --- PRICE FETCHING ---
-async function fetchPriceForForm() {
+async function fetchLivePriceForForm() {
     const symbol = document.getElementById('tx-coin').value;
-    const dStr = document.getElementById('tx-date-input').value;
-    
-    if (!dStr) {
-        alert('Pasirinkite datą!');
-        return;
-    }
-    
     const coin = coinsList.find(c => c.symbol === symbol);
     if (!coin) return;
 
     const btn = document.getElementById('btn-fetch-price');
     const oldText = btn.innerText;
     btn.innerText = '...';
-    btn.disabled = true;
-    
+
     try {
-        let price = 0;
-        const selectedDate = new Date(dStr);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        selectedDate.setHours(0, 0, 0, 0);
+        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
+        const data = await res.json();
+        const price = data[coin.coingecko_id].usd;
         
-        if (selectedDate.getTime() === today.getTime()) {
-            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
-            const data = await res.json();
-            price = data[coin.coingecko_id].usd;
-        } else {
-            const d = selectedDate.getDate().toString().padStart(2, '0');
-            const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
-            const y = selectedDate.getFullYear();
-            const dateQuery = `${d}-${m}-${y}`;
-            
-            const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin.coingecko_id}/history?date=${dateQuery}`);
-            const data = await res.json();
-            
-            if (data.market_data && data.market_data.current_price) {
-                price = data.market_data.current_price.usd;
-            } else {
-                alert("Istorinė kaina nerasta šiai datai.");
-            }
-        }
+        const priceInput = document.getElementById('tx-price');
+        priceInput.value = price;
         
-        if (price > 0) {
-            const priceInput = document.getElementById('tx-price');
-            priceInput.value = price;
-            priceInput.dispatchEvent(new Event('input'));
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Nepavyko gauti kainos. Bandykite vėliau.");
-    }
-    
+        // Iššaukiame įvykį, kad suveiktų skaičiuotuvas
+        priceInput.dispatchEvent(new Event('input'));
+        
+    } catch (e) { alert("Busy. Try later."); }
     btn.innerText = oldText;
-    btn.disabled = false;
 }
 
-// --- TRANSACTION HANDLERS ---
-window.onEditTx = function(id) {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
-    
-    openModal('add-modal');
-    
-    setTimeout(() => {
-        document.getElementById('tx-id').value = tx.id;
-        document.getElementById('tx-type').value = tx.type;
-        
-        const parts = tx.date.split('T');
-        if (parts.length >= 1) document.getElementById('tx-date-input').value = parts[0];
-        if (parts.length >= 2) document.getElementById('tx-time-input').value = parts[1].slice(0, 5);
-        
-        document.getElementById('tx-coin').value = tx.coin_symbol;
-        document.getElementById('tx-exchange').value = tx.exchange || '';
-        document.getElementById('tx-method').value = tx.method || 'Market Buy';
-        document.getElementById('tx-amount').value = tx.amount;
-        document.getElementById('tx-price').value = tx.price_per_coin;
-        document.getElementById('tx-total').value = tx.total_cost_usd;
-        document.getElementById('tx-notes').value = tx.notes || '';
-        
-        document.getElementById('modal-title').innerText = "Edit Transaction";
-        const btn = document.getElementById('btn-save');
-        btn.innerText = "Update Transaction";
-        btn.classList.remove('bg-primary-600', 'hover:bg-primary-500');
-        btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
-    }, 50);
-};
+// UI & FORMATTING
+function formatMoney(amount) {
+    const num = Number(amount);
+    if (num === 0) return '$0.00';
+    if (num < 1 && num > -1) return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 8 });
+    return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
-window.onDeleteTx = async function(id) {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
+function populateCoinSelect(holdings = {}) {
+    const select = document.getElementById('tx-coin');
+    if (!select) return;
+    const currentVal = select.value; // Išsaugome, jei buvo pasirinkta
+    select.innerHTML = '';
+
+    const sortedCoins = [...coinsList].sort((a, b) => {
+        const hasA = (holdings[a.symbol] || 0) > 0;
+        const hasB = (holdings[b.symbol] || 0) > 0;
+        if (hasA && !hasB) return -1;
+        if (!hasA && hasB) return 1;
+        const topA = PRIORITY_COINS.includes(a.symbol);
+        const topB = PRIORITY_COINS.includes(b.symbol);
+        if (topA && !topB) return -1;
+        if (!topA && topB) return 1;
+        return a.symbol.localeCompare(b.symbol);
+    });
+
+    sortedCoins.forEach(coin => {
+        const option = document.createElement('option');
+        option.value = coin.symbol;
+        const hasBalance = (holdings[coin.symbol] || 0) > 0;
+        option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
+        select.appendChild(option);
+    });
     
-    const confirmMsg = `Ar tikrai norite ištrinti šią transakciją?\n\n${tx.coin_symbol} ${tx.type}\nKiekis: ${tx.amount}\nData: ${new Date(tx.date).toLocaleDateString('lt-LT')}`;
-    
-    if (confirm(confirmMsg)) {
-        const success = await deleteTransaction(id);
-        if (success) {
-            await loadAllData();
-        }
+    // Atstatome pasirinkimą arba parenkame pirmą
+    if (currentVal && sortedCoins.some(c => c.symbol === currentVal)) {
+        select.value = currentVal;
+    } else if (sortedCoins.length > 0) {
+        select.value = sortedCoins[0].symbol;
     }
-};
+}
+
+function populateDeleteSelect() {
+    const select = document.getElementById('delete-coin-select');
+    if (!select) return;
+    select.innerHTML = '';
+    const sorted = [...coinsList].sort((a, b) => a.symbol.localeCompare(b.symbol));
+    sorted.forEach(coin => {
+        const option = document.createElement('option');
+        option.value = coin.symbol;
+        option.textContent = coin.symbol;
+        select.appendChild(option);
+    });
+}
+
+function renderJournal() {
+    const tbody = document.getElementById('journal-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
+        return;
+    }
+    const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+    sortedTx.forEach(tx => {
+        const row = document.createElement('tr');
+        const isBuy = tx.type === 'Buy';
+        
+        // Paimame metodą arba rodom "Manual" jei nėra
+        const method = tx.method ? tx.method : '';
+        const methodBadge = method ? `<div class="text-[9px] text-gray-500 italic mt-0.5">${method}</div>` : '';
+
+        row.innerHTML = `
+            <td class="px-4 py-3 align-top border-b border-gray-800/30">
+                <div class="font-bold text-gray-200 text-sm">${tx.coin_symbol}</div>
+                <div class="text-[10px] text-gray-500">${tx.date}</div>
+                ${methodBadge} </td>
+            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
+                <div class="text-xs text-gray-300">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
+                <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
+            </td>
+            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
+                <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
+                <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isBuy ? 'text-teal-400 bg-teal-900/20' : 'text-red-400 bg-red-900/20'}">${tx.type}</span>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function updateDashboard() {
+    let holdings = {};
+    let totalInvested = 0;
+    transactions.forEach(tx => {
+        if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = 0;
+        const amt = Number(tx.amount);
+        const cost = Number(tx.total_cost_usd);
+        if (tx.type === 'Buy') { holdings[tx.coin_symbol] += amt; totalInvested += cost; }
+        else { holdings[tx.coin_symbol] -= amt; totalInvested -= cost; }
+    });
+
+    let currentVal = 0;
+    for (const [symbol, amount] of Object.entries(holdings)) {
+        if (amount <= 0.0000001) continue;
+        const coin = coinsList.find(c => c.symbol === symbol);
+        if (coin && prices[coin.coingecko_id]) currentVal += amount * prices[coin.coingecko_id].usd;
+    }
+
+    document.getElementById('header-total-value').innerText = formatMoney(currentVal);
+    const pnl = currentVal - totalInvested;
+    const pnlEl = document.getElementById('total-pnl');
+    const pnlPercEl = document.getElementById('total-pnl-percent');
+    if (pnlEl) {
+        pnlEl.innerText = `${pnl >= 0 ? '+' : ''}${formatMoney(pnl)}`;
+        pnlEl.className = `text-2xl font-bold ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    }
+    if (pnlPercEl) {
+        let percent = totalInvested > 0 ? (pnl / totalInvested * 100) : 0;
+        pnlPercEl.innerText = `${percent.toFixed(2)}%`;
+        pnlPercEl.className = `text-xs font-bold px-2 py-0.5 rounded bg-gray-800 ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    }
+    renderChart(totalInvested, currentVal);
+    renderGoals(holdings);
+    return holdings;
+}
+
+function renderGoals(holdings) {
+    const container = document.getElementById('goals-container');
+    const section = document.getElementById('goals-section');
+    if (!container || !section) return;
+    container.innerHTML = '';
+    if (goals.length === 0) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden');
+    
+    goals.forEach(goal => {
+        const current = holdings[goal.coin_symbol] || 0;
+        const target = Number(goal.target_amount);
+        if (target <= 0) return;
+        const pct = Math.min(100, (current / target) * 100);
+        
+        const div = document.createElement('div');
+        div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl';
+        div.innerHTML = `
+            <div class="flex justify-between text-xs mb-1">
+                <span class="font-bold text-gray-300">${goal.coin_symbol}</span>
+                <span class="text-primary-400 font-bold">${pct.toFixed(1)}%</span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-primary-500 h-1.5 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+            </div>
+            <div class="text-[9px] text-gray-500 mt-1 text-right font-mono">
+                ${current.toLocaleString(undefined, {maximumFractionDigits: 2})} / ${target.toLocaleString()}
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function renderChart(invested, current) {
+    const ctxEl = document.getElementById('pnlChart');
+    if (!ctxEl) return;
+    if (myChart) myChart.destroy();
+    const ctx = ctxEl.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 160);
+    grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: ['Invested', 'Current'], datasets: [{ data: [invested, current], borderColor: '#2dd4bf', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#1f2937', pointBorderColor: '#2dd4bf' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
+    });
+}
 
 async function handleTxSubmit(e) {
     e.preventDefault();
-    
     const btn = document.getElementById('btn-save');
-    const oldText = btn.innerText;
-    btn.innerText = "Saving...";
+    const originalText = btn.innerHTML;
+    btn.innerHTML = 'Saving...';
     btn.disabled = true;
-    
-    const txId = document.getElementById('tx-id').value;
+
     const rawAmount = document.getElementById('tx-amount').value;
     const rawPrice = document.getElementById('tx-price').value;
     const rawTotal = document.getElementById('tx-total').value;
-    const dStr = document.getElementById('tx-date-input').value;
-    const tStr = document.getElementById('tx-time-input').value || '00:00';
-    
-    // Validation
-    if (!rawAmount || !rawPrice || !rawTotal || !dStr) {
-        alert('Užpildykite visus būtinus laukus!');
-        btn.innerText = oldText;
-        btn.disabled = false;
-        return;
-    }
-    
-    const amount = parseFloat(rawAmount);
-    const price = parseFloat(rawPrice);
-    const total = parseFloat(rawTotal);
-    
-    if (amount <= 0 || price <= 0 || total <= 0) {
-        alert('Reikšmės turi būti didesnės už nulį!');
-        btn.innerText = oldText;
-        btn.disabled = false;
-        return;
-    }
-    
-    const finalDate = `${dStr}T${tStr}:00`;
-    
+
     const txData = {
-        date: finalDate,
+        date: document.getElementById('tx-date').value,
         type: document.getElementById('tx-type').value,
         coin_symbol: document.getElementById('tx-coin').value,
-        exchange: document.getElementById('tx-exchange').value || null,
-        method: document.getElementById('tx-method').value,
-        notes: document.getElementById('tx-notes').value || null,
-        amount: amount,
-        price_per_coin: price,
-        total_cost_usd: total
+        exchange: document.getElementById('tx-exchange').value,
+        method: document.getElementById('tx-method').value, // NAUJAS LAUKAS
+        amount: parseFloat(rawAmount),
+        price_per_coin: parseFloat(rawPrice),
+        total_cost_usd: parseFloat(rawTotal)
     };
-    
-    let success = false;
-    if (txId) {
-        success = await updateTransaction(txId, txData);
-    } else {
-        success = await saveTransaction(txData);
+
+    if (isNaN(txData.amount) || isNaN(txData.price_per_coin)) {
+        alert("Please enter valid numbers.");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
     }
-    
-    if (success) {
-        closeModal('add-modal');
-        await loadAllData();
-    }
-    
-    btn.innerText = oldText;
+
+    const success = await saveTransaction(txData);
+    if (success) { 
+        closeModal('add-modal'); 
+        e.target.reset(); 
+        document.getElementById('tx-date').valueAsDate = new Date(); 
+        await loadAllData(); 
+    } 
+    btn.innerHTML = originalText;
     btn.disabled = false;
 }
 
-// --- COIN MANAGEMENT ---
 async function handleNewCoinSubmit() {
-    const symbol = document.getElementById('new-coin-symbol').value.trim().toUpperCase();
-    const coingeckoId = document.getElementById('new-coin-id').value.trim().toLowerCase();
-    const targetRaw = document.getElementById('new-coin-target').value;
-    
-    if (!symbol || !coingeckoId) {
-        alert('Užpildykite simbolį ir CoinGecko ID!');
-        return;
-    }
-    
+    const sym = document.getElementById('new-coin-symbol').value.toUpperCase();
+    const id = document.getElementById('new-coin-id').value.toLowerCase();
+    const target = document.getElementById('new-coin-target').value;
+
+    if (!sym || !id) { alert("Symbol and ID are required."); return; }
+
     const btn = document.getElementById('btn-save-coin');
     const oldText = btn.innerText;
-    btn.innerText = 'Saving...';
+    btn.innerText = "Saving...";
     btn.disabled = true;
-    
+
     try {
-        const coinData = { symbol, coingecko_id: coingeckoId };
-        const success = await saveNewCoin(coinData);
-        
-        if (success && targetRaw) {
-            const target = parseFloat(targetRaw);
-            if (target > 0) {
-                // Naudojame naują funkciją iš supabase.js, kuri valdo upsertą
-                await saveOrUpdateGoal(symbol, target); 
+        await saveNewCoin({ symbol: sym, coingecko_id: id, name: sym });
+        if (target && Number(target) > 0) {
+            const { data: { user } } = await _supabase.auth.getUser();
+            if (user) {
+                await _supabase.from('crypto_goals').upsert({ user_id: user.id, coin_symbol: sym, target_amount: Number(target) }, { onConflict: 'user_id, coin_symbol' });
             }
         }
-        
-        if (success) {
-            document.getElementById('new-coin-symbol').value = '';
-            document.getElementById('new-coin-id').value = '';
-            document.getElementById('new-coin-target').value = '';
-            closeModal('new-coin-modal');
-            await loadAllData();
-        }
-    } catch (e) {
-        // Klaida iš supabase.js bus parodyta ten, čia tik loguojam
-        console.error(e);
+        closeModal('new-coin-modal');
+        document.getElementById('new-coin-symbol').value = '';
+        document.getElementById('new-coin-id').value = '';
+        document.getElementById('new-coin-target').value = '';
+        await loadAllData();
+    } catch (err) {
+        console.error("Error saving coin/goal:", err);
+        alert("Failed to save.");
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
     }
-    
-    btn.innerText = oldText;
-    btn.disabled = false;
 }
 
 async function handleDeleteCoinSubmit() {
-    const select = document.getElementById('delete-coin-select');
-    const sym = select.value;
-    
-    if (!sym) {
-        alert('Pasirinkite monetą!');
-        return;
-    }
-    
-    // Check if there are transactions for this coin
-    const hasTx = transactions.some(tx => tx.coin_symbol === sym);
-    
-    let confirmMsg = `Ar tikrai norite ištrinti ${sym}?`;
-    if (hasTx) {
-        confirmMsg += `\n\n⚠️ DĖMESIO: Šiai monetai yra ${transactions.filter(tx => tx.coin_symbol === sym).length} transakcijų!\nIštrinus monetą, VISOS jos transakcijos taip pat bus ištrintos!`;
-    }
-    
-    if (confirm(confirmMsg)) {
-        const btn = document.getElementById('btn-delete-coin');
-        const oldText = btn.innerText;
-        btn.innerText = 'Deleting...';
-        btn.disabled = true;
-        
-        try {
-            const { data: { user } } = await _supabase.auth.getUser();
-            if (user) {
-                // 1. Delete transactions first
-                if (hasTx) {
-                    await _supabase
-                        .from('crypto_transactions')
-                        .delete()
-                        .eq('user_id', user.id)
-                        .eq('coin_symbol', sym);
-                }
-                
-                // 2. Delete goals
-                await _supabase
-                    .from('crypto_goals')
-                    .delete()
-                    .eq('user_id', user.id)
-                    .eq('coin_symbol', sym);
-                
-                // 3. Delete coin
-                await deleteSupportedCoin(sym);
-            }
-            
-            closeModal('delete-coin-modal');
-            await loadAllData();
-        } catch (e) {
-            // Klaida bus rodoma iš supabase.js
-            console.error(e);
-        }
-        
-        btn.innerText = oldText;
-        btn.disabled = false;
+    const sym = document.getElementById('delete-coin-select').value;
+    if (!sym) return;
+    if (!confirm(`Delete ${sym}?`)) return;
+    const success = await deleteSupportedCoin(sym);
+    if (success) {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if(user) await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
+        closeModal('delete-coin-modal');
+        await loadAllData();
     }
 }
