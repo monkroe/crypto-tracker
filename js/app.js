@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.9 (Pilnas funkcijų atkūrimas)
+// js/app.js - Versija 1.7.10 (Ištaisytas redagavimas, tikslai ir laiko juostos)
 
-const APP_VERSION = '1.7.9';
+const APP_VERSION = '1.7.10';
 
 let coinsList = [];
 let transactions = [];
@@ -213,7 +213,7 @@ async function loadAllData() {
         populateCoinSelect(holdings); 
         
         renderJournal();
-        renderGoals();
+        renderGoals(holdings); // KRITINIS PATAISYMAS: perduodami duomenys tikslams
         
         if (transactions.length > 0) {
             // generateHistoryChart(); 
@@ -279,7 +279,6 @@ function updateDashboard() {
     const holdings = {};
     let totalInvested = 0;
     
-    // Apskaičiuojame turimus kiekius ir investuotą sumą
     transactions.forEach(tx => {
         if (!holdings[tx.coin_symbol]) {
             holdings[tx.coin_symbol] = { qty: 0, invested: 0 };
@@ -334,10 +333,7 @@ function populateCoinSelect(holdings) {
     const deleteSelect = document.getElementById('delete-coin-select');
     if (!select || !deleteSelect) return;
     
-    // Transakcijos pasirinkimo laukas
     select.innerHTML = '';
-    
-    // Trinimo pasirinkimo laukas
     deleteSelect.innerHTML = '<option value="">-- Pasirinkite --</option>';
 
     if (coinsList.length === 0) {
@@ -393,6 +389,8 @@ function renderJournal() {
         
         const dateObj = new Date(tx.date);
         
+        // KRITINIS PATAISYMAS: Užtikriname, kad laikas būtų rodomas teisingoje vartotojo laiko juostoje
+        // Naudojame .toLocaleString(undefined, ...) be priverstinio lt-LT, kad vartotojo OS nustatymai būtų paisomi
         const dateStr = dateObj.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'numeric',
@@ -400,7 +398,7 @@ function renderJournal() {
         }) + ' ' + dateObj.toLocaleTimeString(undefined, {
             hour: '2-digit',
             minute:'2-digit',
-            hour12: false
+            hour12: false // 24 valandų formatas
         });
         
         const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
@@ -435,7 +433,10 @@ function renderGoals(holdings) {
     const section = document.getElementById('goals-section');
     if (!container || !section) return;
     container.innerHTML = '';
+    
+    // Nėra tikslų - paslepiame
     if (goals.length === 0) { section.classList.add('hidden'); return; }
+    
     section.classList.remove('hidden');
     
     goals.forEach(goal => {
@@ -496,6 +497,14 @@ async function handleTxSubmit(e) {
     const amount = parseFloat(rawAmount);
     const price = parseFloat(rawPrice);
     const total = parseFloat(rawTotal);
+    const coinSymbol = document.getElementById('tx-coin').value;
+
+    if (coinSymbol === '') {
+        alert("Pasirinkite monetą.");
+        btn.innerText = oldText;
+        btn.disabled = false;
+        return;
+    }
 
     if (isNaN(amount) || isNaN(price) || isNaN(total) || 
         amount <= 0 || price <= 0 || total <= 0) {
@@ -511,7 +520,7 @@ async function handleTxSubmit(e) {
     const txData = {
         date: finalDate,
         type: document.getElementById('tx-type').value,
-        coin_symbol: document.getElementById('tx-coin').value,
+        coin_symbol: coinSymbol,
         exchange: document.getElementById('tx-exchange').value || null,
         method: document.getElementById('tx-method').value,
         notes: document.getElementById('tx-notes').value || null,
@@ -551,15 +560,20 @@ window.onEditTx = function(id) {
     document.getElementById('tx-exchange').value = tx.exchange || '';
     document.getElementById('tx-method').value = tx.method || 'Market Buy';
 
+    // KRITINIS PATAISYMAS: Data ir laikas turi būti atskirti ir konvertuoti
     const dateObj = new Date(tx.date);
+    
+    // Naudojame .toISOString() fragmentus, kurie naršyklei veikia patikimai
     const dStr = dateObj.toISOString().split('T')[0];
-    const tStr = dateObj.toTimeString().split(' ')[0].slice(0,5);
+    const tStr = dateObj.toTimeString().split(' ')[0].slice(0,5); 
+    
     document.getElementById('tx-date-input').value = dStr;
     document.getElementById('tx-time-input').value = tStr;
 
-    document.getElementById('tx-amount').value = tx.amount;
-    document.getElementById('tx-price').value = tx.price_per_coin;
-    document.getElementById('tx-total').value = tx.total_cost_usd;
+    // KRITINIS PATAISYMAS: Naudojame toFixed() ir konvertuojame į String, kad nebūtų lokalizacijos klaidų (kablelių)
+    document.getElementById('tx-amount').value = Number(tx.amount).toFixed(6);
+    document.getElementById('tx-price').value = Number(tx.price_per_coin).toFixed(8);
+    document.getElementById('tx-total').value = Number(tx.total_cost_usd).toFixed(2);
     document.getElementById('tx-notes').value = tx.notes || '';
 
     openModal('add-modal');
