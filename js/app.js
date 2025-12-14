@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.14 (Ištaisytas datos/laiko konvertavimas ir grafikas)
+// js/app.js - Versija 1.8.0 (PATAISYTAS GRAFIKAS + EDIT + DATOS)
 
-const APP_VERSION = '1.7.14';
+const APP_VERSION = '1.8.0';
 
 let coinsList = [];
 let transactions = [];
@@ -10,29 +10,24 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log(`App started v${APP_VERSION}`);
-    const versionEl = document.querySelector('footer p:nth-child(3) span');
+    console.log(`✅ App started v${APP_VERSION}`);
+    const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.innerText = APP_VERSION;
     
-    // Pradinis sesijos tikrinimas
     const { data: { session } } = await _supabase.auth.getSession();
     if (session) {
-        document.getElementById('auth-screen').classList.add('hidden');
-        document.getElementById('app-content').classList.remove('hidden');
+        showAppScreen();
         loadAllData();
     } else {
-        document.getElementById('auth-screen').classList.remove('hidden');
-        document.getElementById('app-content').classList.add('hidden');
+        showAuthScreen();
     }
 
     _supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            document.getElementById('auth-screen').classList.add('hidden');
-            document.getElementById('app-content').classList.remove('hidden');
+            showAppScreen();
             loadAllData();
         } else if (event === 'SIGNED_OUT') {
-            document.getElementById('auth-screen').classList.remove('hidden');
-            document.getElementById('app-content').classList.add('hidden');
+            showAuthScreen();
             clearData();
         }
     });
@@ -41,7 +36,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// --- UI HELPERS / AUTH HANDLERS ---
+function showAppScreen() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('app-content').classList.remove('hidden');
+}
+
+function showAuthScreen() {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('app-content').classList.add('hidden');
+}
+
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
@@ -51,7 +55,7 @@ function setupAuthHandlers() {
         const email = emailInput.value.trim();
         const pass = passInput.value.trim();
         if (!email || !pass) {
-            errText.textContent = "⚠️ Prašome įvesti el. paštą ir slaptažodį.";
+            errText.textContent = "⚠️ Įveskite el. paštą ir slaptažodį.";
             errText.classList.remove('hidden');
             return false;
         }
@@ -72,8 +76,8 @@ function setupAuthHandlers() {
             errText.textContent = "Klaida: " + (e.message || 'Prisijungti nepavyko.');
             errText.classList.remove('hidden');
             btn.innerText = originalText;
+            btn.disabled = false;
         }
-        btn.disabled = false;
     });
 
     document.getElementById('btn-signup').addEventListener('click', async () => {
@@ -85,14 +89,15 @@ function setupAuthHandlers() {
         try {
             const { error } = await userSignUp(emailInput.value, passInput.value);
             if (error) throw error;
-            alert("Registracija sėkminga! Patikrinkite el. paštą (jei reikia) ir prisijunkite.");
+            alert("✅ Registracija sėkminga! Patikrinkite el. paštą ir prisijunkite.");
             btn.innerText = originalText;
+            btn.disabled = false;
         } catch (e) {
-            errText.textContent = "Registracijos klaida: " + (e.message || 'Nepavyko užregistruoti.');
+            errText.textContent = "Klaida: " + (e.message || 'Registracija nepavyko.');
             errText.classList.remove('hidden');
             btn.innerText = originalText;
+            btn.disabled = false;
         }
-        btn.disabled = false;
     });
 
     document.getElementById('btn-logout').addEventListener('click', async () => {
@@ -103,14 +108,22 @@ function setupAuthHandlers() {
 }
 
 function clearData() {
-    document.getElementById('journal-body').innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</td></tr>';
+    const tbody = document.getElementById('journal-body');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</td></tr>';
+    
     document.getElementById('header-total-value').innerText = '$0.00';
     document.getElementById('total-pnl').innerText = '$0.00';
     document.getElementById('total-pnl-percent').innerText = '0.00%';
+    
     coinsList = [];
     transactions = [];
     goals = [];
     prices = {};
+    
+    if (myChart) {
+        myChart.destroy();
+        myChart = null;
+    }
 }
 
 function setupAppListeners() {
@@ -122,18 +135,25 @@ function setupAppListeners() {
         setupCalculator();
     }
     
-    document.getElementById('btn-save-coin').replaceWith(document.getElementById('btn-save-coin').cloneNode(true));
-    document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
+    const btnSaveCoin = document.getElementById('btn-save-coin');
+    if (btnSaveCoin) {
+        btnSaveCoin.replaceWith(btnSaveCoin.cloneNode(true));
+        document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
+    }
     
-    document.getElementById('btn-delete-coin').replaceWith(document.getElementById('btn-delete-coin').cloneNode(true));
-    document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
+    const btnDeleteCoin = document.getElementById('btn-delete-coin');
+    if (btnDeleteCoin) {
+        btnDeleteCoin.replaceWith(btnDeleteCoin.cloneNode(true));
+        document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
+    }
     
     const btnFetch = document.getElementById('btn-fetch-price');
-    btnFetch.replaceWith(btnFetch.cloneNode(true));
-    document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
+    if (btnFetch) {
+        btnFetch.replaceWith(btnFetch.cloneNode(true));
+        document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
+    }
 }
 
-// --- CALCULATOR ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -150,50 +170,58 @@ function setupCalculator() {
         const a = val(amountIn);
         const p = val(priceIn);
         const t = val(totalIn);
-        if (t > 0 && a > 0) { priceIn.value = (t / a).toFixed(8); } 
-        else if (p > 0) { totalIn.value = (a * p).toFixed(2); }
+        if (t > 0 && a > 0) {
+            priceIn.value = (t / a).toFixed(8);
+        } else if (p > 0) {
+            totalIn.value = (a * p).toFixed(2);
+        }
     });
 
     priceIn.addEventListener('input', () => {
         const p = val(priceIn);
         const a = val(amountIn);
         const t = val(totalIn);
-        if (t > 0 && p > 0) { amountIn.value = (t / p).toFixed(6); } 
-        else if (a > 0) { totalIn.value = (a * p).toFixed(2); }
+        if (t > 0 && p > 0) {
+            amountIn.value = (t / p).toFixed(6);
+        } else if (a > 0) {
+            totalIn.value = (a * p).toFixed(2);
+        }
     });
 
     totalIn.addEventListener('input', () => {
         const t = val(totalIn);
         const p = val(priceIn);
         const a = val(amountIn);
-        if (a > 0 && t > 0) { priceIn.value = (t / a).toFixed(8); } 
-        else if (p > 0) { amountIn.value = (t / p).toFixed(6); }
+        if (a > 0 && t > 0) {
+            priceIn.value = (t / a).toFixed(8);
+        } else if (p > 0) {
+            amountIn.value = (t / p).toFixed(6);
+        }
     });
 }
 
-// ===============================================
-// HELPER FUNKCIJOS
-// ===============================================
 function formatMoney(value) {
     const num = Number(value);
-    const options = {
+    if (isNaN(num)) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
         minimumFractionDigits: 2,
-        maximumFractionDigits: num > -1 && num < 1 ? 8 : 2
-    };
-    return new Intl.NumberFormat('en-US', options).format(value);
+        maximumFractionDigits: 2
+    }).format(num);
 }
 
 const padTo2Digits = (num) => String(num).padStart(2, '0');
 
-// ===============================================
+// ===========================================
 // DATA LOADING
-// ===============================================
-
+// ===========================================
 async function loadAllData() {
+    console.log('📊 Loading all data...');
     const journalBody = document.getElementById('journal-body');
-    if (journalBody) journalBody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</td></tr>';
+    if (journalBody) {
+        journalBody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</td></tr>';
+    }
     
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
@@ -206,41 +234,23 @@ async function loadAllData() {
         transactions = Array.isArray(txData) ? txData : [];
         goals = Array.isArray(goalsData) ? goalsData : [];
         
+        console.log(`✅ Loaded: ${coinsList.length} coins, ${transactions.length} transactions, ${goals.length} goals`);
+        
         if (coinsList.length > 0) {
             await fetchCurrentPrices();
         }
 
         const holdings = updateDashboard();
-        
-        // Paimame vertes is atnaujinto Dashboard (skirtos Chart.js)
-        let totalInvested = 0;
-        let totalValue = 0;
-        
-        Object.values(holdings).forEach(data => {
-            totalInvested += data.invested;
-        });
-
-        Object.entries(holdings).forEach(([sym, data]) => {
-            if (data.qty > 0) {
-                const coin = coinsList.find(c => c.symbol === sym);
-                if (coin && prices[coin.coingecko_id]) {
-                    totalValue += data.qty * prices[coin.coingecko_id].usd;
-                }
-            }
-        });
-        
-        populateCoinSelect(holdings); 
-        
+        populateCoinSelect(holdings);
         renderJournal();
-        renderGoals(holdings); 
+        renderGoals(holdings);
+        await generateHistoryChart(); // PATAISYTA: Naudojame tikrą istorinį grafiką
         
-        // Grafiko inicializavimas
-        renderChart(totalInvested, totalValue); 
-
     } catch (e) {
-        console.error('Error loading data in app.js:', e);
-        renderJournal(); 
-        updateDashboard(); 
+        console.error('❌ Error loading data:', e);
+        if (journalBody) {
+            journalBody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-red-400">Error loading data. Check console.</td></tr>';
+        }
     }
 }
 
@@ -253,15 +263,17 @@ async function fetchCurrentPrices() {
         if (res.ok) {
             const newPrices = await res.json();
             prices = { ...prices, ...newPrices };
+            console.log('💰 Prices updated:', Object.keys(prices).length, 'coins');
         }
     } catch (e) {
-        console.warn("Price fetch error:", e);
+        console.warn("⚠️ Price fetch error:", e);
     }
 }
 
 async function fetchPriceForForm() {
     const symbol = document.getElementById('tx-coin').value;
     const coin = coinsList.find(c => c.symbol === symbol);
+    
     if (!coin || !coin.coingecko_id) {
         alert("CoinGecko ID nerastas!");
         return;
@@ -269,28 +281,36 @@ async function fetchPriceForForm() {
 
     const btn = document.getElementById('btn-fetch-price');
     const oldText = btn.innerText;
-    btn.innerText = '...';
+    btn.innerText = '⏳';
+    btn.disabled = true;
 
     try {
         const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
+        if (!res.ok) throw new Error('API error');
+        
         const data = await res.json();
-        const price = data[coin.coingecko_id].usd;
+        const price = data[coin.coingecko_id]?.usd;
         
-        const priceInput = document.getElementById('tx-price');
-        priceInput.value = price;
-        
-        priceInput.dispatchEvent(new Event('input'));
-        
-    } catch (e) { 
-        alert("Kaina nerasta (CoinGecko API klaida)."); 
+        if (price) {
+            const priceInput = document.getElementById('tx-price');
+            priceInput.value = price;
+            priceInput.dispatchEvent(new Event('input'));
+            console.log(`✅ Price fetched: ${symbol} = $${price}`);
+        } else {
+            throw new Error('Price not found');
+        }
+    } catch (e) {
+        console.error('❌ Price fetch error:', e);
+        alert("Nepavyko gauti kainos iš CoinGecko.");
     }
+    
     btn.innerText = oldText;
+    btn.disabled = false;
 }
 
-
-// ===============================================
-// DASHBOARD LOGIC
-// ===============================================
+// ===========================================
+// DASHBOARD
+// ===========================================
 function updateDashboard() {
     const holdings = {};
     let totalInvested = 0;
@@ -330,20 +350,145 @@ function updateDashboard() {
     document.getElementById('header-total-value').innerText = formatMoney(totalValue);
     
     const pnlEl = document.getElementById('total-pnl');
-    pnlEl.innerText = `${pnl >= 0 ? '+' : ''}${formatMoney(pnl)}`;
+    pnlEl.innerText = formatMoney(pnl);
     pnlEl.style.color = pnl >= 0 ? '#2dd4bf' : '#f87171';
     
     const pnlPercentEl = document.getElementById('total-pnl-percent');
     pnlPercentEl.innerText = (pnl >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%';
-    pnlPercentEl.className = `text-xs font-bold px-2 py-0.5 rounded bg-gray-800 ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    pnlPercentEl.style.backgroundColor = pnl >= 0 ? '#14532d' : '#7f1d1d';
+    pnlPercentEl.style.color = pnl >= 0 ? '#34d399' : '#fca5a5';
+    
+    console.log(`💵 Portfolio: ${formatMoney(totalValue)} | P&L: ${formatMoney(pnl)} (${pnlPercent.toFixed(2)}%)`);
     
     return holdings;
 }
 
+// ===========================================
+// CHART - PATAISYTA VERSIJA
+// ===========================================
+async function generateHistoryChart() {
+    console.log('📈 Generating history chart...');
+    
+    if (transactions.length === 0) {
+        renderChart(['No data'], [0]);
+        return;
+    }
+    
+    // Rasti pirmą transakciją
+    const dates = transactions.map(t => new Date(t.date).getTime());
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date();
+    
+    console.log(`📅 Date range: ${minDate.toLocaleDateString()} to ${maxDate.toLocaleDateString()}`);
+    
+    // Generuoti dienas
+    const dayLabels = [];
+    const dayValues = [];
+    
+    for (let d = new Date(minDate); d <= maxDate; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        dayLabels.push(dateStr);
+        
+        // Skaičiuoti balansą iki šios datos
+        let dailyValue = 0;
+        const balances = {};
+        
+        transactions.forEach(tx => {
+            const txDate = new Date(tx.date).toISOString().split('T')[0];
+            if (txDate <= dateStr) {
+                if (!balances[tx.coin_symbol]) balances[tx.coin_symbol] = 0;
+                
+                if (tx.type === 'Buy') {
+                    balances[tx.coin_symbol] += Number(tx.amount);
+                } else {
+                    balances[tx.coin_symbol] -= Number(tx.amount);
+                }
+            }
+        });
+        
+        // Konvertuoti į USD naudojant dabartinius prices
+        for (const [sym, qty] of Object.entries(balances)) {
+            if (qty > 0) {
+                const coin = coinsList.find(c => c.symbol === sym);
+                if (coin && prices[coin.coingecko_id]) {
+                    dailyValue += qty * prices[coin.coingecko_id].usd;
+                }
+            }
+        }
+        
+        dayValues.push(dailyValue);
+    }
+    
+    console.log(`✅ Chart generated with ${dayLabels.length} data points`);
+    renderChart(dayLabels, dayValues);
+}
 
-// ===============================================
+function renderChart(labels, data) {
+    const ctxEl = document.getElementById('pnlChart');
+    if (!ctxEl) {
+        console.error('❌ Chart canvas not found!');
+        return;
+    }
+    
+    if (myChart) {
+        myChart.destroy();
+    }
+    
+    const ctx = ctxEl.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 160);
+    grad.addColorStop(0, 'rgba(45, 212, 191, 0.3)');
+    grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+    
+    let borderColor = '#2dd4bf';
+    if (data.length > 1 && data[data.length - 1] < data[0]) {
+        borderColor = '#f87171';
+    }
+    
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                borderColor: borderColor,
+                backgroundColor: grad,
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                pointHitRadius: 10,
+                pointBackgroundColor: '#1f2937',
+                pointBorderColor: borderColor
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return formatMoney(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { display: false },
+                y: { display: false }
+            }
+        }
+    });
+    
+    console.log('✅ Chart rendered successfully');
+}
+
+// ===========================================
 // UI RENDERING
-// ===============================================
+// ===========================================
 function populateCoinSelect(holdings) {
     const select = document.getElementById('tx-coin');
     const deleteSelect = document.getElementById('delete-coin-select');
@@ -353,11 +498,8 @@ function populateCoinSelect(holdings) {
     deleteSelect.innerHTML = '<option value="">-- Pasirinkite --</option>';
 
     if (coinsList.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = '-- Pridėkite monetą per Manage Coins --';
-        select.appendChild(option);
-        return; 
+        select.innerHTML = '<option value="">-- Pridėkite monetą --</option>';
+        return;
     }
     
     const sortedCoins = [...coinsList].sort((a, b) => {
@@ -365,27 +507,29 @@ function populateCoinSelect(holdings) {
         const hasB = (holdings[b.symbol]?.qty || 0) > 0;
         if (hasA && !hasB) return -1;
         if (!hasA && hasB) return 1;
+        
         const topA = PRIORITY_COINS.includes(a.symbol);
         const topB = PRIORITY_COINS.includes(b.symbol);
         if (topA && !topB) return -1;
         if (!topA && topB) return 1;
+        
         return a.symbol.localeCompare(b.symbol);
     });
 
     sortedCoins.forEach(coin => {
-        const option = document.createElement('option');
-        option.value = coin.symbol;
         const hasBalance = (holdings[coin.symbol]?.qty || 0) > 0;
-        option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
-        select.appendChild(option.cloneNode(true));
         
-        const deleteOption = option.cloneNode(true);
-        deleteOption.value = coin.symbol;
-        deleteOption.textContent = coin.symbol;
-        deleteSelect.appendChild(deleteOption);
+        const opt1 = document.createElement('option');
+        opt1.value = coin.symbol;
+        opt1.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
+        select.appendChild(opt1);
+        
+        const opt2 = document.createElement('option');
+        opt2.value = coin.symbol;
+        opt2.textContent = coin.symbol;
+        deleteSelect.appendChild(opt2);
     });
 }
-
 
 function renderJournal() {
     const tbody = document.getElementById('journal-body');
@@ -404,15 +548,13 @@ function renderJournal() {
         const isBuy = tx.type === 'Buy';
         
         const dateObj = new Date(tx.date);
-        
-        // PATAISYTA: Naudojame vietinę vartotojo laiko juostą atvaizdavimui
         const dateStr = dateObj.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'numeric',
             day: 'numeric'
         }) + ' ' + dateObj.toLocaleTimeString(undefined, {
             hour: '2-digit',
-            minute:'2-digit',
+            minute: '2-digit',
             hour12: false
         });
         
@@ -441,15 +583,21 @@ function renderJournal() {
         `;
         tbody.appendChild(row);
     });
+    
+    console.log(`✅ Journal rendered: ${sortedTx.length} transactions`);
 }
 
 function renderGoals(holdings) {
     const container = document.getElementById('goals-container');
     const section = document.getElementById('goals-section');
     if (!container || !section) return;
+    
     container.innerHTML = '';
     
-    if (goals.length === 0) { section.classList.add('hidden'); return; }
+    if (goals.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
     
     section.classList.remove('hidden');
     
@@ -457,6 +605,7 @@ function renderGoals(holdings) {
         const current = holdings[goal.coin_symbol]?.qty || 0;
         const target = Number(goal.target_amount);
         if (target <= 0) return;
+        
         const pct = Math.min(100, (current / target) * 100);
         
         const div = document.createElement('div');
@@ -475,48 +624,16 @@ function renderGoals(holdings) {
         `;
         container.appendChild(div);
     });
+    
+    console.log(`✅ Goals rendered: ${goals.length} goals`);
 }
 
-function renderChart(invested, current) {
-    const ctxEl = document.getElementById('pnlChart');
-    if (!ctxEl) return;
-    if (myChart) myChart.destroy();
-    
-    const dataInvested = invested || 0;
-    const dataCurrent = current || 0;
-    
-    const ctx = ctxEl.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 160);
-    grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
-    myChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels: ['Invested', 'Current'], datasets: [{ 
-            data: [dataInvested, dataCurrent], 
-            borderColor: '#2dd4bf', 
-            backgroundColor: grad, 
-            borderWidth: 2, 
-            fill: true, 
-            tension: 0.3, 
-            pointRadius: 4, 
-            pointBackgroundColor: '#1f2937', 
-            pointBorderColor: '#2dd4bf' 
-        }] },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            plugins: { legend: { display: false } }, 
-            scales: { 
-                x: { display: false }, 
-                y: { display: false } 
-            } 
-        }
-    });
-}
-
-
-// --- TRANSACTION HANDLERS ---
+// ===========================================
+// TRANSACTION HANDLERS
+// ===========================================
 async function handleTxSubmit(e) {
     e.preventDefault();
+    console.log('💾 Saving transaction...');
     
     const btn = document.getElementById('btn-save');
     const oldText = btn.innerText;
@@ -524,37 +641,35 @@ async function handleTxSubmit(e) {
     btn.disabled = true;
     
     const txId = document.getElementById('tx-id').value;
+    const coinSymbol = document.getElementById('tx-coin').value;
     const rawAmount = document.getElementById('tx-amount').value;
     const rawPrice = document.getElementById('tx-price').value;
     const rawTotal = document.getElementById('tx-total').value;
-    const dStr = document.getElementById('tx-date-input').value; 
-    const tStr = document.getElementById('tx-time-input').value || '00:00'; 
+    const dStr = document.getElementById('tx-date-input').value;
+    const tStr = document.getElementById('tx-time-input').value || '00:00';
+    
+    // Validation
+    if (!coinSymbol) {
+        alert("Pasirinkite monetą!");
+        btn.innerText = oldText;
+        btn.disabled = false;
+        return;
+    }
     
     const amount = parseFloat(rawAmount);
     const price = parseFloat(rawPrice);
     const total = parseFloat(rawTotal);
-    const coinSymbol = document.getElementById('tx-coin').value;
-
-    if (coinSymbol === '') {
-        alert("Pasirinkite monetą.");
-        btn.innerText = oldText;
-        btn.disabled = false;
-        return;
-    }
-
-    if (isNaN(amount) || isNaN(price) || isNaN(total) || 
-        amount <= 0 || price <= 0 || total <= 0) {
-        
-        alert("Įveskite galiojančius, teigiamus skaičius (Amount, Price, Total Cost turi būti didesni už 0).");
+    
+    if (isNaN(amount) || isNaN(price) || isNaN(total) || amount <= 0 || price <= 0 || total <= 0) {
+        alert("Įveskite teigiamus skaičius!");
         btn.innerText = oldText;
         btn.disabled = false;
         return;
     }
     
-    // PRADINIS PATAISYMAS (V1.7.14): Naudojame vietinio laiko konvertavimą į ISO
-    // Tai padeda Supabase teisingai suprasti laiką, bet neleidžia jo keisti į UTC
-    const date = new Date(`${dStr}T${tStr}:00`);
-    const finalDate = date.toISOString(); 
+    // PATAISYTA: Datos konvertavimas
+    const localDate = new Date(`${dStr}T${tStr}:00`);
+    const finalDate = localDate.toISOString();
     
     const txData = {
         date: finalDate,
@@ -563,21 +678,26 @@ async function handleTxSubmit(e) {
         exchange: document.getElementById('tx-exchange').value || null,
         method: document.getElementById('tx-method').value,
         notes: document.getElementById('tx-notes').value || null,
-        amount: amount, 
+        amount: amount,
         price_per_coin: price,
         total_cost_usd: total
     };
     
     let success = false;
     if (txId) {
+        console.log('📝 Updating transaction:', txId);
         success = await updateTransaction(txId, txData);
     } else {
+        console.log('➕ Creating new transaction');
         success = await saveTransaction(txData);
     }
     
     if (success) {
+        console.log('✅ Transaction saved!');
         closeModal('add-modal');
         await loadAllData();
+    } else {
+        console.error('❌ Failed to save transaction');
     }
     
     btn.innerText = oldText;
@@ -586,63 +706,75 @@ async function handleTxSubmit(e) {
 
 window.onEditTx = function(id) {
     const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
+    if (!tx) {
+        console.error('❌ Transaction not found:', id);
+        return;
+    }
     
-    // Prieš atidarant modalą, visada jį nustatome į 'New Transaction' būseną
-    // (openModal tai daro, bet čia dar kartą, kad būtų švaru)
+    console.log('✏️ Editing transaction:', tx);
     
-    // Nustatome redagavimo būseną
-    document.getElementById('modal-title').innerText = "Edit Transaction";
-    document.getElementById('btn-save').innerText = "Update Transaction";
-    document.getElementById('btn-save').classList.remove('bg-primary-600', 'hover:bg-primary-500');
-    document.getElementById('btn-save').classList.add('bg-yellow-600', 'hover:bg-yellow-500');
-
-    document.getElementById('tx-id').value = tx.id;
-    document.getElementById('tx-type').value = tx.type;
-    document.getElementById('tx-coin').value = tx.coin_symbol;
-    document.getElementById('tx-exchange').value = tx.exchange || '';
-    document.getElementById('tx-method').value = tx.method || 'Market Buy';
-
-    // 3. KRITINIS PATAISYMAS: Datos/laiko konvertavimas, naudojant Date objektą
-    
-    // V1.7.13 pataisė tik dalinai. V1.7.14 naudoja vietinį laiką, kad gauti teisingą datą
-    const dateObj = new Date(tx.date);
-
-    // Formatuojame datą (YYYY-MM-DD)
-    const dStr = [
-        dateObj.getFullYear(),
-        padTo2Digits(dateObj.getMonth() + 1),
-        padTo2Digits(dateObj.getDate()),
-    ].join('-');
-    
-    // Formatuojame laiką (HH:MM)
-    const tStr = [
-        padTo2Digits(dateObj.getHours()),
-        padTo2Digits(dateObj.getMinutes()),
-    ].join(':');
-    
-    document.getElementById('tx-date-input').value = dStr;
-    document.getElementById('tx-time-input').value = tStr;
-
-    // 4. SKAIČIŲ KONVERTAVIMAS: Naudojame .toFixed() ir konvertuojame į String
-    document.getElementById('tx-amount').value = Number(tx.amount).toFixed(6);
-    document.getElementById('tx-price').value = Number(tx.price_per_coin).toFixed(8);
-    document.getElementById('tx-total').value = Number(tx.total_cost_usd).toFixed(2);
-    document.getElementById('tx-notes').value = tx.notes || '';
-
     openModal('add-modal');
-}
+    
+    setTimeout(() => {
+        document.getElementById('tx-id').value = tx.id;
+        document.getElementById('tx-type').value = tx.type;
+        document.getElementById('tx-coin').value = tx.coin_symbol;
+        document.getElementById('tx-exchange').value = tx.exchange || '';
+        document.getElementById('tx-method').value = tx.method || 'Market Buy';
+
+        // PATAISYTA: Datos konvertavimas
+        const dateObj = new Date(tx.date);
+        
+        const year = dateObj.getFullYear();
+        const month = padTo2Digits(dateObj.getMonth() + 1);
+        const day = padTo2Digits(dateObj.getDate());
+        const dStr = `${year}-${month}-${day}`;
+        
+        const hours = padTo2Digits(dateObj.getHours());
+        const minutes = padTo2Digits(dateObj.getMinutes());
+        const tStr = `${hours}:${minutes}`;
+        
+        document.getElementById('tx-date-input').value = dStr;
+        document.getElementById('tx-time-input').value = tStr;
+
+        // PATAISYTA: Skaičių konvertavimas
+        document.getElementById('tx-amount').value = Number(tx.amount).toFixed(6);
+        document.getElementById('tx-price').value = Number(tx.price_per_coin).toFixed(8);
+        document.getElementById('tx-total').value = Number(tx.total_cost_usd).toFixed(2);
+        document.getElementById('tx-notes').value = tx.notes || '';
+
+        document.getElementById('modal-title').innerText = "Edit Transaction";
+        const btn = document.getElementById('btn-save');
+        btn.innerText = "Update Transaction";
+        btn.classList.remove('bg-primary-600', 'hover:bg-primary-500');
+        btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+        
+        console.log('✅ Form populated with transaction data');
+    }, 100);
+};
 
 window.onDeleteTx = async function(id) {
-    if (!confirm("Ar tikrai norite ištrinti šią transakciją?")) return;
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+    
+    const confirmMsg = `Ar tikrai norite ištrinti?\n\n${tx.coin_symbol} ${tx.type}\n${Number(tx.amount).toFixed(4)} @ ${formatMoney(tx.price_per_coin)}\nTotal: ${formatMoney(tx.total_cost_usd)}`;
+    
+    if (!confirm(confirmMsg)) return;
+    
+    console.log('🗑️ Deleting transaction:', id);
     const success = await deleteTransaction(id);
+    
     if (success) {
+        console.log('✅ Transaction deleted');
         await loadAllData();
+    } else {
+        console.error('❌ Failed to delete transaction');
     }
-}
+};
 
-
-// --- COIN MANAGEMENT LOGIC ---
+// ===========================================
+// COIN MANAGEMENT
+// ===========================================
 async function handleNewCoinSubmit() {
     const symbol = document.getElementById('new-coin-symbol').value.trim().toUpperCase();
     const coingeckoId = document.getElementById('new-coin-id').value.trim().toLowerCase();
@@ -653,10 +785,18 @@ async function handleNewCoinSubmit() {
         return;
     }
     
+    // Check if already exists
+    if (coinsList.find(c => c.symbol === symbol)) {
+        alert(`Moneta ${symbol} jau egzistuoja!`);
+        return;
+    }
+    
     const btn = document.getElementById('btn-save-coin');
     const oldText = btn.innerText;
     btn.innerText = 'Saving...';
     btn.disabled = true;
+    
+    console.log('➕ Adding new coin:', symbol);
     
     try {
         const coinData = { symbol, coingecko_id: coingeckoId };
@@ -665,11 +805,13 @@ async function handleNewCoinSubmit() {
         if (success && targetRaw) {
             const target = parseFloat(targetRaw);
             if (target > 0) {
-                await saveOrUpdateGoal(symbol, target); 
+                console.log('🎯 Adding goal:', symbol, target);
+                await saveOrUpdateGoal(symbol, target);
             }
         }
         
         if (success) {
+            console.log('✅ Coin added successfully');
             document.getElementById('new-coin-symbol').value = '';
             document.getElementById('new-coin-id').value = '';
             document.getElementById('new-coin-target').value = '';
@@ -677,8 +819,8 @@ async function handleNewCoinSubmit() {
             await loadAllData();
         }
     } catch (e) {
-        console.error("Error saving coin/goal:", e);
-        alert("Klaida įrašant monetą. Patikrinkite, ar ji jau pridėta (duplicate key).");
+        console.error('❌ Error adding coin:', e);
+        alert('Klaida pridedant monetą: ' + e.message);
     }
     
     btn.innerText = oldText;
@@ -687,31 +829,53 @@ async function handleNewCoinSubmit() {
 
 async function handleDeleteCoinSubmit() {
     const sym = document.getElementById('delete-coin-select').value;
+    
     if (!sym || sym === '') {
-        alert("Pasirinkite monetą trynimui.");
+        alert("Pasirinkite monetą!");
         return;
     }
-    if (!confirm(`Ar tikrai norite ištrinti ${sym} ir visus susijusius tikslus? Transakcijos liks!`)) return;
+    
+    // Check if has transactions
+    const hasTx = transactions.some(tx => tx.coin_symbol === sym);
+    
+    let confirmMsg = `Ar tikrai norite ištrinti ${sym}?`;
+    if (hasTx) {
+        const txCount = transactions.filter(tx => tx.coin_symbol === sym).length;
+        confirmMsg += `\n\n⚠️ DĖMESIO: Ši moneta turi ${txCount} transakcijų!\nTransakcijos liks, bet negalėsite pridėti naujų.`;
+    }
+    
+    if (!confirm(confirmMsg)) return;
 
     const btn = document.getElementById('btn-delete-coin');
     const oldText = btn.innerText;
     btn.innerText = "Deleting...";
     btn.disabled = true;
+    
+    console.log('🗑️ Deleting coin:', sym);
 
     try {
         const success = await deleteSupportedCoin(sym);
+        
         if (success) {
+            // Also delete goals
             const { data: { user } } = await _supabase.auth.getUser();
-            if(user) await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
+            if (user) {
+                await _supabase
+                    .from('crypto_goals')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('coin_symbol', sym);
+            }
             
+            console.log('✅ Coin deleted successfully');
             closeModal('delete-coin-modal');
             await loadAllData();
         }
     } catch (e) {
-        console.error("Delete error:", e);
-        alert("Klaida trinant monetą.");
+        console.error('❌ Error deleting coin:', e);
+        alert('Klaida trinant monetą: ' + e.message);
     }
 
     btn.innerText = oldText;
     btn.disabled = false;
-}
+              }
