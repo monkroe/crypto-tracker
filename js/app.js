@@ -1,4 +1,8 @@
-// js/app.js - Versija 1.5.0 (Dynamic History Chart & Real PnL)
+// js/app.js - Versija 1.5.3 (Auto-Version, 24h Time, Stable Chart)
+
+// --- KONFIGŪRACIJA ---
+const APP_VERSION = '1.5.3'; // Pakeiskite šį skaičių ir jis pasikeis visur
+// ---------------------
 
 let coinsList = [];
 let transactions = [];
@@ -8,8 +12,13 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.5.0");
+    console.log(`App started v${APP_VERSION}`);
     
+    // 1. Automatiškai įrašome versiją į HTML (jei yra elementas)
+    const versionEl = document.getElementById('app-version');
+    if (versionEl) versionEl.innerText = APP_VERSION;
+    
+    // 2. Auth Listener
     _supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
             document.getElementById('auth-screen').classList.add('hidden');
@@ -26,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// --- AUTH ---
+// --- AUTH HANDLERS ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
@@ -46,11 +55,13 @@ function setupAuthHandlers() {
         try { await userLogin(emailInput.value, passInput.value); } 
         catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
+
     document.getElementById('btn-signup').addEventListener('click', async () => {
         if (!validate()) return;
         try { await userSignUp(emailInput.value, passInput.value); alert("Registracija sėkminga!"); } 
         catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
+
     document.getElementById('btn-logout').addEventListener('click', async () => await userSignOut());
 }
 
@@ -75,6 +86,7 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
+// --- CALCULATOR ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -96,7 +108,7 @@ function setupCalculator() {
     });
 }
 
-// --- DATA LOADING & CHART LOGIC ---
+// --- DATA LOADING ---
 async function loadAllData() {
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
@@ -109,11 +121,9 @@ async function loadAllData() {
         goals = goalsData.data || [];
 
         await fetchCurrentPrices();
-        
-        // 1. Atnaujiname Dashboard su momentiniais duomenimis
         const holdings = updateDashboard(); 
         
-        // 2. Sukuriame istorinį grafiką (Tai užtruks ilgiau, todėl darome fone)
+        // Fone krauname grafiką (naudojame stabilesnį metodą, kad nebūtų tiesių linijų)
         generateHistoryChart();
 
         populateCoinSelect(holdings);
@@ -134,97 +144,83 @@ async function fetchCurrentPrices() {
     } catch (e) { console.warn("Price error"); }
 }
 
-// --- CHART GENERATION (THE BRAIN) ---
+// --- CHART GENERATION (Stable Version) ---
 async function generateHistoryChart() {
-    if (transactions.length === 0) {
-        renderChart([], []);
-        return;
-    }
+    if (transactions.length === 0) { renderChart([], []); return; }
 
-    // 1. Randame seniausią transakciją
     const dates = transactions.map(t => new Date(t.date).getTime());
     const minDate = new Date(Math.min(...dates));
-    const startTimestamp = Math.floor(minDate.getTime() / 1000);
-    const endTimestamp = Math.floor(Date.now() / 1000); // Šiandien
+    const now = new Date();
 
-    // Apsauga: Jei transakcija ateityje arba labai sena, ribojame (pvz 365 dienos)
+    if (minDate > now) { renderChart(['Now'], [0]); return; }
+
+    const startTimestamp = Math.floor(minDate.getTime() / 1000);
+    const endTimestamp = Math.floor(Date.now() / 1000);
     const daysDiff = (endTimestamp - startTimestamp) / (60 * 60 * 24);
     
-    // 2. Gauname istorines kainas kiekvienai monetai
-    const historyMap = {}; // { 'kaspa': { '2025-01-01': 0.15, ... } }
-    
-    // CoinGecko API Chart
     const fetchChart = async (coinId) => {
         try {
-            // "days=max" arba skaičius. Jei transakcija senesnė nei 90 dienų, API duoda daily, jei ne - hourly.
-            // Mes imame 'days' parametrą
             const days = Math.ceil(daysDiff) + 1; 
             const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`);
+            if (!res.ok) throw new Error("Rate Limit");
             const data = await res.json();
-            return { id: coinId, prices: data.prices }; // prices = [[timestamp, price], ...]
+            return { id: coinId, prices: data.prices };
         } catch (e) {
             console.warn(`Failed chart for ${coinId}`, e);
             return { id: coinId, prices: [] };
         }
     };
 
-    // Filtruojame tik monetas, kurias realiai turime transakcijose
     const activeSymbols = [...new Set(transactions.map(t => t.coin_symbol))];
     const activeCoins = coinsList.filter(c => activeSymbols.includes(c.symbol));
 
-    const chartsData = await Promise.all(activeCoins.map(c => fetchChart(c.coingecko_id)));
+    // Siunčiame užklausas su 1s pertrauka, kad išvengtume klaidų
+    const chartsData = [];
+    for (const coin of activeCoins) {
+        if (chartsData.length > 0) await new Promise(r => setTimeout(r, 1000));
+        const data = await fetchChart(coin.coingecko_id);
+        chartsData.push(data);
+    }
 
-    // 3. Apdorojame duomenis į žemėlapį (Map) pagal datą
+    const historyMap = {}; 
     chartsData.forEach(item => {
         const coinSym = coinsList.find(c => c.coingecko_id === item.id)?.symbol;
         if (!coinSym) return;
-        
         historyMap[coinSym] = {};
         item.prices.forEach(([ts, price]) => {
-            const dateStr = new Date(ts).toISOString().split('T')[0]; // YYYY-MM-DD
+            const dateStr = new Date(ts).toISOString().split('T')[0];
             historyMap[coinSym][dateStr] = price;
         });
     });
 
-    // 4. Statome laiko juostą dienomis
     const chartLabels = [];
     const chartData = [];
     
-    // Einame per kiekvieną dieną nuo Start iki Šiandien
     for (let d = new Date(minDate); d <= new Date(); d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         chartLabels.push(dateStr);
-
-        // Kiek tą dieną turėjau monetų?
         let dailyValue = 0;
-        
-        // Randame balansus tai dienai
         const balances = {};
         transactions.forEach(tx => {
             const txDate = new Date(tx.date).toISOString().split('T')[0];
-            if (txDate <= dateStr) { // Jei transakcija jau įvyko
+            if (txDate <= dateStr) {
                 if (!balances[tx.coin_symbol]) balances[tx.coin_symbol] = 0;
                 if (tx.type === 'Buy') balances[tx.coin_symbol] += Number(tx.amount);
                 else balances[tx.coin_symbol] -= Number(tx.amount);
             }
         });
-
-        // Dauginame balansą iš tos dienos kainos
         for (const [sym, qty] of Object.entries(balances)) {
-            if (qty > 0 && historyMap[sym] && historyMap[sym][dateStr]) {
-                dailyValue += qty * historyMap[sym][dateStr];
-            } else if (qty > 0) {
-                // Jei tos dienos kainos nėra (API skylė), bandom imti dabartinę arba 0
-                const coin = coinsList.find(c => c.symbol === sym);
-                if (coin && prices[coin.coingecko_id]) {
-                     // Fallback: naudojam šiandienos kainą jei nėra istorinės (kad grafikas nenukristų į 0)
-                    dailyValue += qty * prices[coin.coingecko_id].usd; 
+            if (qty > 0) {
+                if (historyMap[sym] && historyMap[sym][dateStr]) dailyValue += qty * historyMap[sym][dateStr];
+                else {
+                    // Fallback
+                    const coin = coinsList.find(c => c.symbol === sym);
+                    if (coin && prices[coin.coingecko_id]) dailyValue += qty * prices[coin.coingecko_id].usd; 
                 }
             }
         }
         chartData.push(dailyValue);
     }
-
     renderChart(chartLabels, chartData);
 }
 
@@ -238,11 +234,8 @@ function renderChart(labels, data) {
     grad.addColorStop(0, 'rgba(45, 212, 191, 0.3)'); 
     grad.addColorStop(1, 'rgba(45, 212, 191, 0.0)');
 
-    // Nustatome spalvą pagal trendą (pirmas vs paskutinis taškas)
-    let borderColor = '#2dd4bf'; // Žalia (Default)
-    if (data.length > 1 && data[data.length - 1] < data[0]) {
-        borderColor = '#f87171'; // Raudona, jei vertė krito
-    }
+    let borderColor = '#2dd4bf';
+    if (data.length > 1 && data[data.length - 1] < data[0]) borderColor = '#f87171';
 
     myChart = new Chart(ctx, {
         type: 'line',
@@ -254,8 +247,8 @@ function renderChart(labels, data) {
                 backgroundColor: grad, 
                 borderWidth: 2, 
                 fill: true, 
-                tension: 0.1, // Mažesnis tension = aštresni kampai (realesnis grafikas)
-                pointRadius: 0, // Paslepiame taškus, kad būtų švari linija
+                tension: 0.2, 
+                pointRadius: 0, 
                 pointHitRadius: 10
             }] 
         },
@@ -264,19 +257,60 @@ function renderChart(labels, data) {
             maintainAspectRatio: false, 
             plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } }, 
             scales: { x: { display: false }, y: { display: false } },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
         }
     });
 }
 
-// ... LIKUSIOS FUNKCIJOS LIEKA TOKIOS PAT KAIP BUVO v1.4.3 ...
-// (Čia tiesiog nukopijuokite viską, kas yra žemiau iš ankstesnio failo, 
-// arba naudokite šias, jos identiškos, tik kad būtų pilnas failas)
+// --- RENDER JOURNAL (24h Time & Visible Notes) ---
+function renderJournal() {
+    const tbody = document.getElementById('journal-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    if (transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
+        return;
+    }
+    const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+    sortedTx.forEach(tx => {
+        const row = document.createElement('tr');
+        const isBuy = tx.type === 'Buy';
+        
+        // 24h formatas (be AM/PM)
+        const dateObj = new Date(tx.date);
+        const dateStr = dateObj.toLocaleDateString('lt-LT') + ' ' + dateObj.toLocaleTimeString('lt-LT', {hour: '2-digit', minute:'2-digit', hour12: false});
 
+        const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
+        const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
+        
+        // Matoma pastaba
+        const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1 leading-tight"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
+
+        row.innerHTML = `
+            <td class="px-4 py-3 align-top border-b border-gray-800/30">
+                <div class="font-bold text-gray-200 text-sm flex items-center flex-wrap">${tx.coin_symbol} ${method}</div>
+                ${exchangeName}
+                <div class="text-[10px] text-gray-600 mt-0.5 mb-1">${dateStr}</div>
+                ${notesDisplay}
+            </td>
+            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
+                <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
+                <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
+            </td>
+            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
+                <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
+                <div class="flex justify-end gap-3 mt-2">
+                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// --- SMART PRICE FETCH ---
 async function fetchPriceForForm() {
     const symbol = document.getElementById('tx-coin').value;
     const dateVal = document.getElementById('tx-date').value;
@@ -315,48 +349,7 @@ async function fetchPriceForForm() {
     btn.innerText = oldText;
 }
 
-function renderJournal() {
-    const tbody = document.getElementById('journal-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (transactions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
-        return;
-    }
-    const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-    sortedTx.forEach(tx => {
-        const row = document.createElement('tr');
-        const isBuy = tx.type === 'Buy';
-        const dateObj = new Date(tx.date);
-        const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
-        const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
-        const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1 leading-tight"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
-
-        row.innerHTML = `
-            <td class="px-4 py-3 align-top border-b border-gray-800/30">
-                <div class="font-bold text-gray-200 text-sm flex items-center flex-wrap">${tx.coin_symbol} ${method}</div>
-                ${exchangeName}
-                <div class="text-[10px] text-gray-600 mt-0.5 mb-1">${dateStr}</div>
-                ${notesDisplay}
-            </td>
-            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
-                <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
-            </td>
-            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
-                <div class="flex justify-end gap-3 mt-2">
-                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
+// --- ACTIONS: EDIT & DELETE ---
 window.onEditTx = function(id) {
     const tx = transactions.find(t => t.id === id);
     if(!tx) return;
@@ -422,6 +415,7 @@ async function handleTxSubmit(e) {
     btn.disabled = false;
 }
 
+// --- DASHBOARD HELPERS ---
 function updateDashboard() {
     let holdings = {};
     let totalInvested = 0;
