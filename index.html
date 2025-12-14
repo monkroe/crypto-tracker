@@ -20,7 +20,6 @@
         }
     </script>
     
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -186,7 +185,7 @@
                     &copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.
                 </p>
                 <p class="text-[9px] font-mono text-gray-700 pt-1">
-                    Version 1.7.8
+                    Version 1.7.10
                 </p>
             </footer>
         </main>
@@ -233,7 +232,8 @@
                         <input 
                             type="date" 
                             id="tx-date-input" 
-                            required class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
+                            required 
+                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
                         >
                     </div>
                     <div class="relative">
@@ -296,7 +296,8 @@
                                 id="tx-amount" 
                                 step="any" 
                                 placeholder="0.00" 
-                                required class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
+                                required 
+                                class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
                             >
                         </div>
                         <div>
@@ -314,7 +315,8 @@
                                 id="tx-price" 
                                 step="any" 
                                 placeholder="0.00" 
-                                required class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
+                                required 
+                                class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
                             >
                         </div>
                     </div>
@@ -325,7 +327,8 @@
                             id="tx-total" 
                             step="any" 
                             placeholder="0.00" 
-                            required class="w-full bg-gray-900 border border-primary-500/50 text-white font-bold rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
+                            required 
+                            class="w-full bg-gray-900 border border-primary-500/50 text-white font-bold rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
                         >
                     </div>
                 </div>
@@ -416,14 +419,18 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase.js"></script>
     <script src="js/app.js"></script>
     
     <script>
+        // Set current year
         document.getElementById('auto-year').textContent = new Date().getFullYear();
         
+        // Modal functions
         function openModal(id) { 
             if(id === 'add-modal') {
+                // Reset form to empty state
                 document.getElementById('tx-id').value = ''; 
                 document.getElementById('add-tx-form').reset();
                 document.getElementById('modal-title').innerText = "New Transaction";
@@ -431,10 +438,12 @@
                 document.getElementById('btn-save').classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
                 document.getElementById('btn-save').classList.add('bg-primary-600', 'hover:bg-primary-500');
                 
+                // Clear inputs completely
                 document.getElementById('tx-amount').value = '';
                 document.getElementById('tx-price').value = '';
                 document.getElementById('tx-total').value = '';
                 
+                // Set current date/time
                 const now = new Date();
                 const dStr = now.toISOString().split('T')[0];
                 const tStr = now.toTimeString().split(' ')[0].slice(0,5);
@@ -449,6 +458,7 @@
             document.getElementById(id).classList.add('hidden'); 
         }
         
+        // Close modal on Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 ['add-modal', 'new-coin-modal', 'delete-coin-modal'].forEach(id => {
