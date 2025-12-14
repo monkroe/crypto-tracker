@@ -1,4 +1,4 @@
-// js/app.js - Pagrindinė logika
+// js/app.js - Versija 1.1.0 (Smart Sort & Fixes)
 
 // --- KINTAMIEJI ---
 let coinsList = [];
@@ -6,6 +6,9 @@ let transactions = [];
 let goals = [];
 let prices = {};
 let myChart = null;
+
+// Populiarios monetos, kurias norime matyti viršuje, net jei jų neturime
+const TOP_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 // --- INIT (STARTAS) ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -17,38 +20,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Įjungiame skaičiuoklę formoje
     setupCalculator();
     
-    // 3. Klausomės mygtukų paspaudimų
-    document.getElementById('add-tx-form').addEventListener('submit', handleTxSubmit);
-    document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
-    document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
+    // 3. Klausomės mygtukų
+    const form = document.getElementById('add-tx-form');
+    if (form) form.addEventListener('submit', handleTxSubmit);
+
+    const saveCoinBtn = document.getElementById('btn-save-coin');
+    if (saveCoinBtn) saveCoinBtn.addEventListener('click', handleNewCoinSubmit);
+    
+    const fetchPriceBtn = document.getElementById('btn-fetch-price');
+    if (fetchPriceBtn) fetchPriceBtn.addEventListener('click', fetchLivePriceForForm);
 });
 
 // --- DUOMENŲ UŽKROVIMAS ---
 async function loadAllData() {
-    // Rodyti "Loading..."
-    document.getElementById('journal-body').innerHTML = '<tr><td colspan="3" class="text-center py-4"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>';
+    const journalBody = document.getElementById('journal-body');
+    // Tik pirmą kartą rodome loading, kad neerzintų atnaujinant
+    if (journalBody && transactions.length === 0) {
+        journalBody.innerHTML = '<tr><td colspan="3" class="text-center py-4"><i class="fa-solid fa-spinner fa-spin"></i> Loading data...</td></tr>';
+    }
 
     try {
-        // Siunčiame užklausas į Supabase (naudojame funkcijas iš supabase.js)
-        coinsList = await getSupportedCoins();
-        transactions = await getTransactions();
-        
-        // Gauname tikslus (Goals) - tiesioginė užklausa čia, nes paprasta
-        const { data: goalsData } = await _supabase.from('crypto_goals').select('*');
-        goals = goalsData || [];
+        // Lygiagrečios užklausos greičiui
+        const [coinsData, txData, goalsData] = await Promise.all([
+            getSupportedCoins(),
+            getTransactions(),
+            _supabase.from('crypto_goals').select('*')
+        ]);
 
-        // Užpildome formos pasirinkimus (Dropdown)
-        populateCoinSelect();
+        coinsList = coinsData || [];
+        transactions = txData || [];
+        goals = goalsData.data || [];
 
-        // Gauname naujausias kainas
+        // 1. Gauname kainas
         await fetchPrices();
 
-        // Atvaizduojame viską
+        // 2. Atvaizduojame Dashboard (ir suskaičiuojame Holdings rūšiavimui)
+        const holdings = updateDashboard();
+
+        // 3. Užpildome Dropdown (Dabar jau žinome, ką turime, todėl galime rūšiuoti)
+        populateCoinSelect(holdings);
+
+        // 4. Atvaizduojame žurnalą
         renderJournal();
-        updateDashboard();
 
     } catch (e) {
-        console.error("Klaida užkraunant duomenis:", e);
+        console.error("Critical error loading data:", e);
     }
 }
 
@@ -59,20 +75,28 @@ async function fetchPrices() {
     const ids = coinsList.map(c => c.coingecko_id).join(',');
     try {
         const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
-        prices = await res.json();
-        console.log("Kainos atnaujintos:", prices);
+        
+        if (!res.ok) throw new Error("API Limit");
+        
+        const newPrices = await res.json();
+        // Sujungiame su senomis kainomis (jei API nepavyktų dalinai)
+        prices = { ...prices, ...newPrices };
+        console.log("Kainos atnaujintos.");
     } catch (e) {
-        console.error("CoinGecko Error:", e);
-        // Jei nepavyksta, kainos lieka tuščios (nerodys vertės)
+        console.warn("CoinGecko API limit reached or error. Using old prices.");
     }
 }
 
 async function fetchLivePriceForForm() {
-    const symbol = document.getElementById('tx-coin').value;
+    const symbolEl = document.getElementById('tx-coin');
+    if (!symbolEl) return;
+    
+    const symbol = symbolEl.value;
     const coin = coinsList.find(c => c.symbol === symbol);
     if (!coin) return;
 
     const btn = document.getElementById('btn-fetch-price');
+    const originalText = btn.innerHTML; // Išsaugome ikoną/tekstą
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
     try {
@@ -80,53 +104,104 @@ async function fetchLivePriceForForm() {
         const data = await res.json();
         const price = data[coin.coingecko_id].usd;
         
-        document.getElementById('tx-price').value = price;
-        // Trigger calculator
-        document.getElementById('tx-price').dispatchEvent(new Event('input'));
+        const priceInput = document.getElementById('tx-price');
+        priceInput.value = price;
+        // Iššaukiame įvykį skaičiuoklei
+        priceInput.dispatchEvent(new Event('input'));
     } catch (e) {
-        alert("Nepavyko gauti kainos.");
+        alert("CoinGecko API busy. Try again in 30s.");
     }
-    btn.innerText = "GET LIVE";
+    btn.innerHTML = originalText;
 }
 
 // --- VARTOTOJO SĄSAJA (UI) ---
 
-function populateCoinSelect() {
+// IŠMANUS RŪŠIAVIMAS: Holdings -> Top Coins -> Alphabet
+function populateCoinSelect(holdings = {}) {
     const select = document.getElementById('tx-coin');
+    if (!select) return;
+    
+    // Išsaugome, ką vartotojas buvo pasirinkęs (jei perkraunam duomenis)
+    const currentSelection = select.value;
+
     select.innerHTML = '';
-    coinsList.forEach(coin => {
+
+    // Rūšiavimo logika
+    const sortedCoins = [...coinsList].sort((a, b) => {
+        const holdsA = (holdings[a.symbol] || 0) > 0;
+        const holdsB = (holdings[b.symbol] || 0) > 0;
+
+        // 1. Prioritetas: Ar aš turiu šią monetą?
+        if (holdsA && !holdsB) return -1;
+        if (!holdsA && holdsB) return 1;
+
+        // 2. Prioritetas: Ar tai Top moneta (BTC, KAS...)?
+        const isTopA = TOP_COINS.includes(a.symbol);
+        const isTopB = TOP_COINS.includes(b.symbol);
+        if (isTopA && !isTopB) return -1;
+        if (!isTopA && isTopB) return 1;
+
+        // 3. Prioritetas: Abėcėlė
+        return a.symbol.localeCompare(b.symbol);
+    });
+
+    sortedCoins.forEach(coin => {
         const option = document.createElement('option');
         option.value = coin.symbol;
-        option.textContent = coin.symbol; // Tik simbolis, kad tilptų mobile
+        
+        // Pažymime vizualiai, kurias turi
+        const hasBalance = (holdings[coin.symbol] || 0) > 0;
+        option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
+        
         select.appendChild(option);
+    });
+
+    // Atstatome pasirinkimą, jei įmanoma
+    if (currentSelection) {
+        select.value = currentSelection;
+    }
+}
+
+// FORMATAVIMO PAGALBININKAS (Helper)
+function formatMoney(amount) {
+    // Jei kaina labai maža (pvz. 0.00004), rodome daugiau skaičių
+    // Jei kaina didelė (BTC), rodome 2 skaičius
+    return Number(amount).toLocaleString('en-US', {
+        minimumFractionDigits: amount < 1 ? 4 : 2,
+        maximumFractionDigits: amount < 1 ? 8 : 2
     });
 }
 
 function renderJournal() {
     const tbody = document.getElementById('journal-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (transactions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-xs text-gray-600">No transactions yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet. Start adding!</td></tr>';
         return;
     }
 
     transactions.forEach(tx => {
         const row = document.createElement('tr');
         const isBuy = tx.type === 'Buy';
+        const dateObj = new Date(tx.date);
+        const dateStr = dateObj.toLocaleDateString(); // Paprastesnė data
         
         row.innerHTML = `
-            <td class="px-4 py-3 align-top">
-                <div class="font-bold text-gray-200 text-sm">${tx.coin_symbol}</div>
-                <div class="text-[10px] text-gray-500">${tx.date}</div>
+            <td class="px-4 py-3 align-top border-b border-gray-800/50">
+                <div class="font-bold text-gray-200 text-sm flex items-center gap-1">
+                    ${tx.coin_symbol}
+                    <span class="text-[9px] px-1.5 py-0.5 rounded ${isBuy ? 'bg-teal-900/50 text-teal-400' : 'bg-red-900/50 text-red-400'}">${tx.type}</span>
+                </div>
+                <div class="text-[10px] text-gray-500">${dateStr}</div>
             </td>
-            <td class="px-4 py-3 text-right align-top">
-                <div class="text-xs text-gray-300">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
-                <div class="text-[10px] text-gray-500">@ $${Number(tx.price_per_coin).toFixed(4)}</div>
+            <td class="px-4 py-3 text-right align-top border-b border-gray-800/50">
+                <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toLocaleString('en-US', {maximumFractionDigits: 6})}</div>
+                <div class="text-[10px] text-gray-500">@ $${Number(tx.price_per_coin).toLocaleString('en-US', {maximumFractionDigits: 6})}</div>
             </td>
-            <td class="px-4 py-3 text-right align-top">
-                <div class="font-bold text-sm ${isBuy ? 'text-gray-300' : 'text-gray-500'}">$${Number(tx.total_cost_usd).toFixed(2)}</div>
-                <div class="text-[10px] ${isBuy ? 'text-primary-500' : 'text-red-400'} uppercase font-bold tracking-wider">${tx.type}</div>
+            <td class="px-4 py-3 text-right align-top border-b border-gray-800/50">
+                <div class="font-bold text-sm text-gray-200">$${Number(tx.total_cost_usd).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
             </td>
         `;
         tbody.appendChild(row);
@@ -134,7 +209,6 @@ function renderJournal() {
 }
 
 function updateDashboard() {
-    // 1. Skaičiuojame Holdings (Kiek ko turime) ir Investuotą sumą
     let holdings = {};
     let totalInvested = 0;
 
@@ -149,17 +223,14 @@ function updateDashboard() {
             totalInvested += cost;
         } else {
             holdings[tx.coin_symbol] -= amount;
-            // Paprastas PnL skaičiavimas: pardavus, mažiname investuotą sumą proporcingai, arba tiesiog atimame gautus pinigus (Cash out).
-            // Čia naudosime "Cash Flow" metodą: Invested mažėja per pardavimo sumą.
             totalInvested -= cost; 
         }
     });
 
-    // 2. Skaičiuojame Dabartinę Vertę (Current Value)
     let currentPortfolioValue = 0;
     
     for (const [symbol, amount] of Object.entries(holdings)) {
-        if (amount <= 0.000001) continue; // Ignoruojame nulinius likučius
+        if (amount <= 0.0000001) continue;
 
         const coin = coinsList.find(c => c.symbol === symbol);
         if (coin && prices[coin.coingecko_id]) {
@@ -168,41 +239,46 @@ function updateDashboard() {
         }
     }
 
-    // 3. Atnaujiname Header
-    document.getElementById('header-total-value').innerText = `$${currentPortfolioValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    // Header Update
+    const headerValue = document.getElementById('header-total-value');
+    if (headerValue) headerValue.innerText = `$${formatMoney(currentPortfolioValue)}`;
 
-    // 4. Atnaujiname PnL kortelę
+    // PnL Update
     const pnl = currentPortfolioValue - totalInvested;
-    // Apsauga nuo dalybos iš nulio
     let pnlPercent = 0;
-    if (totalInvested !== 0) {
-        pnlPercent = (pnl / Math.abs(totalInvested)) * 100;
+    if (totalInvested > 0) {
+        pnlPercent = (pnl / totalInvested) * 100;
     }
 
     const pnlEl = document.getElementById('total-pnl');
     const pnlPercEl = document.getElementById('total-pnl-percent');
 
-    pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-    pnlEl.className = `text-2xl font-bold ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    if (pnlEl) {
+        pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$${formatMoney(pnl)}`;
+        pnlEl.className = `text-2xl font-bold ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    }
     
-    pnlPercEl.innerText = `${pnlPercent.toFixed(2)}%`;
-    pnlPercEl.className = `text-xs font-bold px-2 py-0.5 rounded bg-gray-800 ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    if (pnlPercEl) {
+        pnlPercEl.innerText = `${pnlPercent.toFixed(2)}%`;
+        pnlPercEl.className = `text-xs font-bold px-2 py-0.5 rounded bg-gray-800 ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`;
+    }
 
-    // 5. Atnaujiname Grafiką
     renderChart(totalInvested, currentPortfolioValue);
-
-    // 6. Atnaujiname Tikslus (Goals)
     renderGoals(holdings);
 
-    // 7. Išsaugome istoriją į DB (Snapshots)
+    // Save Snapshot
     if (typeof savePortfolioSnapshot === 'function') {
         savePortfolioSnapshot(currentPortfolioValue, totalInvested);
     }
+
+    return holdings; // Grąžiname, kad žinotume ką rūšiuoti
 }
 
 function renderGoals(holdings) {
     const container = document.getElementById('goals-container');
     const section = document.getElementById('goals-section');
+    if (!container || !section) return;
+
     container.innerHTML = '';
 
     if (goals.length === 0) {
@@ -217,50 +293,54 @@ function renderGoals(holdings) {
         const percent = Math.min(100, (currentAmount / target) * 100);
         
         const div = document.createElement('div');
-        div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl';
+        div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl relative overflow-hidden';
         div.innerHTML = `
-            <div class="flex justify-between text-xs mb-1">
-                <span class="font-bold text-gray-300">${goal.coin_symbol} Goal</span>
+            <div class="flex justify-between text-xs mb-1 relative z-10">
+                <span class="font-bold text-gray-300 flex items-center gap-2">
+                    <i class="fa-solid fa-bullseye text-primary-500"></i> ${goal.coin_symbol}
+                </span>
                 <span class="text-primary-400 font-bold">${percent.toFixed(1)}%</span>
             </div>
-            <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                <div class="bg-primary-500 h-2 rounded-full" style="width: ${percent}%"></div>
+            <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden mt-2">
+                <div class="bg-primary-500 h-1.5 rounded-full shadow-[0_0_10px_rgba(45,212,191,0.5)]" style="width: ${percent}%"></div>
             </div>
-            <div class="flex justify-between text-[10px] text-gray-500 mt-1">
-                <span>${currentAmount.toFixed(0)} / ${target.toLocaleString()}</span>
-                <span>${(target - currentAmount).toFixed(0)} left</span>
+            <div class="flex justify-between text-[9px] text-gray-500 mt-1.5">
+                <span>${currentAmount.toLocaleString()} held</span>
+                <span>Target: ${target.toLocaleString()}</span>
             </div>
         `;
         container.appendChild(div);
     });
 }
 
-// --- GRAFIKAS (Chart.js) ---
 function renderChart(invested, current) {
-    const ctx = document.getElementById('pnlChart').getContext('2d');
+    const ctxEl = document.getElementById('pnlChart');
+    if (!ctxEl) return;
+    const ctx = ctxEl.getContext('2d');
     
-    // Gradientas
+    // Modernus gradientas
     const gradient = ctx.createLinearGradient(0, 0, 0, 160);
-    gradient.addColorStop(0, 'rgba(45, 212, 191, 0.5)'); // Primary color
+    gradient.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); 
     gradient.addColorStop(1, 'rgba(45, 212, 191, 0.0)');
 
     if (myChart) myChart.destroy();
 
     myChart = new Chart(ctx, {
-        type: 'line', // Keičiame į Line grafiką, gražiau atrodo
+        type: 'line',
         data: {
-            labels: ['Cost Basis', 'Current Value'],
+            labels: ['Invested', 'Current Value'],
             datasets: [{
-                label: 'Portfolio Value',
+                label: 'USD',
                 data: [invested, current],
                 borderColor: '#2dd4bf',
                 backgroundColor: gradient,
                 borderWidth: 2,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
+                pointRadius: 6,
                 pointBackgroundColor: '#1f2937',
-                pointBorderColor: '#2dd4bf'
+                pointBorderColor: '#2dd4bf',
+                pointBorderWidth: 2,
+                fill: true,
+                tension: 0.4
             }]
         },
         options: {
@@ -268,19 +348,26 @@ function renderChart(invested, current) {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                y: { display: false }, // Paslepiame ašis švaresniam vaizdui
-                x: { ticks: { color: '#6b7280', font: {size: 10} }, grid: {display: false} }
-            }
+                y: { display: false },
+                x: { 
+                    ticks: { color: '#6b7280', font: {size: 11, family: 'sans-serif'} }, 
+                    grid: {display: false} 
+                }
+            },
+            animation: { duration: 1500, easing: 'easeOutQuart' }
         }
     });
 }
 
-// --- LOGIKA: ADD TRANSACTION FORM ---
+// --- LOGIKA: SKAIČIUOKLĖ ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
     const totalIn = document.getElementById('tx-total');
 
+    if (!amountIn || !priceIn || !totalIn) return;
+
+    // 1. Įvedus Kiekį ir Kainą -> Skaičiuoja Total
     function calcTotal() {
         const amt = parseFloat(amountIn.value);
         const prc = parseFloat(priceIn.value);
@@ -289,19 +376,27 @@ function setupCalculator() {
         }
     }
     
-    // Atvirkštinė logika: jei įvedi Total ir Price -> suskaičiuoja Amount
+    // 2. Įvedus Total ir Kainą -> Skaičiuoja Kiekį
+    // Svarbu: naudojame 'input' įvykį, kad veiktų iškart rašant
     function calcAmount() {
         const tot = parseFloat(totalIn.value);
         const prc = parseFloat(priceIn.value);
         if (!isNaN(tot) && !isNaN(prc) && prc !== 0) {
-            amountIn.value = (tot / prc).toFixed(6); // Daugiau tikslumo monetoms
+            // Skaičiuojame tiksliai
+            const result = tot / prc;
+            amountIn.value = result.toFixed(6); 
         }
     }
 
     amountIn.addEventListener('input', calcTotal);
-    priceIn.addEventListener('input', calcTotal);
-    // Jei vartotojas keičia Total, galime perskaičiuoti Amount
-    totalIn.addEventListener('change', calcAmount); 
+    priceIn.addEventListener('input', () => {
+        // Jei vartotojas keičia kainą, priklauso ką jis prieš tai redagavo.
+        // Standartiškai atnaujiname Total
+        if (amountIn.value) calcTotal();
+    });
+    
+    // Šitas pataisymas leidžia rašant Total iškart gauti Amount
+    totalIn.addEventListener('input', calcAmount); 
 }
 
 async function handleTxSubmit(e) {
@@ -326,33 +421,39 @@ async function handleTxSubmit(e) {
     if (success) {
         closeModal();
         e.target.reset();
-        document.getElementById('tx-date').valueAsDate = new Date(); // Reset date
-        await loadAllData(); // Perkrauti viską
+        const dateEl = document.getElementById('tx-date');
+        if (dateEl) dateEl.valueAsDate = new Date();
+        await loadAllData();
     }
 
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
 
-// --- LOGIKA: ADD NEW COIN ---
 async function handleNewCoinSubmit() {
-    const symbol = document.getElementById('new-coin-symbol').value.toUpperCase();
-    const id = document.getElementById('new-coin-id').value.toLowerCase();
+    const symbolEl = document.getElementById('new-coin-symbol');
+    const idEl = document.getElementById('new-coin-id');
     const btn = document.getElementById('btn-save-coin');
+
+    if (!symbolEl || !idEl) return;
+    
+    const symbol = symbolEl.value.toUpperCase();
+    const id = idEl.value.toLowerCase();
 
     if (!symbol || !id) return alert("Please fill both fields");
 
+    const originalText = btn.innerText;
     btn.innerText = "Saving...";
     
     const success = await saveNewCoin({ symbol: symbol, coingecko_id: id, name: symbol });
     
     if (success) {
         document.getElementById('new-coin-modal').classList.add('hidden');
-        document.getElementById('new-coin-symbol').value = '';
-        document.getElementById('new-coin-id').value = '';
+        symbolEl.value = '';
+        idEl.value = '';
         await loadAllData();
     } else {
         alert("Error adding coin. Maybe symbol already exists?");
     }
-    btn.innerText = "Add Coin";
+    btn.innerText = originalText;
 }
