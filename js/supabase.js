@@ -1,8 +1,8 @@
 // js/supabase.js - Versija 1.3.1 (With User Auth Logic)
 
 // ĮKLIJUOK SAVO DUOMENIS ČIA:
-const SUPABASE_URL = 'https://TAVO_PROJEKTO_ID.supabase.co'; 
-const SUPABASE_KEY = 'TAVO_VIEŠAS_RAKTAS_CIA';
+const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
+const SUPABASE_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
