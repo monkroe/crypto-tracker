@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.11 (Ištaisytas redagavimo formos užpildymas)
+// js/app.js - Versija 1.7.14 (Ištaisytas datos/laiko konvertavimas ir grafikas)
 
-const APP_VERSION = '1.7.11';
+const APP_VERSION = '1.7.14';
 
 let coinsList = [];
 let transactions = [];
@@ -185,6 +185,8 @@ function formatMoney(value) {
     return new Intl.NumberFormat('en-US', options).format(value);
 }
 
+const padTo2Digits = (num) => String(num).padStart(2, '0');
+
 // ===============================================
 // DATA LOADING
 // ===============================================
@@ -210,16 +212,30 @@ async function loadAllData() {
 
         const holdings = updateDashboard();
         
+        // Paimame vertes is atnaujinto Dashboard (skirtos Chart.js)
+        let totalInvested = 0;
+        let totalValue = 0;
+        
+        Object.values(holdings).forEach(data => {
+            totalInvested += data.invested;
+        });
+
+        Object.entries(holdings).forEach(([sym, data]) => {
+            if (data.qty > 0) {
+                const coin = coinsList.find(c => c.symbol === sym);
+                if (coin && prices[coin.coingecko_id]) {
+                    totalValue += data.qty * prices[coin.coingecko_id].usd;
+                }
+            }
+        });
+        
         populateCoinSelect(holdings); 
         
         renderJournal();
         renderGoals(holdings); 
         
-        if (transactions.length > 0) {
-            // generateHistoryChart(); 
-        } else {
-            renderChart([], []); 
-        }
+        // Grafiko inicializavimas
+        renderChart(totalInvested, totalValue); 
 
     } catch (e) {
         console.error('Error loading data in app.js:', e);
@@ -389,6 +405,7 @@ function renderJournal() {
         
         const dateObj = new Date(tx.date);
         
+        // PATAISYTA: Naudojame vietinę vartotojo laiko juostą atvaizdavimui
         const dateStr = dateObj.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'numeric',
@@ -464,13 +481,35 @@ function renderChart(invested, current) {
     const ctxEl = document.getElementById('pnlChart');
     if (!ctxEl) return;
     if (myChart) myChart.destroy();
+    
+    const dataInvested = invested || 0;
+    const dataCurrent = current || 0;
+    
     const ctx = ctxEl.getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 160);
     grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
     myChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: ['Invested', 'Current'], datasets: [{ data: [invested, current], borderColor: '#2dd4bf', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#1f2937', pointBorderColor: '#2dd4bf' }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
+        data: { labels: ['Invested', 'Current'], datasets: [{ 
+            data: [dataInvested, dataCurrent], 
+            borderColor: '#2dd4bf', 
+            backgroundColor: grad, 
+            borderWidth: 2, 
+            fill: true, 
+            tension: 0.3, 
+            pointRadius: 4, 
+            pointBackgroundColor: '#1f2937', 
+            pointBorderColor: '#2dd4bf' 
+        }] },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } }, 
+            scales: { 
+                x: { display: false }, 
+                y: { display: false } 
+            } 
+        }
     });
 }
 
@@ -512,7 +551,10 @@ async function handleTxSubmit(e) {
         return;
     }
     
-    const finalDate = `${dStr}T${tStr}:00`; 
+    // PRADINIS PATAISYMAS (V1.7.14): Naudojame vietinio laiko konvertavimą į ISO
+    // Tai padeda Supabase teisingai suprasti laiką, bet neleidžia jo keisti į UTC
+    const date = new Date(`${dStr}T${tStr}:00`);
+    const finalDate = date.toISOString(); 
     
     const txData = {
         date: finalDate,
@@ -546,11 +588,10 @@ window.onEditTx = function(id) {
     const tx = transactions.find(t => t.id === id);
     if (!tx) return;
     
-    // 1. Prieš atidarant modalą, visada jį nustatome į 'New Transaction' būseną
-    document.getElementById('tx-id').value = ''; 
-    document.getElementById('add-tx-form').reset(); 
+    // Prieš atidarant modalą, visada jį nustatome į 'New Transaction' būseną
+    // (openModal tai daro, bet čia dar kartą, kad būtų švaru)
     
-    // 2. Nustatome redagavimo būseną
+    // Nustatome redagavimo būseną
     document.getElementById('modal-title').innerText = "Edit Transaction";
     document.getElementById('btn-save').innerText = "Update Transaction";
     document.getElementById('btn-save').classList.remove('bg-primary-600', 'hover:bg-primary-500');
@@ -562,23 +603,28 @@ window.onEditTx = function(id) {
     document.getElementById('tx-exchange').value = tx.exchange || '';
     document.getElementById('tx-method').value = tx.method || 'Market Buy';
 
-    // 3. DATOS IR LAIKO KONVERTAVIMAS: Būtina užtikrinti ISO formatą date/time inputams
-    // Supabase date formatas yra ISO, bet norint išvesti jį teisingai HTML date/time laukuose:
+    // 3. KRITINIS PATAISYMAS: Datos/laiko konvertavimas, naudojant Date objektą
     
-    // Tiesiogiai naudojame transakcijos datą/laiką
-    const fullDateStr = tx.date; 
+    // V1.7.13 pataisė tik dalinai. V1.7.14 naudoja vietinį laiką, kad gauti teisingą datą
+    const dateObj = new Date(tx.date);
+
+    // Formatuojame datą (YYYY-MM-DD)
+    const dStr = [
+        dateObj.getFullYear(),
+        padTo2Digits(dateObj.getMonth() + 1),
+        padTo2Digits(dateObj.getDate()),
+    ].join('-');
     
-    // Išskiriame datą (YYYY-MM-DD)
-    const dStr = fullDateStr.substring(0, 10); 
-    
-    // Išskiriame laiką (HH:MM), kartais Supabase grąžina 'HH:MM:SS', bet reikia tik 'HH:MM'
-    // Laikas yra 11 pozicijoje, baigiasi 16 pozicijoje (HH:MM)
-    const tStr = fullDateStr.substring(11, 16); 
+    // Formatuojame laiką (HH:MM)
+    const tStr = [
+        padTo2Digits(dateObj.getHours()),
+        padTo2Digits(dateObj.getMinutes()),
+    ].join(':');
     
     document.getElementById('tx-date-input').value = dStr;
     document.getElementById('tx-time-input').value = tStr;
 
-    // 4. SKAIČIŲ KONVERTAVIMAS: Naudojame .toFixed() kad išvengtume lokalizacijos klaidų (kablelių)
+    // 4. SKAIČIŲ KONVERTAVIMAS: Naudojame .toFixed() ir konvertuojame į String
     document.getElementById('tx-amount').value = Number(tx.amount).toFixed(6);
     document.getElementById('tx-price').value = Number(tx.price_per_coin).toFixed(8);
     document.getElementById('tx-total').value = Number(tx.total_cost_usd).toFixed(2);
