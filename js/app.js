@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.4.0 (Full Edit/Delete & Historical Price)
+// js/app.js - Versija 1.4.1 (Fix: Edit Modal Population)
 
 let coinsList = [];
 let transactions = [];
@@ -8,7 +8,7 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.4.0");
+    console.log("App started v1.4.1");
     _supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
             document.getElementById('auth-screen').classList.add('hidden');
@@ -68,7 +68,7 @@ function setupAppListeners() {
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
     
-    // FETCH PRICE LOGIKA SU ISTORIJA
+    // FETCH PRICE
     const btnFetch = document.getElementById('btn-fetch-price');
     btnFetch.replaceWith(btnFetch.cloneNode(true));
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
@@ -128,7 +128,6 @@ async function fetchCurrentPrices() {
     } catch (e) { console.warn("Price error"); }
 }
 
-// --- SMART PRICE FETCH (CURRENT OR HISTORY) ---
 async function fetchPriceForForm() {
     const symbol = document.getElementById('tx-coin').value;
     const dateVal = document.getElementById('tx-date').value;
@@ -144,20 +143,16 @@ async function fetchPriceForForm() {
         const selectedDate = new Date(dateVal);
         const today = new Date();
         
-        // Jei data yra šiandien (arba ateityje), imam Live Price
         if (selectedDate.toDateString() === today.toDateString()) {
             const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
             const data = await res.json();
             price = data[coin.coingecko_id].usd;
         } else {
-            // Jei data praeityje -> imame istorinę (History API)
-            // CoinGecko formatas: DD-MM-YYYY
             const d = selectedDate.getDate().toString().padStart(2, '0');
             const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
             const y = selectedDate.getFullYear();
             const dateStr = `${d}-${m}-${y}`;
             
-            console.log("Fetching history for:", dateStr);
             const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin.coingecko_id}/history?date=${dateStr}`);
             const data = await res.json();
             
@@ -171,7 +166,7 @@ async function fetchPriceForForm() {
         if (price > 0) {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
-            priceInput.dispatchEvent(new Event('input')); // Trigger calculator
+            priceInput.dispatchEvent(new Event('input'));
         }
     } catch (e) { 
         console.error(e);
@@ -180,7 +175,7 @@ async function fetchPriceForForm() {
     btn.innerText = oldText;
 }
 
-// --- RENDER JOURNAL (SU EDIT/DELETE) ---
+// --- RENDER JOURNAL ---
 function renderJournal() {
     const tbody = document.getElementById('journal-body');
     if (!tbody) return;
@@ -192,7 +187,6 @@ function renderJournal() {
         const row = document.createElement('tr');
         const isBuy = tx.type === 'Buy';
         const dateObj = new Date(tx.date);
-        // Formatuojame datą ir laiką: YYYY-MM-DD HH:MM
         const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
         const method = tx.method ? `<div class="text-[9px] text-gray-500 italic">${tx.method}</div>` : '';
@@ -200,7 +194,7 @@ function renderJournal() {
 
         row.innerHTML = `
             <td class="px-4 py-3 align-top border-b border-gray-800/30">
-                <div class="font-bold text-gray-200 text-sm flex items-center">${tx.coin_symbol} ${notesIcon}</div>
+                <div class="font-bold text-gray-200 text-sm flex items-center gap-1">${tx.coin_symbol} ${notesIcon}</div>
                 <div class="text-[10px] text-gray-500">${dateStr}</div>
                 ${method}
             </td>
@@ -211,9 +205,9 @@ function renderJournal() {
             <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
                 <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
                 
-                <div class="flex justify-end gap-3 mt-1">
-                    <button onclick="onEditTx(${tx.id})" class="text-gray-600 hover:text-primary-400 text-xs"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-600 hover:text-red-400 text-xs"><i class="fa-solid fa-trash"></i></button>
+                <div class="flex justify-end gap-3 mt-2">
+                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-primary-400 text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-400 text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         `;
@@ -221,36 +215,40 @@ function renderJournal() {
     });
 }
 
-// --- EDIT / DELETE ACTIONS ---
+// --- ACTIONS: EDIT / DELETE (PAKEISTA LOGIKA) ---
+
 window.onEditTx = function(id) {
     const tx = transactions.find(t => t.id === id);
     if(!tx) return;
 
-    // Užpildome formą
-    document.getElementById('tx-id').value = tx.id;
-    document.getElementById('tx-type').value = tx.type;
-    
-    // Konvertuojame datą į datetime-local formatą (YYYY-MM-DDTHH:MM)
-    const d = new Date(tx.date);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    document.getElementById('tx-date').value = d.toISOString().slice(0, 16);
-    
-    document.getElementById('tx-coin').value = tx.coin_symbol;
-    document.getElementById('tx-exchange').value = tx.exchange;
-    document.getElementById('tx-method').value = tx.method || 'Market Buy';
-    document.getElementById('tx-amount').value = tx.amount;
-    document.getElementById('tx-price').value = tx.price_per_coin;
-    document.getElementById('tx-total').value = tx.total_cost_usd;
-    document.getElementById('tx-notes').value = tx.notes || '';
-
-    // Pakeičiame mygtuką ir pavadinimą
-    document.getElementById('modal-title').innerText = "Edit Transaction";
-    const btn = document.getElementById('btn-save');
-    btn.innerText = "Update Transaction";
-    btn.classList.remove('bg-primary-600', 'hover:bg-primary-500');
-    btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500'); // Geltonas redaguojant
-
+    // 1. PIRMA: Atidarome modalą (kad jis išsivalytų ir pasiruoštų)
     openModal('add-modal');
+
+    // 2. TADA: Užpildome duomenimis (perrašome tuščius laukus)
+    setTimeout(() => {
+        document.getElementById('tx-id').value = tx.id;
+        document.getElementById('tx-type').value = tx.type;
+        
+        // Datos konversija
+        const d = new Date(tx.date);
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        document.getElementById('tx-date').value = d.toISOString().slice(0, 16);
+        
+        document.getElementById('tx-coin').value = tx.coin_symbol;
+        document.getElementById('tx-exchange').value = tx.exchange;
+        document.getElementById('tx-method').value = tx.method || 'Market Buy';
+        document.getElementById('tx-amount').value = tx.amount;
+        document.getElementById('tx-price').value = tx.price_per_coin;
+        document.getElementById('tx-total').value = tx.total_cost_usd;
+        document.getElementById('tx-notes').value = tx.notes || '';
+
+        // Pakeičiame mygtuką į "Update"
+        document.getElementById('modal-title').innerText = "Edit Transaction";
+        const btn = document.getElementById('btn-save');
+        btn.innerText = "Update Transaction";
+        btn.classList.remove('bg-primary-600', 'hover:bg-primary-500');
+        btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+    }, 50); // Trumpa pauzė užtikrina, kad HTML reset nesuveiktų vėliau
 };
 
 window.onDeleteTx = async function(id) {
@@ -268,18 +266,18 @@ async function handleTxSubmit(e) {
     btn.innerText = "Saving...";
     btn.disabled = true;
 
-    const txId = document.getElementById('tx-id').value; // Jei yra ID -> Update
+    const txId = document.getElementById('tx-id').value;
     const rawAmount = document.getElementById('tx-amount').value;
     const rawPrice = document.getElementById('tx-price').value;
     const rawTotal = document.getElementById('tx-total').value;
 
     const txData = {
-        date: document.getElementById('tx-date').value, // Dabar jau timestamp
+        date: document.getElementById('tx-date').value,
         type: document.getElementById('tx-type').value,
         coin_symbol: document.getElementById('tx-coin').value,
         exchange: document.getElementById('tx-exchange').value,
         method: document.getElementById('tx-method').value,
-        notes: document.getElementById('tx-notes').value, // NAUJA
+        notes: document.getElementById('tx-notes').value,
         amount: parseFloat(rawAmount),
         price_per_coin: parseFloat(rawPrice),
         total_cost_usd: parseFloat(rawTotal)
@@ -287,10 +285,8 @@ async function handleTxSubmit(e) {
 
     let success = false;
     if (txId) {
-        // UPDATE
         success = await updateTransaction(txId, txData);
     } else {
-        // CREATE
         success = await saveTransaction(txData);
     }
 
@@ -302,10 +298,7 @@ async function handleTxSubmit(e) {
     btn.disabled = false;
 }
 
-// ... (Kitos funkcijos: updateDashboard, formatMoney, handleNewCoinSubmit ir t.t. lieka tokios pat) ...
-// Įsitikinkite, kad nukopijuojate visą updateDashboard ir kitas funkcijas iš praeito kodo, jei aš čia jas sutrumpinau vietos taupymui.
-// Žemiau pridedu trūkstamas funkcijas, kad kodas būtų pilnas.
-
+// --- DASHBOARD HELPERS ---
 function updateDashboard() {
     let holdings = {};
     let totalInvested = 0;
