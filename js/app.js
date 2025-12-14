@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.3.0 (Fixed Calc & Types)
+// js/app.js - Versija 1.3.1 (Fixed Goals Logic)
 
 let coinsList = [];
 let transactions = [];
@@ -8,19 +8,19 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.3.0");
+    console.log("App started v1.3.1");
     await loadAllData();
     setupCalculator();
     
     // Listeners (Klausikliai)
     const form = document.getElementById('add-tx-form');
     if (form) {
-        // Pašaliname senus listenerius ir dedame naują
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
     }
 
+    // Pakeistas listeneris monetų pridėjimui
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
     document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
@@ -31,6 +31,7 @@ async function loadAllData() {
     if (journalBody && transactions.length === 0) journalBody.innerHTML = '<tr><td colspan="3" class="text-center py-6">Loading...</td></tr>';
 
     try {
+        // Paimame duomenis iš Supabase
         const [coinsData, txData, goalsData] = await Promise.all([
             getSupportedCoins(),
             getTransactions(),
@@ -81,7 +82,7 @@ async function fetchLivePriceForForm() {
         
         const priceInput = document.getElementById('tx-price');
         priceInput.value = price;
-        priceInput.dispatchEvent(new Event('input'));
+        priceInput.dispatchEvent(new Event('input')); // Iškviečia kalkuliatorių
     } catch (e) { alert("Busy. Try later."); }
     btn.innerText = oldText;
 }
@@ -143,7 +144,10 @@ function renderJournal() {
         tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
         return;
     }
-    transactions.forEach(tx => {
+    // Rūšiuojame pagal datą (naujausi viršuje)
+    const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    sortedTx.forEach(tx => {
         const row = document.createElement('tr');
         const isBuy = tx.type === 'Buy';
         row.innerHTML = `
@@ -167,6 +171,8 @@ function renderJournal() {
 function updateDashboard() {
     let holdings = {};
     let totalInvested = 0;
+    
+    // Skaičiuojame balansus
     transactions.forEach(tx => {
         if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = 0;
         const amt = Number(tx.amount);
@@ -207,20 +213,37 @@ function renderGoals(holdings) {
     const section = document.getElementById('goals-section');
     if (!container || !section) return;
     container.innerHTML = '';
-    if (goals.length === 0) { section.classList.add('hidden'); return; }
+    
+    // Jei nėra tikslų, slepiame sekciją
+    if (goals.length === 0) { 
+        section.classList.add('hidden'); 
+        return; 
+    }
+    
     section.classList.remove('hidden');
+    
     goals.forEach(goal => {
         const current = holdings[goal.coin_symbol] || 0;
         const target = Number(goal.target_amount);
+        
+        // Apsauga nuo dalybos iš nulio
+        if (target <= 0) return;
+
         const pct = Math.min(100, (current / target) * 100);
+        
         const div = document.createElement('div');
         div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl';
         div.innerHTML = `
             <div class="flex justify-between text-xs mb-1">
-                <span class="font-bold text-gray-300">${goal.coin_symbol}</span><span class="text-primary-400 font-bold">${pct.toFixed(1)}%</span>
+                <span class="font-bold text-gray-300">${goal.coin_symbol}</span>
+                <span class="text-primary-400 font-bold">${pct.toFixed(1)}%</span>
             </div>
-            <div class="w-full bg-gray-800 rounded-full h-1.5"><div class="bg-primary-500 h-1.5 rounded-full" style="width: ${pct}%"></div></div>
-            <div class="text-[9px] text-gray-500 mt-1 text-right">${current.toFixed(2)} / ${target.toLocaleString()}</div>
+            <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-primary-500 h-1.5 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+            </div>
+            <div class="text-[9px] text-gray-500 mt-1 text-right font-mono">
+                ${current.toLocaleString(undefined, {maximumFractionDigits: 2})} / ${target.toLocaleString()}
+            </div>
         `;
         container.appendChild(div);
     });
@@ -229,14 +252,37 @@ function renderGoals(holdings) {
 function renderChart(invested, current) {
     const ctxEl = document.getElementById('pnlChart');
     if (!ctxEl) return;
+    
+    // Sunaikiname seną grafiką, jei yra
+    if (myChart) myChart.destroy();
+    
     const ctx = ctxEl.getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 160);
-    grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
-    if (myChart) myChart.destroy();
+    grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); 
+    grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+    
     myChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: ['Invested', 'Current'], datasets: [{ data: [invested, current], borderColor: '#2dd4bf', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#1f2937', pointBorderColor: '#2dd4bf' }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
+        data: { 
+            labels: ['Invested', 'Current Value'], 
+            datasets: [{ 
+                data: [invested, current], 
+                borderColor: '#2dd4bf', 
+                backgroundColor: grad, 
+                borderWidth: 2, 
+                fill: true, 
+                tension: 0.3, 
+                pointRadius: 4, 
+                pointBackgroundColor: '#1f2937', 
+                pointBorderColor: '#2dd4bf' 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } }, 
+            scales: { x: { display: false }, y: { display: false } } 
+        }
     });
 }
 
@@ -246,14 +292,12 @@ function setupCalculator() {
     const totalIn = document.getElementById('tx-total');
     if (!amountIn) return;
     
-    // Keičiant Amount arba Price -> Skaičiuojame Total
     function updateTotal() {
         const a = parseFloat(amountIn.value);
         const p = parseFloat(priceIn.value);
         if (!isNaN(a) && !isNaN(p)) totalIn.value = (a * p).toFixed(2);
     }
     
-    // Keičiant Total -> Skaičiuojame Amount (SVARBU!)
     function updateAmount() {
         const t = parseFloat(totalIn.value);
         const p = parseFloat(priceIn.value);
@@ -262,7 +306,7 @@ function setupCalculator() {
     
     amountIn.addEventListener('input', updateTotal);
     priceIn.addEventListener('input', updateTotal);
-    totalIn.addEventListener('input', updateAmount); // 'input' užtikrina, kad veikia iškart rašant
+    totalIn.addEventListener('input', updateAmount);
 }
 
 // HANDLERS
@@ -273,12 +317,10 @@ async function handleTxSubmit(e) {
     btn.innerHTML = 'Saving...';
     btn.disabled = true;
 
-    // 1. Paimame duomenis
     const rawAmount = document.getElementById('tx-amount').value;
     const rawPrice = document.getElementById('tx-price').value;
     const rawTotal = document.getElementById('tx-total').value;
 
-    // 2. Konvertuojame į skaičius (BŪTINA!)
     const txData = {
         date: document.getElementById('tx-date').value,
         type: document.getElementById('tx-type').value,
@@ -289,9 +331,8 @@ async function handleTxSubmit(e) {
         total_cost_usd: parseFloat(rawTotal)
     };
 
-    // 3. Patikriname
     if (isNaN(txData.amount) || isNaN(txData.price_per_coin)) {
-        alert("Klaida: Netinkami skaičiai.");
+        alert("Please enter valid numbers.");
         btn.innerHTML = originalText;
         btn.disabled = false;
         return;
@@ -304,20 +345,63 @@ async function handleTxSubmit(e) {
         document.getElementById('tx-date').valueAsDate = new Date(); 
         await loadAllData(); 
     } 
-    // Jei nesėkmė - supabase.js parodys alert su priežastimi
     
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
 
+// === PAKEISTA FUNKCIJA ===
 async function handleNewCoinSubmit() {
     const sym = document.getElementById('new-coin-symbol').value.toUpperCase();
     const id = document.getElementById('new-coin-id').value.toLowerCase();
-    if (!sym || !id) return;
-    await saveNewCoin({ symbol: sym, coingecko_id: id, name: sym });
-    closeModal('new-coin-modal');
-    await loadAllData();
+    const target = document.getElementById('new-coin-target').value; // Paimame tikslą
+
+    if (!sym || !id) {
+        alert("Symbol and ID are required.");
+        return;
+    }
+
+    const btn = document.getElementById('btn-save-coin');
+    const oldText = btn.innerText;
+    btn.innerText = "Saving...";
+    btn.disabled = true;
+
+    try {
+        // 1. Išsaugome monetą
+        await saveNewCoin({ symbol: sym, coingecko_id: id, name: sym });
+
+        // 2. Jei įvestas tikslas, išsaugome ir jį
+        if (target && Number(target) > 0) {
+            const { data: { user } } = await _supabase.auth.getUser();
+            if (user) {
+                // Patikriname, ar tikslas jau yra, jei taip - atnaujiname
+                const { error } = await _supabase.from('crypto_goals').upsert({
+                    user_id: user.id,
+                    coin_symbol: sym,
+                    target_amount: Number(target)
+                }, { onConflict: 'user_id, coin_symbol' });
+                
+                if (error) console.error("Goal save error:", error);
+            }
+        }
+
+        closeModal('new-coin-modal');
+        // Išvalome formą
+        document.getElementById('new-coin-symbol').value = '';
+        document.getElementById('new-coin-id').value = '';
+        document.getElementById('new-coin-target').value = '';
+        
+        await loadAllData();
+
+    } catch (err) {
+        console.error("Error saving coin/goal:", err);
+        alert("Failed to save. Check console.");
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
 }
+// === PAKEITIMAS BAIGIASI ===
 
 async function handleDeleteCoinSubmit() {
     const sym = document.getElementById('delete-coin-select').value;
@@ -327,6 +411,12 @@ async function handleDeleteCoinSubmit() {
     btn.innerText = "Deleting...";
     const success = await deleteSupportedCoin(sym);
     if (success) {
+        // Taip pat ištriname ir tikslą, jei jis buvo
+        const { data: { user } } = await _supabase.auth.getUser();
+        if(user) {
+            await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
+        }
+        
         closeModal('delete-coin-modal');
         await loadAllData();
     }
