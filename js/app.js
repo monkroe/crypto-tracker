@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.4.1 (Fix: Edit Modal Population)
+// js/app.js - Versija 1.4.2 (Full Features: Edit, History, Exchange View)
 
 let coinsList = [];
 let transactions = [];
@@ -8,7 +8,9 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.4.1");
+    console.log("App started v1.4.2");
+    
+    // Auth Listener
     _supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
             document.getElementById('auth-screen').classList.add('hidden');
@@ -20,11 +22,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearData();
         }
     });
+
     setupAuthHandlers();
     setupAppListeners();
 });
 
-// --- AUTH ---
+// --- AUTH HANDLERS ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
@@ -44,11 +47,13 @@ function setupAuthHandlers() {
         try { await userLogin(emailInput.value, passInput.value); } 
         catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
+
     document.getElementById('btn-signup').addEventListener('click', async () => {
         if (!validate()) return;
         try { await userSignUp(emailInput.value, passInput.value); alert("Registracija sėkminga!"); } 
         catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
+
     document.getElementById('btn-logout').addEventListener('click', async () => await userSignOut());
 }
 
@@ -58,23 +63,26 @@ function clearData() {
 }
 
 function setupAppListeners() {
+    // Transaction Form Handler
     const form = document.getElementById('add-tx-form');
     if (form) {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
-        setupCalculator();
+        setupCalculator(); // Activate calculator logic
     }
+
+    // Coin Management Handlers
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
     
-    // FETCH PRICE
+    // Price Fetch Handler
     const btnFetch = document.getElementById('btn-fetch-price');
     btnFetch.replaceWith(btnFetch.cloneNode(true));
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
-// --- CALCULATOR ---
+// --- CALCULATOR (Three-way) ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -96,7 +104,7 @@ function setupCalculator() {
     });
 }
 
-// --- DATA ---
+// --- DATA LOADING ---
 async function loadAllData() {
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
@@ -128,6 +136,7 @@ async function fetchCurrentPrices() {
     } catch (e) { console.warn("Price error"); }
 }
 
+// --- SMART PRICE FETCH (History aware) ---
 async function fetchPriceForForm() {
     const symbol = document.getElementById('tx-coin').value;
     const dateVal = document.getElementById('tx-date').value;
@@ -143,11 +152,13 @@ async function fetchPriceForForm() {
         const selectedDate = new Date(dateVal);
         const today = new Date();
         
+        // If date is today/future -> Live Price
         if (selectedDate.toDateString() === today.toDateString()) {
             const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
             const data = await res.json();
             price = data[coin.coingecko_id].usd;
         } else {
+            // If date is past -> History API
             const d = selectedDate.getDate().toString().padStart(2, '0');
             const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
             const y = selectedDate.getFullYear();
@@ -166,7 +177,7 @@ async function fetchPriceForForm() {
         if (price > 0) {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
-            priceInput.dispatchEvent(new Event('input'));
+            priceInput.dispatchEvent(new Event('input')); // Trigger calculator
         }
     } catch (e) { 
         console.error(e);
@@ -175,39 +186,54 @@ async function fetchPriceForForm() {
     btn.innerText = oldText;
 }
 
-// --- RENDER JOURNAL ---
+// --- RENDER JOURNAL (Updated for Exchange & Notes) ---
 function renderJournal() {
     const tbody = document.getElementById('journal-body');
     if (!tbody) return;
     tbody.innerHTML = '';
+    
+    if (transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
+        return;
+    }
     
     const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
     
     sortedTx.forEach(tx => {
         const row = document.createElement('tr');
         const isBuy = tx.type === 'Buy';
+        
+        // Formatuojame datą
         const dateObj = new Date(tx.date);
         const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        const method = tx.method ? `<div class="text-[9px] text-gray-500 italic">${tx.method}</div>` : '';
-        const notesIcon = tx.notes ? `<i class="fa-regular fa-note-sticky text-gray-600 ml-1" title="${tx.notes}"></i>` : '';
+        // Elementai
+        const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
+        const notesIcon = tx.notes ? `<i class="fa-regular fa-note-sticky text-primary-400 ml-1 cursor-help" title="${tx.notes}"></i>` : '';
+        const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
 
         row.innerHTML = `
             <td class="px-4 py-3 align-top border-b border-gray-800/30">
-                <div class="font-bold text-gray-200 text-sm flex items-center gap-1">${tx.coin_symbol} ${notesIcon}</div>
-                <div class="text-[10px] text-gray-500">${dateStr}</div>
-                ${method}
+                <div class="font-bold text-gray-200 text-sm flex items-center flex-wrap">
+                    ${tx.coin_symbol} 
+                    ${notesIcon}
+                    ${method}
+                </div>
+                ${exchangeName}
+                <div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>
             </td>
+            
             <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="text-xs text-gray-300">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
+                <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
                 <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
             </td>
+            
             <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
                 <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
                 
                 <div class="flex justify-end gap-3 mt-2">
-                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-primary-400 text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-400 text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
+                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         `;
@@ -215,21 +241,20 @@ function renderJournal() {
     });
 }
 
-// --- ACTIONS: EDIT / DELETE (PAKEISTA LOGIKA) ---
-
+// --- ACTIONS: EDIT & DELETE ---
 window.onEditTx = function(id) {
     const tx = transactions.find(t => t.id === id);
     if(!tx) return;
 
-    // 1. PIRMA: Atidarome modalą (kad jis išsivalytų ir pasiruoštų)
+    // 1. OPEN MODAL (Resets form)
     openModal('add-modal');
 
-    // 2. TADA: Užpildome duomenimis (perrašome tuščius laukus)
+    // 2. POPULATE DATA (Delayed to override reset)
     setTimeout(() => {
         document.getElementById('tx-id').value = tx.id;
         document.getElementById('tx-type').value = tx.type;
         
-        // Datos konversija
+        // Date convert to ISO for input
         const d = new Date(tx.date);
         d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
         document.getElementById('tx-date').value = d.toISOString().slice(0, 16);
@@ -242,13 +267,13 @@ window.onEditTx = function(id) {
         document.getElementById('tx-total').value = tx.total_cost_usd;
         document.getElementById('tx-notes').value = tx.notes || '';
 
-        // Pakeičiame mygtuką į "Update"
+        // Change UI to Edit Mode
         document.getElementById('modal-title').innerText = "Edit Transaction";
         const btn = document.getElementById('btn-save');
         btn.innerText = "Update Transaction";
         btn.classList.remove('bg-primary-600', 'hover:bg-primary-500');
         btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
-    }, 50); // Trumpa pauzė užtikrina, kad HTML reset nesuveiktų vėliau
+    }, 50);
 };
 
 window.onDeleteTx = async function(id) {
