@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.3.1 (Fixed Goals Logic)
+// js/app.js - Versija 1.3.3 (Su Validacija ir Klaidų Pranešimais)
 
 let coinsList = [];
 let transactions = [];
@@ -8,30 +8,130 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.3.1");
-    await loadAllData();
+    console.log("App started v1.3.3");
+
+    // AUTH LISTENER: Tai yra pagrindinis "sargas"
+    _supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            // Vartotojas prisijungė
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-content').classList.remove('hidden');
+            loadAllData();
+        } else {
+            // Vartotojas atsijungė
+            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('app-content').classList.add('hidden');
+            clearData();
+        }
+    });
+
+    setupAuthHandlers();
     setupCalculator();
-    
-    // Listeners (Klausikliai)
+    setupAppListeners();
+});
+
+// --- AUTH HANDLERS (SU VALIDACIJA) ---
+function setupAuthHandlers() {
+    const emailInput = document.getElementById('auth-email');
+    const passInput = document.getElementById('auth-pass');
+    const errText = document.getElementById('auth-error');
+
+    // Pagalbinė funkcija patikrinimui
+    function validateInputs() {
+        const email = emailInput.value.trim();
+        const pass = passInput.value.trim();
+        
+        if (!email || !pass) {
+            errText.textContent = "⚠️ Prašome įvesti el. paštą ir slaptažodį.";
+            errText.classList.remove('hidden');
+            // Pridedame raudoną rėmelį laikinai
+            emailInput.classList.add('border-red-500');
+            passInput.classList.add('border-red-500');
+            setTimeout(() => {
+                emailInput.classList.remove('border-red-500');
+                passInput.classList.remove('border-red-500');
+            }, 2000);
+            return false;
+        }
+        return true;
+    }
+
+    // PRISIJUNGIMAS (LOGIN)
+    document.getElementById('btn-login').addEventListener('click', async () => {
+        if (!validateInputs()) return;
+
+        const btn = document.getElementById('btn-login');
+        const originalText = btn.innerText;
+        
+        try {
+            errText.classList.add('hidden');
+            btn.innerText = "Jungiama...";
+            btn.disabled = true;
+            
+            await userLogin(emailInput.value, passInput.value);
+            // Jei pavyko, onAuthStateChange viską sutvarkys
+        } catch (e) {
+            errText.textContent = "Klaida: " + e.message;
+            errText.classList.remove('hidden');
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });
+
+    // REGISTRACIJA (SIGN UP)
+    document.getElementById('btn-signup').addEventListener('click', async () => {
+        if (!validateInputs()) return;
+
+        const btn = document.getElementById('btn-signup');
+        const originalText = btn.innerText;
+
+        try {
+            errText.classList.add('hidden');
+            btn.innerText = "Registruojama...";
+            btn.disabled = true;
+
+            await userSignUp(emailInput.value, passInput.value);
+            alert("Registracija sėkminga! Sistema jus prijungia...");
+        } catch (e) {
+            errText.textContent = "Registracijos klaida: " + e.message;
+            errText.classList.remove('hidden');
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });
+
+    // ATSIJUNGIMAS (LOGOUT)
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+        await userSignOut();
+    });
+}
+
+function clearData() {
+    document.getElementById('journal-body').innerHTML = '';
+    document.getElementById('header-total-value').innerText = '$0.00';
+    document.getElementById('auth-email').value = '';
+    document.getElementById('auth-pass').value = '';
+    document.getElementById('auth-error').classList.add('hidden');
+}
+
+function setupAppListeners() {
     const form = document.getElementById('add-tx-form');
     if (form) {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
     }
-
-    // Pakeistas listeneris monetų pridėjimui
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
     document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
-});
+}
 
+// --- DATA LOADING ---
 async function loadAllData() {
     const journalBody = document.getElementById('journal-body');
     if (journalBody && transactions.length === 0) journalBody.innerHTML = '<tr><td colspan="3" class="text-center py-6">Loading...</td></tr>';
 
     try {
-        // Paimame duomenis iš Supabase
         const [coinsData, txData, goalsData] = await Promise.all([
             getSupportedCoins(),
             getTransactions(),
@@ -82,7 +182,7 @@ async function fetchLivePriceForForm() {
         
         const priceInput = document.getElementById('tx-price');
         priceInput.value = price;
-        priceInput.dispatchEvent(new Event('input')); // Iškviečia kalkuliatorių
+        priceInput.dispatchEvent(new Event('input'));
     } catch (e) { alert("Busy. Try later."); }
     btn.innerText = oldText;
 }
@@ -98,7 +198,6 @@ function formatMoney(amount) {
 function populateCoinSelect(holdings = {}) {
     const select = document.getElementById('tx-coin');
     if (!select) return;
-    const currentVal = select.value;
     select.innerHTML = '';
 
     const sortedCoins = [...coinsList].sort((a, b) => {
@@ -120,7 +219,6 @@ function populateCoinSelect(holdings = {}) {
         option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
         select.appendChild(option);
     });
-    if (currentVal) select.value = currentVal;
 }
 
 function populateDeleteSelect() {
@@ -144,9 +242,7 @@ function renderJournal() {
         tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
         return;
     }
-    // Rūšiuojame pagal datą (naujausi viršuje)
     const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-
     sortedTx.forEach(tx => {
         const row = document.createElement('tr');
         const isBuy = tx.type === 'Buy';
@@ -171,8 +267,6 @@ function renderJournal() {
 function updateDashboard() {
     let holdings = {};
     let totalInvested = 0;
-    
-    // Skaičiuojame balansus
     transactions.forEach(tx => {
         if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = 0;
         const amt = Number(tx.amount);
@@ -188,9 +282,7 @@ function updateDashboard() {
         if (coin && prices[coin.coingecko_id]) currentVal += amount * prices[coin.coingecko_id].usd;
     }
 
-    const headerEl = document.getElementById('header-total-value');
-    if (headerEl) headerEl.innerText = formatMoney(currentVal);
-
+    document.getElementById('header-total-value').innerText = formatMoney(currentVal);
     const pnl = currentVal - totalInvested;
     const pnlEl = document.getElementById('total-pnl');
     const pnlPercEl = document.getElementById('total-pnl-percent');
@@ -213,22 +305,13 @@ function renderGoals(holdings) {
     const section = document.getElementById('goals-section');
     if (!container || !section) return;
     container.innerHTML = '';
-    
-    // Jei nėra tikslų, slepiame sekciją
-    if (goals.length === 0) { 
-        section.classList.add('hidden'); 
-        return; 
-    }
-    
+    if (goals.length === 0) { section.classList.add('hidden'); return; }
     section.classList.remove('hidden');
     
     goals.forEach(goal => {
         const current = holdings[goal.coin_symbol] || 0;
         const target = Number(goal.target_amount);
-        
-        // Apsauga nuo dalybos iš nulio
         if (target <= 0) return;
-
         const pct = Math.min(100, (current / target) * 100);
         
         const div = document.createElement('div');
@@ -252,37 +335,14 @@ function renderGoals(holdings) {
 function renderChart(invested, current) {
     const ctxEl = document.getElementById('pnlChart');
     if (!ctxEl) return;
-    
-    // Sunaikiname seną grafiką, jei yra
     if (myChart) myChart.destroy();
-    
     const ctx = ctxEl.getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 160);
-    grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); 
-    grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
-    
+    grad.addColorStop(0, 'rgba(45, 212, 191, 0.2)'); grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
     myChart = new Chart(ctx, {
         type: 'line',
-        data: { 
-            labels: ['Invested', 'Current Value'], 
-            datasets: [{ 
-                data: [invested, current], 
-                borderColor: '#2dd4bf', 
-                backgroundColor: grad, 
-                borderWidth: 2, 
-                fill: true, 
-                tension: 0.3, 
-                pointRadius: 4, 
-                pointBackgroundColor: '#1f2937', 
-                pointBorderColor: '#2dd4bf' 
-            }] 
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            plugins: { legend: { display: false } }, 
-            scales: { x: { display: false }, y: { display: false } } 
-        }
+        data: { labels: ['Invested', 'Current'], datasets: [{ data: [invested, current], borderColor: '#2dd4bf', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#1f2937', pointBorderColor: '#2dd4bf' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
     });
 }
 
@@ -309,7 +369,6 @@ function setupCalculator() {
     totalIn.addEventListener('input', updateAmount);
 }
 
-// HANDLERS
 async function handleTxSubmit(e) {
     e.preventDefault();
     const btn = document.getElementById('btn-save');
@@ -345,21 +404,16 @@ async function handleTxSubmit(e) {
         document.getElementById('tx-date').valueAsDate = new Date(); 
         await loadAllData(); 
     } 
-    
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
 
-// === PAKEISTA FUNKCIJA ===
 async function handleNewCoinSubmit() {
     const sym = document.getElementById('new-coin-symbol').value.toUpperCase();
     const id = document.getElementById('new-coin-id').value.toLowerCase();
-    const target = document.getElementById('new-coin-target').value; // Paimame tikslą
+    const target = document.getElementById('new-coin-target').value;
 
-    if (!sym || !id) {
-        alert("Symbol and ID are required.");
-        return;
-    }
+    if (!sym || !id) { alert("Symbol and ID are required."); return; }
 
     const btn = document.getElementById('btn-save-coin');
     const oldText = btn.innerText;
@@ -367,58 +421,36 @@ async function handleNewCoinSubmit() {
     btn.disabled = true;
 
     try {
-        // 1. Išsaugome monetą
         await saveNewCoin({ symbol: sym, coingecko_id: id, name: sym });
-
-        // 2. Jei įvestas tikslas, išsaugome ir jį
         if (target && Number(target) > 0) {
             const { data: { user } } = await _supabase.auth.getUser();
             if (user) {
-                // Patikriname, ar tikslas jau yra, jei taip - atnaujiname
-                const { error } = await _supabase.from('crypto_goals').upsert({
-                    user_id: user.id,
-                    coin_symbol: sym,
-                    target_amount: Number(target)
-                }, { onConflict: 'user_id, coin_symbol' });
-                
-                if (error) console.error("Goal save error:", error);
+                await _supabase.from('crypto_goals').upsert({ user_id: user.id, coin_symbol: sym, target_amount: Number(target) }, { onConflict: 'user_id, coin_symbol' });
             }
         }
-
         closeModal('new-coin-modal');
-        // Išvalome formą
         document.getElementById('new-coin-symbol').value = '';
         document.getElementById('new-coin-id').value = '';
         document.getElementById('new-coin-target').value = '';
-        
         await loadAllData();
-
     } catch (err) {
         console.error("Error saving coin/goal:", err);
-        alert("Failed to save. Check console.");
+        alert("Failed to save.");
     } finally {
         btn.innerText = oldText;
         btn.disabled = false;
     }
 }
-// === PAKEITIMAS BAIGIASI ===
 
 async function handleDeleteCoinSubmit() {
     const sym = document.getElementById('delete-coin-select').value;
     if (!sym) return;
-    if (!confirm(`Are you sure you want to delete ${sym}?`)) return;
-    const btn = document.getElementById('btn-delete-coin');
-    btn.innerText = "Deleting...";
+    if (!confirm(`Delete ${sym}?`)) return;
     const success = await deleteSupportedCoin(sym);
     if (success) {
-        // Taip pat ištriname ir tikslą, jei jis buvo
         const { data: { user } } = await _supabase.auth.getUser();
-        if(user) {
-            await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
-        }
-        
+        if(user) await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
         closeModal('delete-coin-modal');
         await loadAllData();
     }
-    btn.innerText = "Delete";
 }
