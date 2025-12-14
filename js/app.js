@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.7 (Ištaisyta datos lokalizacija)
+// js/app.js - Versija 1.7.8 (Ištaisyta validacija ir datos formatavimas)
 
-const APP_VERSION = '1.7.7';
+const APP_VERSION = '1.7.8';
 
 let coinsList = [];
 let transactions = [];
@@ -386,7 +386,6 @@ function renderJournal() {
         
         const dateObj = new Date(tx.date);
         
-        // PATAISYTA: Naudoti vartotojo lokalę (ne fiksuotą lt-LT) su pageidaujamu formatu
         const dateStr = dateObj.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'numeric',
@@ -487,8 +486,15 @@ async function handleTxSubmit(e) {
     const dStr = document.getElementById('tx-date-input').value; 
     const tStr = document.getElementById('tx-time-input').value || '00:00'; 
     
-    if (isNaN(parseFloat(rawAmount)) || isNaN(parseFloat(rawPrice)) || isNaN(parseFloat(rawTotal))) {
-        alert("Įveskite galiojančius skaičius.");
+    // **PATAISYTA VALIDACIJA**: Patikrina ne tik NaN, bet ir neleidžia 0 reikšmių kritiniuose laukuose
+    const amount = parseFloat(rawAmount);
+    const price = parseFloat(rawPrice);
+    const total = parseFloat(rawTotal);
+
+    if (isNaN(amount) || isNaN(price) || isNaN(total) || 
+        amount <= 0 || price <= 0 || total <= 0) {
+        
+        alert("Įveskite galiojančius, teigiamus skaičius (Amount, Price, Total Cost turi būti didesni už 0).");
         btn.innerText = oldText;
         btn.disabled = false;
         return;
@@ -503,9 +509,9 @@ async function handleTxSubmit(e) {
         exchange: document.getElementById('tx-exchange').value || null,
         method: document.getElementById('tx-method').value,
         notes: document.getElementById('tx-notes').value || null,
-        amount: parseFloat(rawAmount),
-        price_per_coin: parseFloat(rawPrice),
-        total_cost_usd: parseFloat(rawTotal)
+        amount: amount, // Naudojame jau konvertuotas reikšmes
+        price_per_coin: price,
+        total_cost_usd: total
     };
     
     let success = false;
