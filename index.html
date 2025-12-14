@@ -118,7 +118,7 @@
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help</p>
                 <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">Version 1.4.0</p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Version 1.5.0</p>
             </footer>
         </main>
     </div>
@@ -131,14 +131,16 @@
             </div>
             
             <form id="add-tx-form" class="space-y-4">
-                <input type="hidden" id="tx-id"> <div class="grid grid-cols-2 gap-3">
+                <input type="hidden" id="tx-id">
+                
+                <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <select id="tx-type" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none font-bold">
                             <option value="Buy">Buy 🟢</option>
                             <option value="Sell">Sell 🔴</option>
                         </select>
                     </div>
-                    <input type="datetime-local" id="tx-date" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none">
+                    <input type="datetime-local" id="tx-date" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none">
                 </div>
                 
                 <div class="grid grid-cols-2 gap-3">
@@ -241,14 +243,9 @@
     <script src="js/app.js"></script>
     <script>
         document.getElementById('auto-year').textContent = new Date().getFullYear();
-        // Nustatome dabartinį laiką kaip default
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        document.getElementById('tx-date').value = now.toISOString().slice(0, 16);
         
         function openModal(id) { 
             if(id === 'add-modal') {
-                // Jei atidarom "Add New", išvalom formą
                 document.getElementById('tx-id').value = ''; 
                 document.getElementById('add-tx-form').reset();
                 document.getElementById('modal-title').innerText = "New Transaction";
@@ -256,7 +253,6 @@
                 document.getElementById('btn-save').classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
                 document.getElementById('btn-save').classList.add('bg-primary-600', 'hover:bg-primary-500');
                 
-                // Reset Date
                 const n = new Date();
                 n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
                 document.getElementById('tx-date').value = n.toISOString().slice(0, 16);
