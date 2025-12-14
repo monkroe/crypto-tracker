@@ -153,16 +153,20 @@
 
     <div id="new-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4">
-            <h3 class="font-bold text-white">Add Coin</h3>
+            <h3 class="font-bold text-white">Add Coin & Goal</h3>
+            
             <input type="text" id="new-coin-symbol" placeholder="Symbol (e.g. MON)" class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg p-3 text-sm">
+            
             <input type="text" id="new-coin-id" placeholder="CoinGecko ID (e.g. monad-official)" class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg p-3 text-sm">
+
+            <input type="number" id="new-coin-target" placeholder="Target Goal (e.g. 100000)" class="w-full bg-gray-800 border border-primary-500/30 text-white rounded-lg p-3 text-sm focus:border-primary-500">
+            
             <div class="flex gap-2">
                 <button onclick="closeModal('new-coin-modal')" class="flex-1 bg-gray-800 text-gray-400 py-2 rounded-lg text-sm">Cancel</button>
                 <button id="btn-save-coin" class="flex-1 bg-primary-600 text-white font-bold py-2 rounded-lg text-sm">Add</button>
             </div>
         </div>
     </div>
-
     <div id="delete-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4">
             <h3 class="font-bold text-red-400">Delete Coin</h3>
@@ -189,4 +193,3 @@
     </script>
 </body>
 </html>
-
