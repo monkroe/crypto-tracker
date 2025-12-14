@@ -1,7 +1,6 @@
-// js/supabase.js - Versija 1.5.0 (Patobulinta su Error Handling)
+// js/supabase.js - Versija 1.7.1 (Saugos ir klaidų tvarkymo patobulinimas)
 
 // ⚠️ SVARBU: Pakeiskite šias reikšmes savo Supabase projekto duomenimis!
-// Jas rasite: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
 const SUPABASE_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
@@ -21,11 +20,14 @@ async function userLogin(email, password) {
             email, 
             password 
         });
-        if (error) throw error;
+        if (error) {
+            // Šitas pranešimas dabar bus rodomas programėlėje!
+            throw new Error(error.message || 'Prisijungti nepavyko. Patikrinkite duomenis.');
+        }
         return { data, error: null };
     } catch (error) {
         console.error('Login error:', error);
-        return { data: null, error };
+        return { data: null, error: error };
     }
 }
 
@@ -38,11 +40,13 @@ async function userSignUp(email, password) {
             email, 
             password 
         });
-        if (error) throw error;
+        if (error) {
+            throw new Error(error.message || 'Registracija nepavyko.');
+        }
         return { data, error: null };
     } catch (error) {
         console.error('Signup error:', error);
-        return { data: null, error };
+        return { data: null, error: error };
     }
 }
 
@@ -236,7 +240,7 @@ async function saveNewCoin(coinData) {
             .select('id')
             .eq('user_id', user.id)
             .eq('symbol', coinData.symbol)
-            .single();
+            .maybeSingle(); // Pakeista į maybeSingle, kad tvarkytų 0 ar 1 rezultatą
         
         if (existing.data) {
             alert(`Moneta ${coinData.symbol} jau egzistuoja!`);
@@ -341,7 +345,7 @@ async function saveOrUpdateGoal(coinSymbol, targetAmount) {
             .select('id')
             .eq('user_id', user.id)
             .eq('coin_symbol', coinSymbol)
-            .single();
+            .maybeSingle(); // Pakeista į maybeSingle
         
         if (existing) {
             // Atnaujinti esamą
