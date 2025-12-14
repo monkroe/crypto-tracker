@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.0 (Pilna versija su visomis funkcijomis)
+// js/app.js - Versija 1.7.2 (Data Access Consistency Fix)
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.2';
 
 let coinsList = [];
 let transactions = [];
@@ -10,6 +10,7 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // ... (AUTH ir UI HELPERS dalis nepasikeitė)
     console.log(`App started v${APP_VERSION}`);
     const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.innerText = APP_VERSION;
@@ -174,18 +175,20 @@ function setupCalculator() {
     });
 }
 
-// --- DATA LOADING ---
+// --- DATA LOADING (PATAISYTA) ---
 async function loadAllData() {
     try {
+        // PAKEITIMAS: Naudojame saugią getCryptoGoals() funkciją iš js/supabase.js
         const [coinsData, txData, goalsData] = await Promise.all([
             getSupportedCoins(),
             getTransactions(),
-            _supabase.from('crypto_goals').select('*')
+            getCryptoGoals() // NAUJAS, SAUGUS KVIETIMAS
         ]);
         
         coinsList = coinsData || [];
         transactions = txData || [];
-        goals = goalsData.data || [];
+        // Saugus goals duomenų priskyrimas
+        goals = goalsData || [];
         
         await fetchCurrentPrices();
         const holdings = updateDashboard();
@@ -196,7 +199,6 @@ async function loadAllData() {
         renderGoals();
     } catch (e) {
         console.error('Error loading data:', e);
-        alert('Klaida kraunant duomenis. Bandykite iš naujo.');
     }
 }
 
@@ -314,6 +316,7 @@ async function generateHistoryChart() {
     const chartsData = [];
     
     for (const coin of activeCoins) {
+        // CoinGecko API vėlavimas, kad neviršytų API limitų
         if (chartsData.length > 0) await new Promise(r => setTimeout(r, 1000));
         const data = await fetchChart(coin.coingecko_id);
         chartsData.push(data);
@@ -436,7 +439,7 @@ function renderJournal() {
     tbody.innerHTML = '';
     
     if (transactions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-xs text-gray-600">No transactions yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</td></tr>';
         return;
     }
     
@@ -734,13 +737,93 @@ async function handleNewCoinSubmit() {
         return;
     }
     
-    // Check if coin already exists
-    if (coinsList.find(c => c.symbol === symbol)) {
-        alert(`Moneta ${symbol} jau egzistuoja!`);
-        return;
-    }
-    
     const btn = document.getElementById('btn-save-coin');
     const oldText = btn.innerText;
     btn.innerText = 'Saving...';
     btn.disabled = true;
+    
+    try {
+        const coinData = { symbol, coingecko_id: coingeckoId };
+        const success = await saveNewCoin(coinData);
+        
+        if (success && targetRaw) {
+            const target = parseFloat(targetRaw);
+            if (target > 0) {
+                // Naudojame naują funkciją iš supabase.js, kuri valdo upsertą
+                await saveOrUpdateGoal(symbol, target); 
+            }
+        }
+        
+        if (success) {
+            document.getElementById('new-coin-symbol').value = '';
+            document.getElementById('new-coin-id').value = '';
+            document.getElementById('new-coin-target').value = '';
+            closeModal('new-coin-modal');
+            await loadAllData();
+        }
+    } catch (e) {
+        // Klaida iš supabase.js bus parodyta ten, čia tik loguojam
+        console.error(e);
+    }
+    
+    btn.innerText = oldText;
+    btn.disabled = false;
+}
+
+async function handleDeleteCoinSubmit() {
+    const select = document.getElementById('delete-coin-select');
+    const sym = select.value;
+    
+    if (!sym) {
+        alert('Pasirinkite monetą!');
+        return;
+    }
+    
+    // Check if there are transactions for this coin
+    const hasTx = transactions.some(tx => tx.coin_symbol === sym);
+    
+    let confirmMsg = `Ar tikrai norite ištrinti ${sym}?`;
+    if (hasTx) {
+        confirmMsg += `\n\n⚠️ DĖMESIO: Šiai monetai yra ${transactions.filter(tx => tx.coin_symbol === sym).length} transakcijų!\nIštrinus monetą, VISOS jos transakcijos taip pat bus ištrintos!`;
+    }
+    
+    if (confirm(confirmMsg)) {
+        const btn = document.getElementById('btn-delete-coin');
+        const oldText = btn.innerText;
+        btn.innerText = 'Deleting...';
+        btn.disabled = true;
+        
+        try {
+            const { data: { user } } = await _supabase.auth.getUser();
+            if (user) {
+                // 1. Delete transactions first
+                if (hasTx) {
+                    await _supabase
+                        .from('crypto_transactions')
+                        .delete()
+                        .eq('user_id', user.id)
+                        .eq('coin_symbol', sym);
+                }
+                
+                // 2. Delete goals
+                await _supabase
+                    .from('crypto_goals')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('coin_symbol', sym);
+                
+                // 3. Delete coin
+                await deleteSupportedCoin(sym);
+            }
+            
+            closeModal('delete-coin-modal');
+            await loadAllData();
+        } catch (e) {
+            // Klaida bus rodoma iš supabase.js
+            console.error(e);
+        }
+        
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
+}
