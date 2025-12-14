@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.6.1 (Smart Calculator Fix)
+// js/app.js - Versija 1.6.2 (Session Fix & Smart Calculator)
 
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 
 let coinsList = [];
 let transactions = [];
@@ -14,14 +14,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.innerText = APP_VERSION;
     
+    // --- PAKEITIMAS: AKTYVUS SESIJOS TIKRINIMAS ---
+    // Pirmiausia patikriname, ar jau esame prisijungę
+    const { data: { session } } = await _supabase.auth.getSession();
+    
+    if (session) {
+        // Jei sesija yra - iškart rodom programą
+        showAppScreen();
+        loadAllData();
+    } else {
+        // Jei ne - rodom login
+        showAuthScreen();
+    }
+
+    // Tada klausomės pasikeitimų (pvz., atsijungimo)
     _supabase.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            document.getElementById('auth-screen').classList.add('hidden');
-            document.getElementById('app-content').classList.remove('hidden');
-            loadAllData();
-        } else {
-            document.getElementById('auth-screen').classList.remove('hidden');
-            document.getElementById('app-content').classList.add('hidden');
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            showAppScreen();
+            // loadAllData kviečiam tik jei duomenys dar neužkrauti
+            if (transactions.length === 0) loadAllData();
+        } else if (event === 'SIGNED_OUT') {
+            showAuthScreen();
             clearData();
         }
     });
@@ -30,7 +43,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// --- AUTH ---
+// --- UI PAGALBINĖS FUNKCIJOS ---
+function showAppScreen() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('app-content').classList.remove('hidden');
+}
+
+function showAuthScreen() {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('app-content').classList.add('hidden');
+}
+
+// --- AUTH HANDLERS ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
@@ -44,11 +68,19 @@ function setupAuthHandlers() {
     }
     document.getElementById('btn-login').addEventListener('click', async () => {
         if (!validate()) return;
-        try { await userLogin(emailInput.value, passInput.value); } catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
+        try { 
+            const { error } = await userLogin(emailInput.value, passInput.value);
+            if (error) throw error;
+            // onAuthStateChange sutvarkys perėjimą
+        } catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
     document.getElementById('btn-signup').addEventListener('click', async () => {
         if (!validate()) return;
-        try { await userSignUp(emailInput.value, passInput.value); alert("Registracija sėkminga!"); } catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
+        try { 
+            const { error } = await userSignUp(emailInput.value, passInput.value); 
+            if (error) throw error;
+            alert("Registracija sėkminga! Patikrinkite paštą arba prisijunkite."); 
+        } catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
     document.getElementById('btn-logout').addEventListener('click', async () => await userSignOut());
 }
@@ -56,6 +88,7 @@ function setupAuthHandlers() {
 function clearData() {
     document.getElementById('journal-body').innerHTML = '';
     document.getElementById('header-total-value').innerText = '$0.00';
+    coinsList = []; transactions = []; // Išvalom atmintį
 }
 
 function setupAppListeners() {
@@ -64,7 +97,7 @@ function setupAppListeners() {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
-        setupCalculator(); // Čia aktyvuojamas skaičiuotuvas
+        setupCalculator();
     }
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
@@ -74,7 +107,7 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
-// --- PATAISYTAS SKAIČIUOTUVAS ---
+// --- SKAIČIUOTUVAS (IŠ 1.6.1) ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -82,49 +115,26 @@ function setupCalculator() {
     
     if (!amountIn || !priceIn || !totalIn) return;
 
-    // Pagalbinė funkcija skaičiaus gavimui
-    const val = (el) => {
-        const v = parseFloat(el.value);
-        return isNaN(v) ? 0 : v;
-    };
+    const val = (el) => { const v = parseFloat(el.value); return isNaN(v) ? 0 : v; };
 
-    // 1. Keičiant KIEKĮ (Amount)
     amountIn.addEventListener('input', () => {
-        const a = val(amountIn);
-        const p = val(priceIn);
+        const a = val(amountIn); const p = val(priceIn);
         if (a && p) totalIn.value = (a * p).toFixed(2);
     });
 
-    // 2. Keičiant KAINĄ (Price) - SVARBUS PATAISYMAS
     priceIn.addEventListener('input', () => {
-        const p = val(priceIn);
-        const a = val(amountIn);
-        const t = val(totalIn);
-        
-        // Jei vartotojas įvedė Kiekį -> Skaičiuojam Total
-        if (a > 0) {
-            totalIn.value = (a * p).toFixed(2);
-        } 
-        // Jei vartotojas įvedė Total (bet dar nėra Kiekio) -> Skaičiuojam Kiekį
-        else if (t > 0 && p > 0) {
-            amountIn.value = (t / p).toFixed(6);
-        }
+        const p = val(priceIn); const a = val(amountIn); const t = val(totalIn);
+        if (a > 0) totalIn.value = (a * p).toFixed(2);
+        else if (t > 0 && p > 0) amountIn.value = (t / p).toFixed(6);
     });
 
-    // 3. Keičiant TOTAL COST
     totalIn.addEventListener('input', () => {
-        const t = val(totalIn);
-        const p = val(priceIn);
-        
-        // Jei žinome kainą -> iškart skaičiuojam kiekį
-        if (p > 0) {
-            amountIn.value = (t / p).toFixed(6);
-        }
+        const t = val(totalIn); const p = val(priceIn);
+        if (p > 0) amountIn.value = (t / p).toFixed(6);
     });
 }
 
-// ... Toliau viskas lieka taip pat ...
-
+// --- DATA LOADING ---
 async function loadAllData() {
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
@@ -276,7 +286,6 @@ async function fetchPriceForForm() {
         if (price > 0) {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
-            // Čia iššaukiame įvykį, kad suveiktų skaičiuotuvas
             priceInput.dispatchEvent(new Event('input'));
         }
     } catch (e) { console.error(e); alert("Nepavyko gauti kainos."); }
