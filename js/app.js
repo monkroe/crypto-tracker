@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.10 (Ištaisytas redagavimas, tikslai ir laiko juostos)
+// js/app.js - Versija 1.7.11 (Ištaisytas redagavimo formos užpildymas)
 
-const APP_VERSION = '1.7.10';
+const APP_VERSION = '1.7.11';
 
 let coinsList = [];
 let transactions = [];
@@ -213,7 +213,7 @@ async function loadAllData() {
         populateCoinSelect(holdings); 
         
         renderJournal();
-        renderGoals(holdings); // KRITINIS PATAISYMAS: perduodami duomenys tikslams
+        renderGoals(holdings); 
         
         if (transactions.length > 0) {
             // generateHistoryChart(); 
@@ -389,8 +389,6 @@ function renderJournal() {
         
         const dateObj = new Date(tx.date);
         
-        // KRITINIS PATAISYMAS: Užtikriname, kad laikas būtų rodomas teisingoje vartotojo laiko juostoje
-        // Naudojame .toLocaleString(undefined, ...) be priverstinio lt-LT, kad vartotojo OS nustatymai būtų paisomi
         const dateStr = dateObj.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'numeric',
@@ -398,7 +396,7 @@ function renderJournal() {
         }) + ' ' + dateObj.toLocaleTimeString(undefined, {
             hour: '2-digit',
             minute:'2-digit',
-            hour12: false // 24 valandų formatas
+            hour12: false
         });
         
         const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
@@ -434,7 +432,6 @@ function renderGoals(holdings) {
     if (!container || !section) return;
     container.innerHTML = '';
     
-    // Nėra tikslų - paslepiame
     if (goals.length === 0) { section.classList.add('hidden'); return; }
     
     section.classList.remove('hidden');
@@ -549,6 +546,11 @@ window.onEditTx = function(id) {
     const tx = transactions.find(t => t.id === id);
     if (!tx) return;
     
+    // 1. Prieš atidarant modalą, visada jį nustatome į 'New Transaction' būseną
+    document.getElementById('tx-id').value = ''; 
+    document.getElementById('add-tx-form').reset(); 
+    
+    // 2. Nustatome redagavimo būseną
     document.getElementById('modal-title').innerText = "Edit Transaction";
     document.getElementById('btn-save').innerText = "Update Transaction";
     document.getElementById('btn-save').classList.remove('bg-primary-600', 'hover:bg-primary-500');
@@ -560,17 +562,23 @@ window.onEditTx = function(id) {
     document.getElementById('tx-exchange').value = tx.exchange || '';
     document.getElementById('tx-method').value = tx.method || 'Market Buy';
 
-    // KRITINIS PATAISYMAS: Data ir laikas turi būti atskirti ir konvertuoti
-    const dateObj = new Date(tx.date);
+    // 3. DATOS IR LAIKO KONVERTAVIMAS: Būtina užtikrinti ISO formatą date/time inputams
+    // Supabase date formatas yra ISO, bet norint išvesti jį teisingai HTML date/time laukuose:
     
-    // Naudojame .toISOString() fragmentus, kurie naršyklei veikia patikimai
-    const dStr = dateObj.toISOString().split('T')[0];
-    const tStr = dateObj.toTimeString().split(' ')[0].slice(0,5); 
+    // Tiesiogiai naudojame transakcijos datą/laiką
+    const fullDateStr = tx.date; 
+    
+    // Išskiriame datą (YYYY-MM-DD)
+    const dStr = fullDateStr.substring(0, 10); 
+    
+    // Išskiriame laiką (HH:MM), kartais Supabase grąžina 'HH:MM:SS', bet reikia tik 'HH:MM'
+    // Laikas yra 11 pozicijoje, baigiasi 16 pozicijoje (HH:MM)
+    const tStr = fullDateStr.substring(11, 16); 
     
     document.getElementById('tx-date-input').value = dStr;
     document.getElementById('tx-time-input').value = tStr;
 
-    // KRITINIS PATAISYMAS: Naudojame toFixed() ir konvertuojame į String, kad nebūtų lokalizacijos klaidų (kablelių)
+    // 4. SKAIČIŲ KONVERTAVIMAS: Naudojame .toFixed() kad išvengtume lokalizacijos klaidų (kablelių)
     document.getElementById('tx-amount').value = Number(tx.amount).toFixed(6);
     document.getElementById('tx-price').value = Number(tx.price_per_coin).toFixed(8);
     document.getElementById('tx-total').value = Number(tx.total_cost_usd).toFixed(2);
