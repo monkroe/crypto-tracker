@@ -1,6 +1,7 @@
 // --- KONFIGŪRACIJA ---
-const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; // Įklijuok savo URL
-const SUPABASE_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW'; // Įklijuok savo KEY
+// Pakeisk šiuos duomenis savo tikrais iš Supabase -> Settings -> API
+const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
+const SUPABASE_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -24,8 +25,8 @@ async function saveTransaction(txData) {
         .select();
 
     if (error) {
-        // SVARBU: Parodome klaidą ekrane!
-        alert("KLAIDA ĮRAŠANT: " + error.message + "\n(Details: " + error.details + ")");
+        // Rodo klaidą ekrane, jei nepavyksta
+        alert("KLAIDA ĮRAŠANT: " + error.message);
         console.error("Save Error:", error);
         return false;
     }
@@ -46,6 +47,7 @@ async function saveNewCoin(coinData) {
     return true;
 }
 
+// Funkcija ištrinti monetai
 async function deleteSupportedCoin(symbol) {
     const { error } = await _supabase.from('supported_coins').delete().eq('symbol', symbol);
     if (error) {
