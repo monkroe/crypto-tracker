@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.7.6 (PILNA VERSIJA)
+// js/app.js - Versija 1.7.7 (Ištaisyta datos lokalizacija)
 
-const APP_VERSION = '1.7.6';
+const APP_VERSION = '1.7.7';
 
 let coinsList = [];
 let transactions = [];
@@ -116,14 +116,12 @@ function clearData() {
 function setupAppListeners() {
     const form = document.getElementById('add-tx-form');
     if (form) {
-        // Klonuojame ir pakeičiame formą, kad išvengtume pasikartojančių klausytojų (listeners)
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
         setupCalculator();
     }
     
-    // Panašiai klonuojame mygtukus, kad išvengtume atminties nuotėkio (memory leak)
     document.getElementById('btn-save-coin').replaceWith(document.getElementById('btn-save-coin').cloneNode(true));
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     
@@ -174,7 +172,7 @@ function setupCalculator() {
 }
 
 // ===============================================
-// **TRŪKUSI FUNKCIJA**
+// HELPER FUNKCIJOS
 // ===============================================
 function formatMoney(value) {
     const num = Number(value);
@@ -188,7 +186,7 @@ function formatMoney(value) {
 }
 
 // ===============================================
-// TRŪKUSI PAGRINDINĖ FUNKCIJA (DATA LOADING)
+// DATA LOADING
 // ===============================================
 
 async function loadAllData() {
@@ -202,7 +200,6 @@ async function loadAllData() {
             getCryptoGoals()
         ]);
         
-        // Apsauga nuo null/undefined, užtikriname, kad gausime masyvus
         coinsList = Array.isArray(coinsData) ? coinsData : [];
         transactions = Array.isArray(txData) ? txData : [];
         goals = Array.isArray(goalsData) ? goalsData : [];
@@ -211,10 +208,8 @@ async function loadAllData() {
             await fetchCurrentPrices();
         }
 
-        // **TRŪKUSI FUNKCIJA**
         const holdings = updateDashboard();
         
-        // **TRŪKUSI FUNKCIJA** (Dabar viena funkcija tvarko abu sąrašus)
         populateCoinSelect(holdings); 
         
         renderJournal();
@@ -233,7 +228,6 @@ async function loadAllData() {
     }
 }
 
-// ... Kitos fetch funkcijos ...
 async function fetchCurrentPrices() {
     if (coinsList.length === 0) return;
     const ids = coinsList.map(c => c.coingecko_id).join(',');
@@ -269,7 +263,6 @@ async function fetchPriceForForm() {
         const priceInput = document.getElementById('tx-price');
         priceInput.value = price;
         
-        // Iššaukiame įvykį, kad suveiktų skaičiuotuvas
         priceInput.dispatchEvent(new Event('input'));
         
     } catch (e) { 
@@ -280,13 +273,12 @@ async function fetchPriceForForm() {
 
 
 // ===============================================
-// **TRŪKUSI FUNKCIJA** (Dashboard Logic)
+// DASHBOARD LOGIC
 // ===============================================
 function updateDashboard() {
     const holdings = {};
     let totalInvested = 0;
     
-    // Apskaičiuojame turimus kiekius ir investuotą sumą
     transactions.forEach(tx => {
         if (!holdings[tx.coin_symbol]) {
             holdings[tx.coin_symbol] = { qty: 0, invested: 0 };
@@ -303,7 +295,6 @@ function updateDashboard() {
         }
     });
     
-    // Apskaičiuojame dabartinę vertę
     let totalValue = 0;
     Object.entries(holdings).forEach(([sym, data]) => {
         if (data.qty > 0) {
@@ -314,7 +305,6 @@ function updateDashboard() {
         }
     });
     
-    // Atnaujiname P&L skaičius
     const pnl = totalValue - totalInvested;
     const pnlPercent = totalInvested > 0 ? (pnl / totalInvested * 100) : 0;
     
@@ -333,14 +323,13 @@ function updateDashboard() {
 
 
 // ===============================================
-// **TRŪKUSI FUNKCIJA** (Coin Selectors)
+// UI RENDERING
 // ===============================================
 function populateCoinSelect(holdings) {
     const select = document.getElementById('tx-coin');
     const deleteSelect = document.getElementById('delete-coin-select');
     if (!select || !deleteSelect) return;
     
-    // Išvalome abu SELECT laukus
     select.innerHTML = '';
     deleteSelect.innerHTML = '<option value="">-- Pasirinkite --</option>';
 
@@ -352,7 +341,6 @@ function populateCoinSelect(holdings) {
         return; 
     }
     
-    // Rūšiavimas: prioriteto monetos, tada tos, kurios turi likutį, tada abėcėlė
     const sortedCoins = [...coinsList].sort((a, b) => {
         const hasA = (holdings[a.symbol]?.qty || 0) > 0;
         const hasB = (holdings[b.symbol]?.qty || 0) > 0;
@@ -365,23 +353,20 @@ function populateCoinSelect(holdings) {
         return a.symbol.localeCompare(b.symbol);
     });
 
-    // Pildome abu sąrašus
     sortedCoins.forEach(coin => {
         const option = document.createElement('option');
         option.value = coin.symbol;
         const hasBalance = (holdings[coin.symbol]?.qty || 0) > 0;
         option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
-        select.appendChild(option.cloneNode(true)); // Transakcijos pridėjimas
+        select.appendChild(option.cloneNode(true));
         
         const deleteOption = option.cloneNode(true);
         deleteOption.value = coin.symbol;
-        deleteOption.textContent = coin.symbol; // Nereikia žvaigždutės trynimui
-        deleteSelect.appendChild(deleteOption); // Trynimo sąrašas
+        deleteOption.textContent = coin.symbol;
+        deleteSelect.appendChild(deleteOption);
     });
 }
 
-
-// ... Kitos render funkcijos (renderJournal, renderGoals, renderChart) ...
 
 function renderJournal() {
     const tbody = document.getElementById('journal-body');
@@ -400,8 +385,17 @@ function renderJournal() {
         const isBuy = tx.type === 'Buy';
         
         const dateObj = new Date(tx.date);
-        const dateStr = dateObj.toLocaleDateString('lt-LT') + ' ' + 
-                       dateObj.toLocaleTimeString('lt-LT', {hour: '2-digit', minute:'2-digit', hour12: false});
+        
+        // PATAISYTA: Naudoti vartotojo lokalę (ne fiksuotą lt-LT) su pageidaujamu formatu
+        const dateStr = dateObj.toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+        }) + ' ' + dateObj.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute:'2-digit',
+            hour12: false
+        });
         
         const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
         const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
@@ -545,14 +539,12 @@ window.onEditTx = function(id) {
     document.getElementById('tx-exchange').value = tx.exchange || '';
     document.getElementById('tx-method').value = tx.method || 'Market Buy';
 
-    // Data ir laikas
     const dateObj = new Date(tx.date);
     const dStr = dateObj.toISOString().split('T')[0];
     const tStr = dateObj.toTimeString().split(' ')[0].slice(0,5);
     document.getElementById('tx-date-input').value = dStr;
     document.getElementById('tx-time-input').value = tStr;
 
-    // Skaičiai
     document.getElementById('tx-amount').value = tx.amount;
     document.getElementById('tx-price').value = tx.price_per_coin;
     document.getElementById('tx-total').value = tx.total_cost_usd;
@@ -570,9 +562,7 @@ window.onDeleteTx = async function(id) {
 }
 
 
-// ===============================================
-// **TRŪKUSI FUNKCIJA** (Coin Submission Logic)
-// ===============================================
+// --- COIN MANAGEMENT LOGIC ---
 async function handleNewCoinSubmit() {
     const symbol = document.getElementById('new-coin-symbol').value.trim().toUpperCase();
     const coingeckoId = document.getElementById('new-coin-id').value.trim().toLowerCase();
@@ -600,7 +590,6 @@ async function handleNewCoinSubmit() {
         }
         
         if (success) {
-            // Išvalome modalą
             document.getElementById('new-coin-symbol').value = '';
             document.getElementById('new-coin-id').value = '';
             document.getElementById('new-coin-target').value = '';
@@ -632,7 +621,6 @@ async function handleDeleteCoinSubmit() {
     try {
         const success = await deleteSupportedCoin(sym);
         if (success) {
-            // Ištriname ir susijusius tikslus
             const { data: { user } } = await _supabase.auth.getUser();
             if(user) await _supabase.from('crypto_goals').delete().eq('user_id', user.id).eq('coin_symbol', sym);
             
