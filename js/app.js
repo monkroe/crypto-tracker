@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.6.2 (Session Fix & Smart Calculator)
+// js/app.js - Versija 1.6.3 (Fixed 3-Way Calculator)
 
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 
 let coinsList = [];
 let transactions = [];
@@ -14,24 +14,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.innerText = APP_VERSION;
     
-    // --- PAKEITIMAS: AKTYVUS SESIJOS TIKRINIMAS ---
-    // Pirmiausia patikriname, ar jau esame prisijungę
+    // Sesijos tikrinimas
     const { data: { session } } = await _supabase.auth.getSession();
-    
     if (session) {
-        // Jei sesija yra - iškart rodom programą
         showAppScreen();
         loadAllData();
     } else {
-        // Jei ne - rodom login
         showAuthScreen();
     }
 
-    // Tada klausomės pasikeitimų (pvz., atsijungimo)
     _supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             showAppScreen();
-            // loadAllData kviečiam tik jei duomenys dar neužkrauti
             if (transactions.length === 0) loadAllData();
         } else if (event === 'SIGNED_OUT') {
             showAuthScreen();
@@ -43,18 +37,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// --- UI PAGALBINĖS FUNKCIJOS ---
+// --- UI PAGALBINĖS ---
 function showAppScreen() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-content').classList.remove('hidden');
 }
-
 function showAuthScreen() {
     document.getElementById('auth-screen').classList.remove('hidden');
     document.getElementById('app-content').classList.add('hidden');
 }
 
-// --- AUTH HANDLERS ---
+// --- AUTH ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
@@ -68,19 +61,13 @@ function setupAuthHandlers() {
     }
     document.getElementById('btn-login').addEventListener('click', async () => {
         if (!validate()) return;
-        try { 
-            const { error } = await userLogin(emailInput.value, passInput.value);
-            if (error) throw error;
-            // onAuthStateChange sutvarkys perėjimą
-        } catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
+        try { const { error } = await userLogin(emailInput.value, passInput.value); if (error) throw error; } 
+        catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
     document.getElementById('btn-signup').addEventListener('click', async () => {
         if (!validate()) return;
-        try { 
-            const { error } = await userSignUp(emailInput.value, passInput.value); 
-            if (error) throw error;
-            alert("Registracija sėkminga! Patikrinkite paštą arba prisijunkite."); 
-        } catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
+        try { const { error } = await userSignUp(emailInput.value, passInput.value); if (error) throw error; alert("Registracija sėkminga!"); } 
+        catch (e) { errText.textContent = e.message; errText.classList.remove('hidden'); }
     });
     document.getElementById('btn-logout').addEventListener('click', async () => await userSignOut());
 }
@@ -88,7 +75,7 @@ function setupAuthHandlers() {
 function clearData() {
     document.getElementById('journal-body').innerHTML = '';
     document.getElementById('header-total-value').innerText = '$0.00';
-    coinsList = []; transactions = []; // Išvalom atmintį
+    coinsList = []; transactions = [];
 }
 
 function setupAppListeners() {
@@ -97,7 +84,7 @@ function setupAppListeners() {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
-        setupCalculator();
+        setupCalculator(); // Aktyvuojam skaičiuotuvą
     }
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
@@ -107,7 +94,7 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
-// --- SKAIČIUOTUVAS (IŠ 1.6.1) ---
+// --- PATAISYTAS 3-KRYPTIS SKAIČIUOTUVAS ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -115,26 +102,51 @@ function setupCalculator() {
     
     if (!amountIn || !priceIn || !totalIn) return;
 
-    const val = (el) => { const v = parseFloat(el.value); return isNaN(v) ? 0 : v; };
+    const val = (el) => {
+        const v = parseFloat(el.value);
+        return isNaN(v) ? 0 : v;
+    };
 
+    // 1. Keičiant KIEKĮ
     amountIn.addEventListener('input', () => {
-        const a = val(amountIn); const p = val(priceIn);
-        if (a && p) totalIn.value = (a * p).toFixed(2);
+        const a = val(amountIn);
+        const p = val(priceIn);
+        const t = val(totalIn);
+        // Jei yra kaina -> skaičiuojam Total
+        if (p > 0) totalIn.value = (a * p).toFixed(2);
+        // Jei kainos nėra, bet yra Total -> skaičiuojam Kainą
+        else if (t > 0 && a > 0) priceIn.value = (t / a).toFixed(8);
     });
 
+    // 2. Keičiant KAINĄ
     priceIn.addEventListener('input', () => {
-        const p = val(priceIn); const a = val(amountIn); const t = val(totalIn);
+        const p = val(priceIn);
+        const a = val(amountIn);
+        const t = val(totalIn);
+        // Jei yra kiekis -> skaičiuojam Total
         if (a > 0) totalIn.value = (a * p).toFixed(2);
+        // Jei kiekio nėra, bet yra Total -> skaičiuojam Kiekį
         else if (t > 0 && p > 0) amountIn.value = (t / p).toFixed(6);
     });
 
+    // 3. Keičiant SUMĄ (Total Cost)
     totalIn.addEventListener('input', () => {
-        const t = val(totalIn); const p = val(priceIn);
-        if (p > 0) amountIn.value = (t / p).toFixed(6);
+        const t = val(totalIn);
+        const p = val(priceIn);
+        const a = val(amountIn);
+        
+        // Svarbu: tikriname ką turime
+        if (p > 0) {
+            // Jei turime kainą -> skaičiuojam Kiekį
+            amountIn.value = (t / p).toFixed(6);
+        } else if (a > 0) {
+            // Jei turime kiekį (bet neturime kainos) -> skaičiuojam Kainą (JŪSŲ ATVEJIS)
+            priceIn.value = (t / a).toFixed(8);
+        }
     });
 }
 
-// --- DATA LOADING ---
+// --- DATA ---
 async function loadAllData() {
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
@@ -286,6 +298,7 @@ async function fetchPriceForForm() {
         if (price > 0) {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
+            // TRIGGER INPUT TO RECALCULATE
             priceInput.dispatchEvent(new Event('input'));
         }
     } catch (e) { console.error(e); alert("Nepavyko gauti kainos."); }
