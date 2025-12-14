@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.3.6 (Skaičiuotuvas veikia į abi puses)
+// js/app.js - Versija 1.3.7 (Tri-way Calculator & Methods)
 
 let coinsList = [];
 let transactions = [];
@@ -8,9 +8,8 @@ let myChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("App started v1.3.6");
+    console.log("App started v1.3.7");
 
-    // AUTH LISTENER
     _supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
             document.getElementById('auth-screen').classList.add('hidden');
@@ -24,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     setupAuthHandlers();
-    setupAppListeners(); // Čia dabar įjungiamas ir skaičiuotuvas
+    setupAppListeners();
 });
 
 // --- AUTH HANDLERS ---
@@ -101,24 +100,16 @@ function clearData() {
 function setupAppListeners() {
     const form = document.getElementById('add-tx-form');
     if (form) {
-        // Klonuojame formą, kad išvalytume senus listenerius
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
-        
-        // Prijungiame Submit funkciją
         newForm.addEventListener('submit', handleTxSubmit);
-
-        // SVARBU: Iš naujo prijungiame skaičiuotuvą prie naujos formos!
-        setupCalculator();
+        setupCalculator(); // Prijungiame atnaujintą skaičiuotuvą
     }
 
-    // Kiti mygtukai
     const btnSaveCoin = document.getElementById('btn-save-coin');
     const btnDelCoin = document.getElementById('btn-delete-coin');
     const btnFetch = document.getElementById('btn-fetch-price');
 
-    // Nuimame senus listenerius (jei būtų) ir dedame naujus, naudojant klonavimo triuką arba paprastai
-    // Čia paprastai, nes šie mygtukai nesikeičia
     btnSaveCoin.replaceWith(btnSaveCoin.cloneNode(true));
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
 
@@ -129,7 +120,7 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchLivePriceForForm);
 }
 
-// --- SKAIČIUOTUVAS (The Brains) ---
+// --- PROTINGAS SKAIČIUOTUVAS (3 PUSIŲ LOGIKA) ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -137,36 +128,45 @@ function setupCalculator() {
     
     if (!amountIn || !priceIn || !totalIn) return;
     
-    // 1. Jei keičiamas Kiekis (Amount) arba Kaina (Price) -> Skaičiuojame Total
-    function calculateTotal() {
-        const amount = parseFloat(amountIn.value);
-        const price = parseFloat(priceIn.value);
-        
-        if (!isNaN(amount) && !isNaN(price)) {
-            const total = amount * price;
-            // Rodo 2 skaičius po kablelio, bet nenaudojame toFixed, kad liktų skaičius inpute
-            totalIn.value = Math.round(total * 100) / 100; 
+    // 1. Keičiant AMOUNT:
+    // Jei yra Price -> skaičiuojame Total.
+    amountIn.addEventListener('input', () => {
+        const a = parseFloat(amountIn.value);
+        const p = parseFloat(priceIn.value);
+        if (!isNaN(a) && !isNaN(p)) {
+            totalIn.value = (a * p).toFixed(2);
         }
-    }
-    
-    // 2. Jei keičiama Suma (Total Cost) -> Skaičiuojame Kiekį (Amount)
-    function calculateAmount() {
-        const total = parseFloat(totalIn.value);
-        const price = parseFloat(priceIn.value);
-        
-        if (!isNaN(total) && !isNaN(price) && price !== 0) {
-            const amount = total / price;
-            // Kiekį rodome tiksliau (pvz. 6 skaičiai po kablelio)
-            amountIn.value = parseFloat(amount.toFixed(6));
-        }
-    }
+    });
 
-    // Prijungiame logiką
-    amountIn.addEventListener('input', calculateTotal);
-    priceIn.addEventListener('input', calculateTotal); // Keičiant kainą, keičiasi total (pagal amount)
-    
-    // Jei vartotojas pats įrašo Total Cost, mes perskaičiuojame Amount
-    totalIn.addEventListener('input', calculateAmount);
+    // 2. Keičiant PRICE:
+    // Jei yra Amount -> skaičiuojame Total.
+    priceIn.addEventListener('input', () => {
+        const a = parseFloat(amountIn.value);
+        const p = parseFloat(priceIn.value);
+        if (!isNaN(a) && !isNaN(p)) {
+            totalIn.value = (a * p).toFixed(2);
+        }
+    });
+
+    // 3. Keičiant TOTAL (Svarbiausia dalis Recurring Buy):
+    // Čia sprendžiame, ką skaičiuoti.
+    totalIn.addEventListener('input', () => {
+        const t = parseFloat(totalIn.value);
+        const a = parseFloat(amountIn.value);
+        const p = parseFloat(priceIn.value);
+
+        if (isNaN(t)) return;
+
+        // Jei vartotojas jau įvedė KIEKĮ (pvz. Kraken davė 213.706), o dabar įveda SUMĄ ($10)
+        // Mes apskaičiuojame KAINĄ.
+        if (!isNaN(a) && a !== 0) {
+            priceIn.value = (t / a).toFixed(8); // Didelis tikslumas kainai
+        } 
+        // Jei kiekio nėra, bet yra kaina, skaičiuojame kiekį
+        else if (!isNaN(p) && p !== 0) {
+            amountIn.value = (t / p).toFixed(6);
+        }
+    });
 }
 
 // --- DATA LOADING ---
@@ -244,6 +244,7 @@ function formatMoney(amount) {
 function populateCoinSelect(holdings = {}) {
     const select = document.getElementById('tx-coin');
     if (!select) return;
+    const currentVal = select.value; // Išsaugome, jei buvo pasirinkta
     select.innerHTML = '';
 
     const sortedCoins = [...coinsList].sort((a, b) => {
@@ -265,6 +266,13 @@ function populateCoinSelect(holdings = {}) {
         option.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol;
         select.appendChild(option);
     });
+    
+    // Atstatome pasirinkimą arba parenkame pirmą
+    if (currentVal && sortedCoins.some(c => c.symbol === currentVal)) {
+        select.value = currentVal;
+    } else if (sortedCoins.length > 0) {
+        select.value = sortedCoins[0].symbol;
+    }
 }
 
 function populateDeleteSelect() {
@@ -292,11 +300,16 @@ function renderJournal() {
     sortedTx.forEach(tx => {
         const row = document.createElement('tr');
         const isBuy = tx.type === 'Buy';
+        
+        // Paimame metodą arba rodom "Manual" jei nėra
+        const method = tx.method ? tx.method : '';
+        const methodBadge = method ? `<div class="text-[9px] text-gray-500 italic mt-0.5">${method}</div>` : '';
+
         row.innerHTML = `
             <td class="px-4 py-3 align-top border-b border-gray-800/30">
                 <div class="font-bold text-gray-200 text-sm">${tx.coin_symbol}</div>
                 <div class="text-[10px] text-gray-500">${tx.date}</div>
-            </td>
+                ${methodBadge} </td>
             <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
                 <div class="text-xs text-gray-300">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
                 <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
@@ -408,6 +421,7 @@ async function handleTxSubmit(e) {
         type: document.getElementById('tx-type').value,
         coin_symbol: document.getElementById('tx-coin').value,
         exchange: document.getElementById('tx-exchange').value,
+        method: document.getElementById('tx-method').value, // NAUJAS LAUKAS
         amount: parseFloat(rawAmount),
         price_per_coin: parseFloat(rawPrice),
         total_cost_usd: parseFloat(rawTotal)
