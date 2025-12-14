@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Crypto Tracker - Portfolio Manager</title>
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -20,22 +21,54 @@
         }
     </script>
     
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        input, select, textarea { -webkit-appearance: none; -moz-appearance: none; }
+        /* Remove default input styles */
+        input, select, textarea { 
+            -webkit-appearance: none; 
+            -moz-appearance: none; 
+        }
+        
+        /* Hide scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Fade in animation */
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        
+        /* Slide up animation for mobile modals */
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        .spinner { border: 2px solid rgba(255, 255, 255, 0.1); border-top-color: #2dd4bf; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; }
+        @keyframes slideUp { 
+            from { transform: translateY(100%); } 
+            to { transform: translateY(0); } 
+        }
+        
+        /* Loading spinner */
+        .spinner { 
+            border: 2px solid rgba(255, 255, 255, 0.1); 
+            border-top-color: #2dd4bf; 
+            border-radius: 50%; 
+            width: 20px; 
+            height: 20px; 
+            animation: spin 0.8s linear infinite; 
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-200 font-sans pb-20">
 
+    <!-- ============================================ -->
+    <!-- AUTH SCREEN -->
+    <!-- ============================================ -->
     <div id="auth-screen" class="fixed inset-0 z-50 bg-gray-950 flex flex-col items-center justify-center p-6 fade-in">
         <div class="w-full max-w-sm space-y-8">
             <div class="text-center space-y-2">
@@ -80,8 +113,12 @@
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- APP CONTENT -->
+    <!-- ============================================ -->
     <div id="app-content" class="hidden">
         
+        <!-- HEADER -->
         <header class="fixed top-0 w-full bg-gray-900/95 backdrop-blur border-b border-gray-800 z-40">
             <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
                 <div class="flex items-center gap-2">
@@ -104,8 +141,10 @@
             </div>
         </header>
 
+        <!-- MAIN CONTENT -->
         <main class="max-w-md mx-auto px-4 pt-20 space-y-5 min-h-screen">
             
+            <!-- P&L CARD WITH CHART -->
             <section class="grid grid-cols-1 gap-4">
                 <div class="bg-gray-900 rounded-2xl border border-gray-800 p-4 shadow-lg relative overflow-hidden">
                     <div class="flex justify-between items-start mb-4">
@@ -126,11 +165,13 @@
                 </div>
             </section>
 
+            <!-- GOALS SECTION -->
             <section id="goals-section" class="hidden">
                 <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Goals Progress</h3>
                 <div id="goals-container" class="space-y-3"></div>
             </section>
 
+            <!-- ADD TRANSACTION BUTTON -->
             <section class="grid grid-cols-2 gap-3">
                 <button 
                     onclick="openModal('add-modal')" 
@@ -140,6 +181,7 @@
                 </button>
             </section>
 
+            <!-- TRANSACTION HISTORY -->
             <section>
                 <div class="flex justify-between items-end mb-2 px-1">
                     <h3 class="text-gray-500 text-xs uppercase font-bold">Recent History</h3>
@@ -159,6 +201,7 @@
                 </div>
             </section>
 
+            <!-- COIN MANAGEMENT -->
             <section class="text-center pt-4 border-t border-gray-800 mt-6">
                 <p class="text-[10px] text-gray-500 mb-2 uppercase font-bold">Manage Coins</p>
                 <div class="flex justify-center gap-4">
@@ -177,6 +220,7 @@
                 </div>
             </section>
 
+            <!-- FOOTER -->
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">
                     Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help
@@ -185,12 +229,15 @@
                     &copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.
                 </p>
                 <p class="text-[9px] font-mono text-gray-700 pt-1">
-                    Version 1.7.15
+                    Version <span id="app-version">Loading...</span>
                 </p>
             </footer>
         </main>
     </div>
 
+    <!-- ============================================ -->
+    <!-- ADD/EDIT TRANSACTION MODAL -->
+    <!-- ============================================ -->
     <div id="add-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm">
         <div class="bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl border-t sm:border border-gray-800 p-5 space-y-5 animate-slide-up sm:animate-none max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center text-white">
@@ -206,6 +253,7 @@
             <form id="add-tx-form" class="space-y-4">
                 <input type="hidden" id="tx-id">
                 
+                <!-- Type & Coin -->
                 <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <select 
@@ -220,19 +268,19 @@
                         <select 
                             id="tx-coin" 
                             class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold"
-                            required
                         ></select>
                         <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
                     </div>
                 </div>
                 
+                <!-- Date & Time -->
                 <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Date</label>
                         <input 
                             type="date" 
                             id="tx-date-input" 
-                            required 
+                            required
                             class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
                         >
                     </div>
@@ -246,6 +294,7 @@
                     </div>
                 </div>
 
+                <!-- Exchange & Method -->
                 <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <select 
@@ -287,6 +336,7 @@
                     </div>
                 </div>
 
+                <!-- Amount, Price, Total -->
                 <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700/50 space-y-3">
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -296,7 +346,7 @@
                                 id="tx-amount" 
                                 step="any" 
                                 placeholder="0.00" 
-                                required 
+                                required
                                 class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
                             >
                         </div>
@@ -315,7 +365,7 @@
                                 id="tx-price" 
                                 step="any" 
                                 placeholder="0.00" 
-                                required 
+                                required
                                 class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
                             >
                         </div>
@@ -327,12 +377,13 @@
                             id="tx-total" 
                             step="any" 
                             placeholder="0.00" 
-                            required 
+                            required
                             class="w-full bg-gray-900 border border-primary-500/50 text-white font-bold rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
                         >
                     </div>
                 </div>
 
+                <!-- Notes -->
                 <div>
                     <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Notes / Comments</label>
                     <textarea 
@@ -354,6 +405,9 @@
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- ADD NEW COIN MODAL -->
+    <!-- ============================================ -->
     <div id="new-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4">
             <h3 class="font-bold text-white">Add Coin & Goal</h3>
@@ -392,6 +446,9 @@
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- DELETE COIN MODAL -->
+    <!-- ============================================ -->
     <div id="delete-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4">
             <h3 class="font-bold text-red-400">Delete Coin</h3>
@@ -419,10 +476,12 @@
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- SCRIPTS -->
+    <!-- ============================================ -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase.js"></script>
-    
-    <script src="js/app.js?v=1714"></script> 
+    <script src="js/app.js"></script>
     
     <script>
         // Set current year
@@ -430,7 +489,7 @@
         
         // Modal functions
         function openModal(id) { 
-            if(id === 'add-modal') {
+            if (id === 'add-modal') {
                 // Reset form to empty state
                 document.getElementById('tx-id').value = ''; 
                 document.getElementById('add-tx-form').reset();
@@ -447,7 +506,7 @@
                 // Set current date/time
                 const now = new Date();
                 const dStr = now.toISOString().split('T')[0];
-                const tStr = now.toTimeString().split(' ')[0].slice(0,5);
+                const tStr = now.toTimeString().split(' ')[0].slice(0, 5);
                 
                 document.getElementById('tx-date-input').value = dStr;
                 document.getElementById('tx-time-input').value = tStr;
