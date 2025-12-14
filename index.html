@@ -254,12 +254,18 @@
         
         function openModal(id) { 
             if(id === 'add-modal') {
+                // RESET TO EMPTY
                 document.getElementById('tx-id').value = ''; 
                 document.getElementById('add-tx-form').reset();
                 document.getElementById('modal-title').innerText = "New Transaction";
                 document.getElementById('btn-save').innerText = "Save Transaction";
                 document.getElementById('btn-save').classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
                 document.getElementById('btn-save').classList.add('bg-primary-600', 'hover:bg-primary-500');
+                
+                // GRIEŽTAS IŠVALYMAS - PANAILINA "1.000" numatytasias reikšmes
+                document.getElementById('tx-amount').value = '';
+                document.getElementById('tx-price').value = '';
+                document.getElementById('tx-total').value = '';
                 
                 // RESET TO CURRENT DATE/TIME
                 const now = new Date();
