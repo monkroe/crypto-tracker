@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.6.6 (Auto-Calculate Price from Amount & Total)
+// js/app.js - Versija 1.6.7 (Clean Inputs & Fixed Triangle Calc)
 
-const APP_VERSION = '1.6.6';
+const APP_VERSION = '1.6.7';
 
 let coinsList = [];
 let transactions = [];
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.innerText = APP_VERSION;
     
-    // Sesijos tikrinimas
+    // Check Session
     const { data: { session } } = await _supabase.auth.getSession();
     if (session) {
         showAppScreen();
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// --- UI PAGALBINĖS ---
+// --- UI HELPERS ---
 function showAppScreen() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-content').classList.remove('hidden');
@@ -84,7 +84,7 @@ function setupAppListeners() {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
-        setupCalculator(); // Aktyvuojam skaičiuotuvą
+        setupCalculator(); 
     }
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
@@ -94,7 +94,7 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
-// --- SKAIČIUOTUVAS (PATAISYTA LOGIKA) ---
+// --- FIXED CALCULATOR ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
@@ -113,11 +113,11 @@ function setupCalculator() {
         const p = val(priceIn);
         const t = val(totalIn);
 
-        // Jei kaina tuščia (0), bet turime Sumą -> Skaičiuojame Kainą (JŪSŲ PRAŠYMAS)
-        if (p === 0 && t > 0 && a > 0) {
+        // Jei turime Sumą (Total) ir įvedame Kiekį -> Skaičiuojame Kainą (Recurring Buy atvejis)
+        if (t > 0 && a > 0) {
             priceIn.value = (t / a).toFixed(8);
         }
-        // Jei kaina yra -> Skaičiuojame Sumą
+        // Kitu atveju, jei turime Kainą -> Skaičiuojame Sumą
         else if (p > 0) {
             totalIn.value = (a * p).toFixed(2);
         }
@@ -129,7 +129,7 @@ function setupCalculator() {
         const a = val(amountIn);
         const t = val(totalIn);
         
-        // Jei turime Sumą -> Perskaičiuojame Kiekį (išlaikome fiksuotą biudžetą)
+        // Jei turime Sumą -> Perskaičiuojame Kiekį
         if (t > 0 && p > 0) {
             amountIn.value = (t / p).toFixed(6);
         }
@@ -145,18 +145,18 @@ function setupCalculator() {
         const p = val(priceIn);
         const a = val(amountIn);
         
-        // Jei kaina tuščia (0), bet turime Kiekį -> Skaičiuojame Kainą
-        if (p === 0 && a > 0 && t > 0) {
+        // Jei turime Kiekį -> Skaičiuojame Kainą (Recurring Buy atvejis)
+        if (a > 0 && t > 0) {
             priceIn.value = (t / a).toFixed(8);
         }
-        // Jei kaina yra -> Skaičiuojame Kiekį (Standartinis pirkimas už sumą)
+        // Jei turime Kainą -> Skaičiuojame Kiekį (Standartinis pirkimas)
         else if (p > 0) {
             amountIn.value = (t / p).toFixed(6);
         }
     });
 }
 
-// --- DATA ---
+// --- DATA & CHARTS ---
 async function loadAllData() {
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
