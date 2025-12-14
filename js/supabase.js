@@ -88,3 +88,17 @@ async function savePortfolioSnapshot(totalValue, totalInvested) {
             .insert([{ date: today, total_value_usd: totalValue, total_invested_usd: totalInvested }]);
     }
 }
+
+// 6. Ištrinti monetą iš sąrašo (NAUJA FUNKCIJA)
+async function deleteSupportedCoin(symbol) {
+    const { error } = await _supabase
+        .from('supported_coins')
+        .delete()
+        .eq('symbol', symbol);
+
+    if (error) {
+        console.error("Error deleting coin:", error);
+        return false;
+    }
+    return true;
+}
