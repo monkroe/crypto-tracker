@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.6.0 (Split Date & Time, Stable Chart)
+// js/app.js - Versija 1.6.1 (Smart Calculator Fix)
 
-const APP_VERSION = '1.6.0'; // Nauja versija
+const APP_VERSION = '1.6.1';
 
 let coinsList = [];
 let transactions = [];
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAppListeners();
 });
 
-// ... AUTH IR CALCULATOR (NIEKAS NEKEISTA) ...
+// --- AUTH ---
 function setupAuthHandlers() {
     const emailInput = document.getElementById('auth-email');
     const passInput = document.getElementById('auth-pass');
@@ -64,7 +64,7 @@ function setupAppListeners() {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleTxSubmit);
-        setupCalculator();
+        setupCalculator(); // Čia aktyvuojamas skaičiuotuvas
     }
     document.getElementById('btn-save-coin').addEventListener('click', handleNewCoinSubmit);
     document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit);
@@ -74,20 +74,57 @@ function setupAppListeners() {
     document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm);
 }
 
+// --- PATAISYTAS SKAIČIUOTUVAS ---
 function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
     const totalIn = document.getElementById('tx-total');
-    if (!amountIn) return;
-    amountIn.addEventListener('input', () => { if(amountIn.value && priceIn.value) totalIn.value = (amountIn.value * priceIn.value).toFixed(2); });
-    priceIn.addEventListener('input', () => { if(amountIn.value && priceIn.value) totalIn.value = (amountIn.value * priceIn.value).toFixed(2); });
+    
+    if (!amountIn || !priceIn || !totalIn) return;
+
+    // Pagalbinė funkcija skaičiaus gavimui
+    const val = (el) => {
+        const v = parseFloat(el.value);
+        return isNaN(v) ? 0 : v;
+    };
+
+    // 1. Keičiant KIEKĮ (Amount)
+    amountIn.addEventListener('input', () => {
+        const a = val(amountIn);
+        const p = val(priceIn);
+        if (a && p) totalIn.value = (a * p).toFixed(2);
+    });
+
+    // 2. Keičiant KAINĄ (Price) - SVARBUS PATAISYMAS
+    priceIn.addEventListener('input', () => {
+        const p = val(priceIn);
+        const a = val(amountIn);
+        const t = val(totalIn);
+        
+        // Jei vartotojas įvedė Kiekį -> Skaičiuojam Total
+        if (a > 0) {
+            totalIn.value = (a * p).toFixed(2);
+        } 
+        // Jei vartotojas įvedė Total (bet dar nėra Kiekio) -> Skaičiuojam Kiekį
+        else if (t > 0 && p > 0) {
+            amountIn.value = (t / p).toFixed(6);
+        }
+    });
+
+    // 3. Keičiant TOTAL COST
     totalIn.addEventListener('input', () => {
-        const t = parseFloat(totalIn.value); const a = parseFloat(amountIn.value); const p = parseFloat(priceIn.value);
-        if (t && a) priceIn.value = (t / a).toFixed(8); else if (t && p) amountIn.value = (t / p).toFixed(6);
+        const t = val(totalIn);
+        const p = val(priceIn);
+        
+        // Jei žinome kainą -> iškart skaičiuojam kiekį
+        if (p > 0) {
+            amountIn.value = (t / p).toFixed(6);
+        }
     });
 }
 
-// ... DATA & CHART (NIEKAS NEKEISTA) ...
+// ... Toliau viskas lieka taip pat ...
+
 async function loadAllData() {
     try {
         const [coinsData, txData, goalsData] = await Promise.all([
@@ -96,7 +133,7 @@ async function loadAllData() {
         coinsList = coinsData || []; transactions = txData || []; goals = goalsData.data || [];
         await fetchCurrentPrices();
         const holdings = updateDashboard(); 
-        generateHistoryChart(); // Stable chart
+        generateHistoryChart();
         populateCoinSelect(holdings); populateDeleteSelect(); renderJournal();
     } catch (e) { console.error(e); }
 }
@@ -210,14 +247,10 @@ function renderJournal() {
     });
 }
 
-// --- UPDATED LOGIC FOR SPLIT INPUTS ---
-
 async function fetchPriceForForm() {
     const symbol = document.getElementById('tx-coin').value;
-    // SUJUNGIAME DATĄ IR LAIKĄ ISTORINEI PAIEŠKAI
     const dStr = document.getElementById('tx-date-input').value;
     if (!dStr) return;
-    
     const coin = coinsList.find(c => c.symbol === symbol);
     if (!coin) return;
 
@@ -227,7 +260,6 @@ async function fetchPriceForForm() {
         const selectedDate = new Date(dStr);
         const today = new Date();
         
-        // Lyginame tik datas be laiko
         if (selectedDate.toDateString() === today.toDateString()) {
             const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
             const data = await res.json(); price = data[coin.coingecko_id].usd;
@@ -244,6 +276,7 @@ async function fetchPriceForForm() {
         if (price > 0) {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
+            // Čia iššaukiame įvykį, kad suveiktų skaičiuotuvas
             priceInput.dispatchEvent(new Event('input'));
         }
     } catch (e) { console.error(e); alert("Nepavyko gauti kainos."); }
@@ -257,12 +290,9 @@ window.onEditTx = function(id) {
     setTimeout(() => {
         document.getElementById('tx-id').value = tx.id;
         document.getElementById('tx-type').value = tx.type;
-        
-        // IŠSKAIDOME ISO DATĄ (YYYY-MM-DDTHH:mm:ss)
         const parts = tx.date.split('T');
-        if (parts.length >= 1) document.getElementById('tx-date-input').value = parts[0]; // Data
-        if (parts.length >= 2) document.getElementById('tx-time-input').value = parts[1].slice(0, 5); // Laikas (HH:mm)
-
+        if (parts.length >= 1) document.getElementById('tx-date-input').value = parts[0];
+        if (parts.length >= 2) document.getElementById('tx-time-input').value = parts[1].slice(0, 5);
         document.getElementById('tx-coin').value = tx.coin_symbol;
         document.getElementById('tx-exchange').value = tx.exchange;
         document.getElementById('tx-method').value = tx.method || 'Market Buy';
@@ -281,19 +311,15 @@ window.onEditTx = function(id) {
 async function handleTxSubmit(e) {
     e.preventDefault();
     const btn = document.getElementById('btn-save'); const oldText = btn.innerText; btn.innerText = "Saving..."; btn.disabled = true;
-
     const txId = document.getElementById('tx-id').value;
     const rawAmount = document.getElementById('tx-amount').value;
     const rawPrice = document.getElementById('tx-price').value;
     const rawTotal = document.getElementById('tx-total').value;
-    
-    // SUJUNGIAME DATĄ IR LAIKĄ
     const dStr = document.getElementById('tx-date-input').value;
     const tStr = document.getElementById('tx-time-input').value || '00:00';
     const finalDate = `${dStr}T${tStr}:00`;
-
     const txData = {
-        date: finalDate, // Siunčiame sujungtą
+        date: finalDate,
         type: document.getElementById('tx-type').value,
         coin_symbol: document.getElementById('tx-coin').value,
         exchange: document.getElementById('tx-exchange').value,
@@ -303,7 +329,6 @@ async function handleTxSubmit(e) {
         price_per_coin: parseFloat(rawPrice),
         total_cost_usd: parseFloat(rawTotal)
     };
-
     let success = false;
     if (txId) success = await updateTransaction(txId, txData);
     else success = await saveTransaction(txData);
@@ -311,7 +336,6 @@ async function handleTxSubmit(e) {
     btn.innerText = oldText; btn.disabled = false;
 }
 
-// ... KITA TAS PATS ...
 window.onDeleteTx = async function(id) { if(confirm("Are you sure you want to delete this transaction?")) { await deleteTransaction(id); await loadAllData(); } };
 function updateDashboard() { let holdings = {}; let totalInvested = 0; transactions.forEach(tx => { if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = 0; const amt = Number(tx.amount); const cost = Number(tx.total_cost_usd); if (tx.type === 'Buy') { holdings[tx.coin_symbol] += amt; totalInvested += cost; } else { holdings[tx.coin_symbol] -= amt; totalInvested -= cost; } }); let currentVal = 0; for (const [symbol, amount] of Object.entries(holdings)) { if (amount <= 0.0000001) continue; const coin = coinsList.find(c => c.symbol === symbol); if (coin && prices[coin.coingecko_id]) currentVal += amount * prices[coin.coingecko_id].usd; } document.getElementById('header-total-value').innerText = formatMoney(currentVal); const pnl = currentVal - totalInvested; const pnlEl = document.getElementById('total-pnl'); const pnlPercEl = document.getElementById('total-pnl-percent'); if (pnlEl) { pnlEl.innerText = `${pnl >= 0 ? '+' : ''}${formatMoney(pnl)}`; pnlEl.className = `text-2xl font-bold ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`; } if (pnlPercEl) { let percent = totalInvested > 0 ? (pnl / totalInvested * 100) : 0; pnlPercEl.innerText = `${percent.toFixed(2)}%`; pnlPercEl.className = `text-xs font-bold px-2 py-0.5 rounded bg-gray-800 ${pnl >= 0 ? 'text-primary-400' : 'text-red-400'}`; } renderGoals(holdings); return holdings; }
 function renderGoals(holdings) { const container = document.getElementById('goals-container'); const section = document.getElementById('goals-section'); if (!container || !section) return; container.innerHTML = ''; if (goals.length === 0) { section.classList.add('hidden'); return; } section.classList.remove('hidden'); goals.forEach(goal => { const current = holdings[goal.coin_symbol] || 0; const target = Number(goal.target_amount); if (target <= 0) return; const pct = Math.min(100, (current / target) * 100); const div = document.createElement('div'); div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl'; div.innerHTML = `<div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-300">${goal.coin_symbol}</span><span class="text-primary-400 font-bold">${pct.toFixed(1)}%</span></div><div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden"><div class="bg-primary-500 h-1.5 rounded-full" style="width: ${pct}%"></div></div><div class="text-[9px] text-gray-500 mt-1 text-right font-mono">${current.toLocaleString()} / ${target.toLocaleString()}</div>`; container.appendChild(div); }); }
