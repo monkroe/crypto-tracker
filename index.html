@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="lt" class="dark"> <head>
+<html lang="lt" class="dark">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Crypto Tracker</title>
@@ -115,10 +116,10 @@
             </section>
 
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
-    <p class="text-[11px] text-gray-500">Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help</p>
-    <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-    <p class="text-[9px] font-mono text-gray-700 pt-1">Version <span id="app-version">Loading...</span></p>
-    </footer>
+                <p class="text-[11px] text-gray-500">Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help</p>
+                <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Version <span id="app-version">Loading...</span></p>
+            </footer>
         </main>
     </div>
 
@@ -139,14 +140,24 @@
                             <option value="Sell">Sell 🔴</option>
                         </select>
                     </div>
-                    <input type="datetime-local" id="tx-date" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none">
-                </div>
-                
-                <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <select id="tx-coin" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold"></select>
                         <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
                     </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="relative">
+                        <label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Date</label>
+                        <input type="date" id="tx-date-input" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none">
+                    </div>
+                    <div class="relative">
+                        <label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Time</label>
+                        <input type="time" id="tx-time-input" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <select id="tx-exchange" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold">
                             <option value="" disabled selected>Exchange...</option>
@@ -164,23 +175,21 @@
                             <option value="Rabby Wallet">Rabby Wallet</option>
                             <option value="Solflare">Solflare</option>
                             <option value="StepN Wallet">StepN Wallet</option>
-                            <option value="Kita / DeFi">Kita/DeFi</option>
+                            <option value="Kita / DeFi">Kita / DeFi</option>
                         </select>
                         <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
                     </div>
-                </div>
-
-                <div class="relative">
-                    <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Transaction Method</label>
-                    <select id="tx-method" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 mt-1 outline-none appearance-none">
-                        <option value="Market Buy">Market Buy (Momentinis)</option>
-                        <option value="Limit Buy">Limit Buy (Nustatyta kaina)</option>
-                        <option value="Recurring Buy">Recurring Buy (Periodinis)</option>
-                        <option value="Swap">Swap/DeFi</option>
-                        <option value="Transfer">Transfer/Deposit</option>
-                        <option value="Gift/Airdrop">Gift/Airdrop</option>
-                    </select>
-                    <i class="fa-solid fa-chevron-down absolute right-3 top-9 text-xs text-gray-500 pointer-events-none"></i>
+                    <div class="relative">
+                        <select id="tx-method" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none">
+                            <option value="Market Buy">Market Buy</option>
+                            <option value="Limit Buy">Limit Buy</option>
+                            <option value="Recurring Buy">Recurring Buy</option>
+                            <option value="Swap">Swap / DeFi</option>
+                            <option value="Transfer">Transfer</option>
+                            <option value="Gift/Airdrop">Gift / Airdrop</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
+                    </div>
                 </div>
 
                 <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700/50 space-y-3">
@@ -252,9 +261,13 @@
                 document.getElementById('btn-save').classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
                 document.getElementById('btn-save').classList.add('bg-primary-600', 'hover:bg-primary-500');
                 
-                const n = new Date();
-                n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
-                document.getElementById('tx-date').value = n.toISOString().slice(0, 16);
+                // RESET TO CURRENT DATE/TIME
+                const now = new Date();
+                const dStr = now.toISOString().split('T')[0];
+                const tStr = now.toTimeString().split(' ')[0].slice(0,5);
+                
+                document.getElementById('tx-date-input').value = dStr;
+                document.getElementById('tx-time-input').value = tStr;
             }
             document.getElementById(id).classList.remove('hidden'); 
         }
