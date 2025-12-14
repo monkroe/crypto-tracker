@@ -1,4 +1,4 @@
-// js/supabase.js - Versija 1.7.3 (Pilna Auth & Data Manager)
+// js/supabase.js - Versija 1.7.5 (Pilna Auth & Data Manager)
 
 // ⚠️ SVARBU: Pakeiskite šias reikšmes savo Supabase projekto duomenimis!
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
@@ -43,17 +43,26 @@ async function userSignOut() {
 // --- TRANSAKCIJOS ---
 
 async function getTransactions() {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return [];
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) return [];
 
-    const { data, error } = await _supabase
-        .from('crypto_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false });
-    
-    if (error) console.error("Get Tx Error:", error);
-    return data || [];
+        const { data, error } = await _supabase
+            .from('crypto_transactions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('date', { ascending: false });
+        
+        if (error) {
+            console.error("Get Tx Error:", error);
+            // Jei RLS klaida, grąžiname tuščią masyvą, o ne null, kad nelūžtų app.js
+            return []; 
+        }
+        return data || [];
+    } catch (e) {
+        console.error("Unexpected error in getTransactions:", e);
+        return [];
+    }
 }
 
 async function saveTransaction(txData) {
@@ -98,23 +107,31 @@ async function deleteTransaction(id) {
 // --- MONETOS ---
 
 async function getSupportedCoins() {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return [];
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) return [];
 
-    const { data } = await _supabase
-        .from('supported_coins')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('symbol', { ascending: true });
+        const { data, error } = await _supabase
+            .from('supported_coins')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('symbol', { ascending: true });
         
-    return data || [];
+        if (error) {
+            console.error("Get Coins Error:", error);
+            return [];
+        }
+        return data || [];
+    } catch (e) {
+        console.error("Unexpected error in getSupportedCoins:", e);
+        return [];
+    }
 }
 
 async function saveNewCoin(coinData) {
     const { data: { user } } = await _supabase.auth.getUser();
     if (!user) { alert("Klaida: Vartotojas neprisijungęs."); return false; }
 
-    // RLS (Row Level Security) ir UNIQUE (naudotojas, simbolis) apribojimai apsaugo nuo dublikatų
     const dataWithUser = { ...coinData, user_id: user.id };
     const { error } = await _supabase.from('supported_coins').insert([dataWithUser]);
     
@@ -142,16 +159,24 @@ async function deleteSupportedCoin(symbol) {
 // --- TIKSLAMS ---
 
 async function getCryptoGoals() {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return [];
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) return [];
 
-    const { data, error } = await _supabase
-        .from('crypto_goals')
-        .select('*')
-        .eq('user_id', user.id);
-        
-    if (error) console.error("Goals Error:", error);
-    return data || [];
+        const { data, error } = await _supabase
+            .from('crypto_goals')
+            .select('*')
+            .eq('user_id', user.id);
+            
+        if (error) {
+            console.error("Goals Error:", error);
+            return [];
+        }
+        return data || [];
+    } catch (e) {
+        console.error("Unexpected error in getCryptoGoals:", e);
+        return [];
+    }
 }
 
 async function saveOrUpdateGoal(coinSymbol, targetAmount) {
