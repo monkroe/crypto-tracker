@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.9.0 (PnL % + Portfolio Allocation Chart)
+// js/app.js - Versija 1.9.1 (Accordion istorija: Year -> Month -> Transactions)
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 
 let coinsList = [];
 let transactions = [];
@@ -14,6 +14,11 @@ const CHART_COLORS = {
     KAS: '#2dd4bf', MON: '#a855f7', BTC: '#f97316', ETH: '#3b82f6',
     SOL: '#8b5cf6', BNB: '#eab308', JUP: '#4ade80', default: '#6b7280'
 };
+
+const MONTH_NAMES_LT = [
+    'Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis',
+    'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'
+];
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log(`✅ App started v${APP_VERSION}`);
@@ -96,8 +101,8 @@ function setupAuthHandlers() {
 }
 
 function clearData() {
-    const tbody = document.getElementById('journal-body');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</td></tr>';
+    const container = document.getElementById('journal-accordion');
+    if (container) container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</div>';
     document.getElementById('header-total-value').innerText = '$0.00';
     document.getElementById('total-pnl').innerText = '$0.00';
     document.getElementById('total-pnl-percent').innerText = '0.00%';
@@ -164,8 +169,8 @@ const padTo2Digits = (num) => String(num).padStart(2, '0');
 
 async function loadAllData() {
     console.log('📊 Loading all data...');
-    const journalBody = document.getElementById('journal-body');
-    if (journalBody) journalBody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</td></tr>';
+    const container = document.getElementById('journal-accordion');
+    if (container) container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</div>';
     
     try {
         const [coinsData, txData, goalsData] = await Promise.all([getSupportedCoins(), getTransactions(), getCryptoGoals()]);
@@ -177,14 +182,14 @@ async function loadAllData() {
         if (coinsList.length > 0) await fetchCurrentPrices();
         const holdings = updateDashboard();
         populateCoinSelect(holdings);
-        renderJournal();
+        renderAccordionJournal(); // NEW: Accordion rendering
         renderGoals(holdings);
         await generateHistoryChart();
         renderAllocationChart(holdings);
         renderCoinCards(holdings);
     } catch (e) {
         console.error('❌ Error loading data:', e);
-        if (journalBody) journalBody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-red-400">Error loading data.</td></tr>';
+        if (container) container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-red-400">Error loading data.</div>';
     }
 }
 
@@ -328,6 +333,154 @@ function renderCoinCards(holdings) {
     console.log(`✅ Rendered ${activeHoldings.length} coin cards`);
 }
 
+// ==========================================
+// NEW: ACCORDION JOURNAL (Year -> Month -> Transactions)
+// ==========================================
+function renderAccordionJournal() {
+    const container = document.getElementById('journal-accordion');
+    if (!container) { console.warn('⚠️ Journal accordion container not found'); return; }
+    container.innerHTML = '';
+    
+    if (transactions.length === 0) {
+        container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</div>';
+        return;
+    }
+    
+    // Group by year and month
+    const grouped = {};
+    transactions.forEach(tx => {
+        const date = new Date(tx.date);
+        const year = date.getFullYear();
+        const month = date.getMonth(); // 0-11
+        
+        if (!grouped[year]) grouped[year] = {};
+        if (!grouped[year][month]) grouped[year][month] = [];
+        grouped[year][month].push(tx);
+    });
+    
+    // Sort years descending
+    const years = Object.keys(grouped).sort((a, b) => b - a);
+    
+    years.forEach((year, yearIndex) => {
+        const yearDiv = document.createElement('div');
+        yearDiv.className = 'border border-gray-800 rounded-xl overflow-hidden mb-3';
+        
+        // Year header
+        const yearHeader = document.createElement('div');
+        yearHeader.className = 'bg-gray-900 px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-gray-850 transition-colors';
+        yearHeader.innerHTML = `
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-calendar text-primary-400"></i>
+                <span class="font-bold text-white">${year}</span>
+                <span class="text-xs text-gray-500">(${Object.values(grouped[year]).flat().length} transactions)</span>
+            </div>
+            <i class="fa-solid fa-chevron-down text-gray-500 transition-transform year-chevron-${year}"></i>
+        `;
+        
+        // Month container
+        const monthContainer = document.createElement('div');
+        monthContainer.id = `year-${year}`;
+        monthContainer.className = yearIndex === 0 ? 'block' : 'hidden'; // First year open
+        
+        // Sort months descending
+        const months = Object.keys(grouped[year]).sort((a, b) => b - a);
+        
+        months.forEach((month, monthIndex) => {
+            const txs = grouped[year][month].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            const monthDiv = document.createElement('div');
+            monthDiv.className = 'border-t border-gray-800/50';
+            
+            // Month header
+            const monthHeader = document.createElement('div');
+            monthHeader.className = 'bg-gray-900/50 px-6 py-2.5 flex justify-between items-center cursor-pointer hover:bg-gray-800/50 transition-colors';
+            monthHeader.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-300">${MONTH_NAMES_LT[month]}</span>
+                    <span class="text-xs text-gray-600">(${txs.length})</span>
+                </div>
+                <i class="fa-solid fa-chevron-down text-gray-600 text-xs transition-transform month-chevron-${year}-${month}"></i>
+            `;
+            
+            // Transactions container
+            const txContainer = document.createElement('div');
+            txContainer.id = `month-${year}-${month}`;
+            txContainer.className = (yearIndex === 0 && monthIndex === 0) ? 'block' : 'hidden'; // First month of first year open
+            
+            txs.forEach(tx => {
+                const txDiv = document.createElement('div');
+                txDiv.className = 'px-6 py-3 border-t border-gray-800/30 hover:bg-gray-900/30 transition-colors';
+                
+                const dateObj = new Date(tx.date);
+                const dateStr = dateObj.toLocaleDateString('lt-LT', { day: '2-digit', month: '2-digit' }) + ' ' + 
+                               dateObj.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit', hour12: false });
+                
+                const isBuy = tx.type === 'Buy';
+                const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
+                const exchangeName = tx.exchange ? `<span class="text-[10px] text-gray-500 ml-2">${tx.exchange}</span>` : '';
+                const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
+                
+                txDiv.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center flex-wrap gap-1">
+                                <span class="font-bold text-sm ${isBuy ? 'text-green-500' : 'text-red-500'}">${tx.coin_symbol}</span>
+                                <span class="text-xs text-gray-600">${isBuy ? 'Buy' : 'Sell'}</span>
+                                ${method}${exchangeName}
+                            </div>
+                            <div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>
+                            ${notesDisplay}
+                        </div>
+                        <div class="text-right ml-4">
+                            <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
+                            <div class="text-[10px] text-gray-500">@ $${Number(tx.price_per_coin).toFixed(4)}</div>
+                            <div class="font-bold text-sm text-white mt-1">${formatMoney(tx.total_cost_usd)}</div>
+                        </div>
+                        <div class="flex flex-col gap-2 ml-3">
+                            <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs p-1"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+                
+                txContainer.appendChild(txDiv);
+            });
+            
+            // Month click handler
+            monthHeader.addEventListener('click', () => {
+                const isHidden = txContainer.classList.contains('hidden');
+                txContainer.classList.toggle('hidden');
+                const chevron = monthHeader.querySelector(`.month-chevron-${year}-${month}`);
+                if (chevron) {
+                    if (isHidden) chevron.style.transform = 'rotate(180deg)';
+                    else chevron.style.transform = 'rotate(0deg)';
+                }
+            });
+            
+            monthDiv.appendChild(monthHeader);
+            monthDiv.appendChild(txContainer);
+            monthContainer.appendChild(monthDiv);
+        });
+        
+        // Year click handler
+        yearHeader.addEventListener('click', () => {
+            const isHidden = monthContainer.classList.contains('hidden');
+            monthContainer.classList.toggle('hidden');
+            const chevron = yearHeader.querySelector(`.year-chevron-${year}`);
+            if (chevron) {
+                if (isHidden) chevron.style.transform = 'rotate(180deg)';
+                else chevron.style.transform = 'rotate(0deg)';
+            }
+        });
+        
+        yearDiv.appendChild(yearHeader);
+        yearDiv.appendChild(monthContainer);
+        container.appendChild(yearDiv);
+    });
+    
+    console.log(`✅ Accordion rendered: ${years.length} years`);
+}
+
 async function generateHistoryChart() {
     console.log('📈 Generating history chart...');
     if (transactions.length === 0) { renderChart(['No data'], [0]); return; }
@@ -396,41 +549,6 @@ function populateCoinSelect(holdings) {
         opt1.textContent = hasBalance ? `★ ${coin.symbol}` : coin.symbol; select.appendChild(opt1);
         const opt2 = document.createElement('option'); opt2.value = coin.symbol; opt2.textContent = coin.symbol; deleteSelect.appendChild(opt2);
     });
-}
-
-function renderJournal() {
-    const tbody = document.getElementById('journal-body');
-    if (!tbody) return; tbody.innerHTML = '';
-    if (transactions.length === 0) { tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</td></tr>'; return; }
-    const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-    sortedTx.forEach(tx => {
-        const row = document.createElement('tr'), isBuy = tx.type === 'Buy';
-        const dateObj = new Date(tx.date);
-        const dateStr = dateObj.toLocaleDateString(undefined, { year: 'numeric', month: 'numeric', day: 'numeric' }) + ' ' + 
-                       dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-        const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
-        const exchangeName = tx.exchange ? `<div class="text-[10px] text-gray-400 font-semibold mt-0.5">${tx.exchange}</div>` : '';
-        const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1 leading-tight"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
-        row.innerHTML = `
-            <td class="px-4 py-3 align-top border-b border-gray-800/30">
-                <div class="font-bold text-gray-200 text-sm flex items-center flex-wrap">${tx.coin_symbol} ${method}</div>${exchangeName}
-                <div class="text-[10px] text-gray-600 mt-0.5 mb-1">${dateStr}</div>${notesDisplay}
-            </td>
-            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div>
-                <div class="text-[10px] text-gray-500">@ ${Number(tx.price_per_coin).toFixed(4)}</div>
-            </td>
-            <td class="px-4 py-3 text-right align-top border-b border-gray-800/30">
-                <div class="font-bold text-sm text-gray-200">${formatMoney(tx.total_cost_usd)}</div>
-                <div class="flex justify-end gap-3 mt-2">
-                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-    console.log(`✅ Journal rendered: ${sortedTx.length} transactions`);
 }
 
 function renderGoals(holdings) {
