@@ -197,23 +197,17 @@
                 </button>
             </section>
 
-            <!-- TRANSACTION HISTORY -->
+            <!-- TRANSACTION HISTORY WITH ACCORDION -->
             <section>
                 <div class="flex justify-between items-end mb-2 px-1">
-                    <h3 class="text-gray-500 text-xs uppercase font-bold">Recent History</h3>
-                    <span class="text-[10px] text-gray-600 italic">Latest entries</span>
+                    <h3 class="text-gray-500 text-xs uppercase font-bold">Transaction History</h3>
+                    <span class="text-[10px] text-gray-600 italic">Year → Month → Transactions</span>
                 </div>
-                <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden shadow-md">
-                    <table class="w-full text-left text-sm text-gray-400">
-                        <tbody id="journal-body" class="divide-y divide-gray-800/50">
-                            <tr>
-                                <td colspan="3" class="px-4 py-8 text-center text-xs text-gray-600">
-                                    <div class="spinner mx-auto mb-2"></div>
-                                    Loading...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="journal-accordion" class="space-y-3">
+                    <div class="px-4 py-8 text-center text-xs text-gray-600">
+                        <div class="spinner mx-auto mb-2"></div>
+                        Loading...
+                    </div>
                 </div>
             </section>
 
