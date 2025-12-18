@@ -27,47 +27,18 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Remove default input styles */
-        input, select, textarea { 
-            -webkit-appearance: none; 
-            -moz-appearance: none; 
-        }
-        
-        /* Hide scrollbar */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* Fade in animation */
-        .fade-in { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateY(10px); } 
-            to { opacity: 1; transform: translateY(0); } 
-        }
-        
-        /* Slide up animation for mobile modals */
-        .animate-slide-up { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { 
-            from { transform: translateY(100%); } 
-            to { transform: translateY(0); } 
-        }
-        
-        /* Loading spinner */
-        .spinner { 
-            border: 2px solid rgba(255, 255, 255, 0.1); 
-            border-top-color: #2dd4bf; 
-            border-radius: 50%; 
-            width: 20px; 
-            height: 20px; 
-            animation: spin 0.8s linear infinite; 
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Celebration Animation */
-        @keyframes popIn { 
-            0% { transform: scale(0.5); opacity: 0; } 
-            100% { transform: scale(1); opacity: 1; } 
-        }
+        input, select, textarea { -webkit-appearance: none; -moz-appearance: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .spinner { border: 2px solid rgba(255, 255, 255, 0.1); border-top-color: #2dd4bf; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .pop-in { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* Custom Checkbox Style */
+        .form-checkbox { appearance: none; background-color: #1f2937; border: 1px solid #374151; display: inline-block; position: relative; }
+        .form-checkbox:checked { background-color: #2dd4bf; border-color: #2dd4bf; }
+        .form-checkbox:checked:after { content: '✔'; position: absolute; top: -2px; left: 1px; font-size: 10px; color: #000; }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-200 font-sans pb-20">
@@ -76,102 +47,41 @@
 
     <div id="auth-screen" class="fixed inset-0 z-50 bg-gray-950 flex flex-col items-center justify-center p-6 fade-in">
         <div class="w-full max-w-sm space-y-8">
-            <div class="text-center space-y-2">
-                <i class="fa-solid fa-rocket text-primary-400 text-5xl mb-4"></i>
-                <h1 class="text-3xl font-bold text-white tracking-tight">Crypto Tracker</h1>
-                <p class="text-gray-500 text-sm">Prisijunkite, kad matytumėte savo portfelį</p>
-            </div>
-            
+            <div class="text-center space-y-2"><i class="fa-solid fa-rocket text-primary-400 text-5xl mb-4"></i><h1 class="text-3xl font-bold text-white tracking-tight">Crypto Tracker</h1><p class="text-gray-500 text-sm">Prisijunkite, kad matytumėte savo portfelį</p></div>
             <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-2xl space-y-4">
-                <input 
-                    type="email" 
-                    id="auth-email" 
-                    placeholder="name@example.com" 
-                    autocomplete="email"
-                    class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
-                >
-                <input 
-                    type="password" 
-                    id="auth-pass" 
-                    placeholder="••••••••" 
-                    autocomplete="current-password"
-                    class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
-                >
-                
-                <div class="pt-2 space-y-3">
-                    <button 
-                        id="btn-login" 
-                        class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95"
-                    >
-                        Log In
-                    </button>
-                    <button 
-                        id="btn-signup" 
-                        class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl border border-gray-700 transition-all active:scale-95"
-                    >
-                        Sign Up
-                    </button>
-                </div>
+                <input type="email" id="auth-email" placeholder="name@example.com" autocomplete="email" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-primary-500 transition-colors">
+                <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-primary-500 transition-colors">
+                <div class="pt-2 space-y-3"><button id="btn-login" class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95">Log In</button><button id="btn-signup" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl border border-gray-700 transition-all active:scale-95">Sign Up</button></div>
             </div>
-            
             <p id="auth-error" class="text-red-400 text-xs text-center hidden"></p>
         </div>
     </div>
 
     <div id="app-content" class="hidden">
-        
         <header class="fixed top-0 w-full bg-gray-900/95 backdrop-blur border-b border-gray-800 z-40">
             <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-chart-pie text-primary-400 text-lg"></i>
-                    <h1 class="font-bold text-base tracking-wide text-gray-100">Portfolio</h1>
-                </div>
+                <div class="flex items-center gap-2"><i class="fa-solid fa-chart-pie text-primary-400 text-lg"></i><h1 class="font-bold text-base tracking-wide text-gray-100">Portfolio</h1></div>
                 <div class="flex items-center gap-4">
-                    <div class="text-right">
-                        <p class="text-[10px] text-gray-500 uppercase font-semibold">Net Worth</p>
-                        <p id="header-total-value" class="text-lg font-bold text-white tracking-tight">$0.00</p>
-                        <p class="text-[9px] text-gray-600 mt-0.5">Invested: <span id="total-invested" class="text-primary-400 font-bold">$0.00</span></p>
-                    </div>
-                    <button 
-                        id="btn-logout" 
-                        class="text-gray-500 hover:text-red-400 transition-colors"
-                        title="Atsijungti"
-                    >
-                        <i class="fa-solid fa-right-from-bracket text-lg"></i>
-                    </button>
+                    <div class="text-right"><p class="text-[10px] text-gray-500 uppercase font-semibold">Net Worth</p><p id="header-total-value" class="text-lg font-bold text-white tracking-tight">$0.00</p><p class="text-[9px] text-gray-600 mt-0.5">Invested: <span id="total-invested" class="text-primary-400 font-bold">$0.00</span></p></div>
+                    <button id="btn-logout" class="text-gray-500 hover:text-red-400 transition-colors" title="Atsijungti"><i class="fa-solid fa-right-from-bracket text-lg"></i></button>
                 </div>
             </div>
         </header>
 
         <main class="max-w-md mx-auto px-4 pt-20 space-y-5 min-h-screen">
-            
             <section class="grid grid-cols-1 gap-4">
                 <div class="bg-gray-900 rounded-2xl border border-gray-800 p-4 shadow-lg relative overflow-hidden">
                     <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Total Profit/Loss</p>
-                            <div class="flex items-baseline gap-2 mt-1">
-                                <h2 id="total-pnl" class="text-2xl font-bold text-white">$0.00</h2>
-                                <span id="total-pnl-percent" class="text-xs font-bold px-2 py-0.5 rounded bg-gray-800 text-gray-400">0.00%</span>
-                            </div>
-                        </div>
-                        <div class="bg-gray-800 p-2 rounded-lg">
-                            <i class="fa-solid fa-arrow-trend-up text-gray-400"></i>
-                        </div>
+                        <div><p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Total Profit/Loss</p><div class="flex items-baseline gap-2 mt-1"><h2 id="total-pnl" class="text-2xl font-bold text-white">$0.00</h2><span id="total-pnl-percent" class="text-xs font-bold px-2 py-0.5 rounded bg-gray-800 text-gray-400">0.00%</span></div></div>
+                        <div class="bg-gray-800 p-2 rounded-lg"><i class="fa-solid fa-arrow-trend-up text-gray-400"></i></div>
                     </div>
-                    <div class="h-40 w-full">
-                        <canvas id="pnlChart"></canvas>
-                    </div>
+                    <div class="h-40 w-full"><canvas id="pnlChart"></canvas></div>
                 </div>
             </section>
 
             <section>
                 <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Portfolio Allocation</h3>
-                <div class="bg-gray-900 rounded-2xl border border-gray-800 p-4 shadow-lg">
-                    <div style="max-height: 250px; position: relative;">
-                        <canvas id="allocationChart"></canvas>
-                    </div>
-                </div>
+                <div class="bg-gray-900 rounded-2xl border border-gray-800 p-4 shadow-lg"><div style="max-height: 250px; position: relative;"><canvas id="allocationChart"></canvas></div></div>
             </section>
 
             <section>
@@ -179,367 +89,94 @@
                 <div id="coin-cards-container" class="grid grid-cols-1 gap-3"></div>
             </section>
 
-            <section id="goals-section" class="hidden">
-                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Goals Progress</h3>
-                <div id="goals-container" class="space-y-3"></div>
-            </section>
+            <section id="goals-section" class="hidden"><h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Goals Progress</h3><div id="goals-container" class="space-y-3"></div></section>
 
             <section class="grid grid-cols-2 gap-3">
-                <button 
-                    onclick="openModal('add-modal')" 
-                    class="bg-primary-600 hover:bg-primary-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary-900/30 flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                >
-                    <i class="fa-solid fa-plus"></i> Add Transaction
-                </button>
-                <button 
-                    onclick="document.getElementById('csv-file-input').click()" 
-                    class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3.5 rounded-xl border border-gray-700 flex items-center justify-center gap-2 active:scale-95 transition-colors"
-                >
-                    <i class="fa-solid fa-file-import"></i> Import CSV
-                </button>
+                <button onclick="openModal('add-modal')" class="bg-primary-600 hover:bg-primary-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary-900/30 flex items-center justify-center gap-2 active:scale-95 transition-transform"><i class="fa-solid fa-plus"></i> Add Transaction</button>
+                <button onclick="document.getElementById('csv-file-input').click()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3.5 rounded-xl border border-gray-700 flex items-center justify-center gap-2 active:scale-95 transition-colors"><i class="fa-solid fa-file-import"></i> Import CSV</button>
             </section>
 
             <section>
-                <div class="flex justify-between items-end mb-2 px-1">
-                    <h3 class="text-gray-500 text-xs uppercase font-bold">Transaction History</h3>
-                    <button onclick="exportToCSV()" class="text-[10px] text-primary-400 hover:text-white flex items-center gap-1 transition-colors">
-                        <i class="fa-solid fa-file-csv"></i> Export CSV
-                    </button>
-                </div>
-                <div id="journal-accordion" class="space-y-3">
-                    <div class="px-4 py-8 text-center text-xs text-gray-600">
-                        <div class="spinner mx-auto mb-2"></div>
-                        Loading...
+                <div class="flex justify-between items-end mb-2 px-1 flex-wrap gap-2">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-gray-500 text-xs uppercase font-bold">Transaction History</h3>
+                        <label class="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer select-none hover:text-white transition-colors bg-gray-900 px-2 py-1 rounded border border-gray-800">
+                            <input type="checkbox" id="select-all-tx" class="form-checkbox h-3 w-3 text-primary-500 rounded border-gray-600 bg-gray-800 focus:ring-0 cursor-pointer">
+                            <span>Select All</span>
+                        </label>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-delete-selected" onclick="deleteSelectedTransactions()" class="hidden text-[10px] text-red-400 hover:text-white hover:bg-red-900/40 items-center gap-1 transition-colors bg-red-900/20 px-2 py-1 rounded border border-red-900/30">
+                            <i class="fa-solid fa-trash"></i> Delete (<span id="selected-count">0</span>)
+                        </button>
+                        <button onclick="exportToCSV()" class="text-[10px] text-primary-400 hover:text-white flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-file-csv"></i> Export CSV
+                        </button>
                     </div>
                 </div>
+                <div id="journal-accordion" class="space-y-3"><div class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</div></div>
             </section>
 
             <section class="text-center pt-4 border-t border-gray-800 mt-6">
                 <p class="text-[10px] text-gray-500 mb-2 uppercase font-bold">Manage Coins</p>
                 <div class="flex justify-center gap-4">
-                    <button 
-                        onclick="openModal('new-coin-modal')" 
-                        class="text-xs text-primary-400 hover:text-white underline decoration-gray-700 underline-offset-4 transition-colors"
-                    >
-                        Add New Coin
-                    </button>
-                    <button 
-                        onclick="openModal('delete-coin-modal')" 
-                        class="text-xs text-red-400 hover:text-white underline decoration-gray-700 underline-offset-4 transition-colors"
-                    >
-                        Delete Coin
-                    </button>
+                    <button onclick="openModal('new-coin-modal')" class="text-xs text-primary-400 hover:text-white underline decoration-gray-700 underline-offset-4 transition-colors">Add New Coin</button>
+                    <button onclick="openModal('delete-coin-modal')" class="text-xs text-red-400 hover:text-white underline decoration-gray-700 underline-offset-4 transition-colors">Delete Coin</button>
                 </div>
             </section>
 
-            <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
-                <p class="text-[11px] text-gray-500">
-                    Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help
-                </p>
-                <p class="text-[10px] text-gray-600">
-                    &copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.
-                </p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">
-                    Version <span id="app-version">Loading...</span>
-                </p>
-            </footer>
+            <footer class="mt-10 py-8 text-center space-y-1 opacity-70"><p class="text-[11px] text-gray-500">Made with <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> and AI help</p><p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p><p class="text-[9px] font-mono text-gray-700 pt-1">Version <span id="app-version">Loading...</span></p></footer>
         </main>
     </div>
 
     <div id="add-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm">
         <div class="bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl border-t sm:border border-gray-800 p-5 space-y-5 animate-slide-up sm:animate-none max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center text-white">
-                <h3 class="font-bold text-lg" id="modal-title">New Transaction</h3>
-                <button 
-                    onclick="closeModal('add-modal')" 
-                    class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-800 text-gray-400 hover:text-white transition-colors"
-                >
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            
+            <div class="flex justify-between items-center text-white"><h3 class="font-bold text-lg" id="modal-title">New Transaction</h3><button onclick="closeModal('add-modal')" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-800 text-gray-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button></div>
             <form id="add-tx-form" class="space-y-4">
                 <input type="hidden" id="tx-id">
-                
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="relative">
-                        <select 
-                            id="tx-type" 
-                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none font-bold"
-                        >
-                            <option value="Buy">Buy 🟢</option>
-                            <option value="Sell">Sell 🔴</option>
-                        </select>
-                    </div>
-                    <div class="relative">
-                        <select 
-                            id="tx-coin" 
-                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold"
-                        ></select>
-                        <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="relative">
-                        <label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Date</label>
-                        <input 
-                            type="date" 
-                            id="tx-date-input" 
-                            required
-                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
-                        >
-                    </div>
-                    <div class="relative">
-                        <label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Time</label>
-                        <input 
-                            type="time" 
-                            id="tx-time-input" 
-                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"
-                        >
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="relative">
-                        <select 
-                            id="tx-exchange" 
-                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold"
-                        >
-                            <option value="">Exchange...</option>
-                            <option value="Binance">Binance</option>
-                            <option value="Bybit">Bybit</option>
-                            <option value="Coinbase">Coinbase</option>
-                            <option value="Crypto.com">Crypto.com</option>
-                            <option value="Kraken">Kraken</option>
-                            <option value="KuCoin">KuCoin</option>
-                            <option value="MEXC">MEXC</option>
-                            <option value="Nexo">Nexo</option>
-                            <option value="Strike">Strike (BTC)</option>
-                            <option value="Jupiter Wallet">Jupiter Wallet</option>
-                            <option value="Phantom Wallet">Phantom Wallet</option>
-                            <option value="Rabby Wallet">Rabby Wallet</option>
-                            <option value="Solflare">Solflare</option>
-                            <option value="StepN Wallet">StepN Wallet</option>
-                            <option value="Kita / DeFi">Kita / DeFi</option>
-                        </select>
-                        <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
-                    </div>
-                    <div class="relative">
-                        <select 
-                            id="tx-method" 
-                            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none"
-                        >
-                            <option value="Market Buy">Market Buy</option>
-                            <option value="Limit Buy">Limit Buy</option>
-                            <option value="Instant Buy">Instant Buy</option>
-                            <option value="Recurring Buy">Recurring Buy</option>
-                            <option value="Swap">Swap / DeFi</option>
-                            <option value="Transfer">Transfer</option>
-                            <option value="Staking Reward">Staking Reward</option>
-                            <option value="Gift/Airdrop">Gift / Airdrop</option>
-                        </select>
-                        <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
-                    </div>
-                </div>
-
-                <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700/50 space-y-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Amount</label>
-                            <input 
-                                type="number" 
-                                id="tx-amount" 
-                                step="any" 
-                                placeholder="0.00" 
-                                required
-                                class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
-                            >
-                        </div>
-                        <div>
-                            <label class="text-[10px] text-gray-500 uppercase font-bold ml-1 flex justify-between">
-                                Price ($) 
-                                <span 
-                                    id="btn-fetch-price" 
-                                    class="text-primary-400 cursor-pointer hover:text-white transition-colors"
-                                >
-                                    GET PRICE
-                                </span>
-                            </label>
-                            <input 
-                                type="number" 
-                                id="tx-price" 
-                                step="any" 
-                                placeholder="0.00" 
-                                required
-                                class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
-                            >
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Total Cost ($)</label>
-                        <input 
-                            type="number" 
-                            id="tx-total" 
-                            step="any" 
-                            placeholder="0.00" 
-                            required
-                            class="w-full bg-gray-900 border border-primary-500/50 text-white font-bold rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"
-                        >
-                    </div>
-                </div>
-
-                <div>
-                    <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Notes / Comments</label>
-                    <textarea 
-                        id="tx-notes" 
-                        rows="2" 
-                        placeholder="Pvz: Pirkau per rytinį dip'ą..." 
-                        class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 mt-1 outline-none resize-none focus:border-primary-500 transition-colors"
-                    ></textarea>
-                </div>
-
-                <button 
-                    type="submit" 
-                    id="btn-save" 
-                    class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-transform active:scale-95"
-                >
-                    Save Transaction
-                </button>
+                <div class="grid grid-cols-2 gap-3"><div class="relative"><select id="tx-type" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none font-bold"><option value="Buy">Buy 🟢</option><option value="Sell">Sell 🔴</option></select></div><div class="relative"><select id="tx-coin" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold"></select><i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i></div></div>
+                <div class="grid grid-cols-2 gap-3"><div class="relative"><label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Date</label><input type="date" id="tx-date-input" required class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"></div><div class="relative"><label class="absolute -top-2 left-2 px-1 bg-gray-900 text-[9px] text-gray-500 font-bold uppercase">Time</label><input type="time" id="tx-time-input" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none focus:border-primary-500 transition-colors"></div></div>
+                <div class="grid grid-cols-2 gap-3"><div class="relative"><select id="tx-exchange" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold"><option value="">Exchange...</option><option value="Binance">Binance</option><option value="Bybit">Bybit</option><option value="Coinbase">Coinbase</option><option value="Crypto.com">Crypto.com</option><option value="Kraken">Kraken</option><option value="KuCoin">KuCoin</option><option value="MEXC">MEXC</option><option value="Nexo">Nexo</option><option value="Strike">Strike (BTC)</option><option value="Jupiter Wallet">Jupiter Wallet</option><option value="Phantom Wallet">Phantom Wallet</option><option value="Rabby Wallet">Rabby Wallet</option><option value="Solflare">Solflare</option><option value="StepN Wallet">StepN Wallet</option><option value="Kita / DeFi">Kita / DeFi</option></select><i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i></div><div class="relative"><select id="tx-method" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none"><option value="Market Buy">Market Buy</option><option value="Limit Buy">Limit Buy</option><option value="Instant Buy">Instant Buy</option><option value="Recurring Buy">Recurring Buy</option><option value="Swap">Swap / DeFi</option><option value="Transfer">Transfer</option><option value="Staking Reward">Staking Reward</option><option value="Gift/Airdrop">Gift / Airdrop</option></select><i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i></div></div>
+                <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700/50 space-y-3"><div class="grid grid-cols-2 gap-3"><div><label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Amount</label><input type="number" id="tx-amount" step="any" placeholder="0.00" required class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"></div><div><label class="text-[10px] text-gray-500 uppercase font-bold ml-1 flex justify-between">Price ($) <span id="btn-fetch-price" class="text-primary-400 cursor-pointer hover:text-white transition-colors">GET PRICE</span></label><input type="number" id="tx-price" step="any" placeholder="0.00" required class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"></div></div><div><label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Total Cost ($)</label><input type="number" id="tx-total" step="any" placeholder="0.00" required class="w-full bg-gray-900 border border-primary-500/50 text-white font-bold rounded-lg p-2 outline-none focus:border-primary-500 transition-colors"></div></div>
+                <div><label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Notes / Comments</label><textarea id="tx-notes" rows="2" placeholder="Pvz: Pirkau per rytinį dip'ą..." class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 mt-1 outline-none resize-none focus:border-primary-500 transition-colors"></textarea></div>
+                <button type="submit" id="btn-save" class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-transform active:scale-95">Save Transaction</button>
             </form>
         </div>
     </div>
 
-    <div id="new-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4">
-            <h3 class="font-bold text-white">Add Coin & Goal</h3>
-            <input 
-                type="text" 
-                id="new-coin-symbol" 
-                placeholder="Symbol (e.g. KAS)" 
-                class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg p-3 text-sm uppercase"
-            >
-            <input 
-                type="text" 
-                id="new-coin-id" 
-                placeholder="CoinGecko ID (e.g. kaspa)" 
-                class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg p-3 text-sm"
-            >
-            <input 
-                type="number" 
-                id="new-coin-target" 
-                placeholder="Target Goal (e.g. 100000)" 
-                class="w-full bg-gray-800 border border-primary-500/30 text-white rounded-lg p-3 text-sm focus:border-primary-500"
-            >
-            <div class="flex gap-2">
-                <button 
-                    onclick="closeModal('new-coin-modal')" 
-                    class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-400 py-2 rounded-lg text-sm transition-colors"
-                >
-                    Cancel
-                </button>
-                <button 
-                    id="btn-save-coin" 
-                    class="flex-1 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-lg text-sm transition-colors"
-                >
-                    Add
-                </button>
-            </div>
-        </div>
-    </div>
+    <div id="new-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4"><h3 class="font-bold text-white">Add Coin & Goal</h3><input type="text" id="new-coin-symbol" placeholder="Symbol (e.g. KAS)" class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg p-3 text-sm uppercase"><input type="text" id="new-coin-id" placeholder="CoinGecko ID (e.g. kaspa)" class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg p-3 text-sm"><input type="number" id="new-coin-target" placeholder="Target Goal (e.g. 100000)" class="w-full bg-gray-800 border border-primary-500/30 text-white rounded-lg p-3 text-sm focus:border-primary-500"><div class="flex gap-2"><button onclick="closeModal('new-coin-modal')" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-400 py-2 rounded-lg text-sm transition-colors">Cancel</button><button id="btn-save-coin" class="flex-1 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-lg text-sm transition-colors">Add</button></div></div></div>
 
-    <div id="delete-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4">
-            <h3 class="font-bold text-red-400">Delete Coin</h3>
-            <div class="relative">
-                <select 
-                    id="delete-coin-select" 
-                    class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none"
-                ></select>
-                <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
-            </div>
-            <div class="flex gap-2">
-                <button 
-                    onclick="closeModal('delete-coin-modal')" 
-                    class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-400 py-2 rounded-lg text-sm transition-colors"
-                >
-                    Cancel
-                </button>
-                <button 
-                    id="btn-delete-coin" 
-                    class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg text-sm transition-colors"
-                >
-                    Delete
-                </button>
-            </div>
-        </div>
-    </div>
+    <div id="delete-coin-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-800 p-5 space-y-4"><h3 class="font-bold text-red-400">Delete Coin</h3><div class="relative"><select id="delete-coin-select" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl p-3 outline-none appearance-none"></select><i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i></div><div class="flex gap-2"><button onclick="closeModal('delete-coin-modal')" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-400 py-2 rounded-lg text-sm transition-colors">Cancel</button><button id="btn-delete-coin" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg text-sm transition-colors">Delete</button></div></div></div>
 
-    <div id="celebration-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/90 fade-in">
-        <div class="text-center space-y-4 p-6 pop-in">
-            <div class="text-6xl animate-bounce">🏆</div>
-            <h2 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-primary-400">
-                Sveikiname!
-            </h2>
-            <p class="text-xl text-gray-300">
-                Jūs pasiekėte <span id="celebration-coin" class="font-bold text-white"></span> tikslą!
-            </p>
-            <p class="text-sm text-gray-500">Jūsų disciplina atsiperka.</p>
-            <button 
-                onclick="closeModal('celebration-modal')" 
-                class="mt-4 bg-primary-600 hover:bg-primary-500 text-white px-8 py-3 rounded-full font-bold shadow-lg transition-transform active:scale-95"
-            >
-                Ačiū! 🚀
-            </button>
-        </div>
-    </div>
+    <div id="celebration-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/90 fade-in"><div class="text-center space-y-4 p-6 pop-in"><div class="text-6xl animate-bounce">🏆</div><h2 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-primary-400">Sveikiname!</h2><p class="text-xl text-gray-300">Jūs pasiekėte <span id="celebration-coin" class="font-bold text-white"></span> tikslą!</p><p class="text-sm text-gray-500">Jūsų disciplina atsiperka.</p><button onclick="closeModal('celebration-modal')" class="mt-4 bg-primary-600 hover:bg-primary-500 text-white px-8 py-3 rounded-full font-bold shadow-lg transition-transform active:scale-95">Ačiū! 🚀</button></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase.js"></script>
     <script src="js/app.js"></script>
-    
     <script>
-        // Set current year
         document.getElementById('auto-year').textContent = new Date().getFullYear();
-        
-        // Modal functions
         function openModal(id) { 
             if (id === 'add-modal') {
-                // Reset form to empty state
                 document.getElementById('tx-id').value = ''; 
                 document.getElementById('add-tx-form').reset();
                 document.getElementById('modal-title').innerText = "New Transaction";
                 document.getElementById('btn-save').innerText = "Save Transaction";
                 document.getElementById('btn-save').classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
                 document.getElementById('btn-save').classList.add('bg-primary-600', 'hover:bg-primary-500');
-                
-                // Clear inputs completely
                 document.getElementById('tx-amount').value = '';
                 document.getElementById('tx-price').value = '';
                 document.getElementById('tx-total').value = '';
-                
-                // Set current date/time
                 const now = new Date();
-                const dStr = now.toISOString().split('T')[0];
-                const tStr = now.toTimeString().split(' ')[0].slice(0, 5);
-                
-                document.getElementById('tx-date-input').value = dStr;
-                document.getElementById('tx-time-input').value = tStr;
+                document.getElementById('tx-date-input').value = now.toISOString().split('T')[0];
+                document.getElementById('tx-time-input').value = now.toTimeString().split(' ')[0].slice(0, 5);
             }
             document.getElementById(id).classList.remove('hidden'); 
         }
-        
-        function closeModal(id) { 
-            document.getElementById(id).classList.add('hidden'); 
-        }
-        
-        // Close modal on Escape key
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 ['add-modal', 'new-coin-modal', 'delete-coin-modal', 'celebration-modal'].forEach(id => {
-                    if (!document.getElementById(id).classList.contains('hidden')) {
-                        closeModal(id);
-                    }
+                    if (!document.getElementById(id).classList.contains('hidden')) closeModal(id);
                 });
             }
         });
