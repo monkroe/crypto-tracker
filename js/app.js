@@ -1,6 +1,6 @@
-// js/app.js - Versija 1.9.4 (CSV Import/Export + Precision + Tx Performance)
+// js/app.js - Versija 1.9.5 (Fixed: Transaction PnL in Dollars)
 
-const APP_VERSION = '1.9.4';
+const APP_VERSION = '1.9.5';
 
 let coinsList = [], transactions = [], goals = [], prices = {}, myChart = null, allocationChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
@@ -239,15 +239,17 @@ function renderAccordionJournal() {
                 const exchangeName = tx.exchange ? `<span class="text-[10px] text-gray-500 ml-2">${tx.exchange}</span>` : '';
                 const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
                 
-                // Transaction Performance Calculation
+                // --- PATAISYMAS ČIA ---
                 let txPerf = '';
                 const currentPrice = prices[coinsList.find(c=>c.symbol===tx.coin_symbol)?.coingecko_id]?.usd;
-                if (currentPrice && tx.price_per_coin > 0) {
-                    const diff = ((currentPrice - tx.price_per_coin) / tx.price_per_coin) * 100;
-                    const diffClass = diff >= 0 ? 'text-green-500' : 'text-red-500';
-                    const diffSign = diff >= 0 ? '+' : '';
-                    txPerf = `<div class="text-[9px] ${diffClass} mt-0.5 font-bold">Price: ${formatPrice(tx.price_per_coin)} → ${formatPrice(currentPrice)} (${diffSign}${diff.toFixed(2)}%)</div>`;
+                if (currentPrice && tx.price_per_coin > 0 && isBuy) {
+                    const pnlValue = (currentPrice - tx.price_per_coin) * tx.amount;
+                    const pnlPercent = ((currentPrice - tx.price_per_coin) / tx.price_per_coin) * 100;
+                    const pnlClass = pnlValue >= 0 ? 'text-green-500' : 'text-red-500';
+                    const sign = pnlValue >= 0 ? '+' : '';
+                    txPerf = `<div class="text-[9px] ${pnlClass} mt-0.5 font-bold">PnL: ${sign}${formatMoney(pnlValue)} (${sign}${pnlPercent.toFixed(2)}%)</div>`;
                 }
+                // ----------------------
 
                 txDiv.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1"><div class="flex items-center flex-wrap gap-1"><span class="font-bold text-sm ${isBuy ? 'text-green-500' : 'text-red-500'}">${tx.coin_symbol}</span><span class="text-xs text-gray-600">${isBuy ? 'Buy' : 'Sell'}</span>${method}${exchangeName}</div><div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>${txPerf}${notesDisplay}</div><div class="text-right ml-4"><div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : '-'}${Number(tx.amount).toFixed(4)}</div><div class="text-[10px] text-gray-500">@ ${formatPrice(tx.price_per_coin)}</div><div class="font-bold text-sm text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1"><i class="fa-solid fa-pen"></i></button><button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs p-1"><i class="fa-solid fa-trash"></i></button></div></div>`;
                 txContainer.appendChild(txDiv);
@@ -453,25 +455,15 @@ async function handleImportCSV(event) {
 
         // 1. Detect Format
         if (header.includes('txid') && header.includes('pair')) {
-            // KRAKEN (Simplified)
-            // Note: Kraken exports are complex. We need "Ledger" or "Trades". 
-            // This assumes a processed or simple trade format.
-            alert("Kraken formatas aptiktas. Įsitikinkite, kad stulpeliai atitinka: time, type, pair, price, cost, fee, vol");
-            // Parsing Kraken is complex due to pair names like 'XXBTZUSD'.
-            // For now, alerting user to use Universal format is safer unless exact headers are known.
             alert("Rekomenduojama naudoti 'Universal Format' importui, nes Kraken duomenys reikalauja papildomo apdorojimo.");
             return;
         } else if (header.includes('timestamp') && header.includes('transaction type') && header.includes('asset')) {
             // COINBASE
             rows.slice(1).forEach(row => {
-                // Coinbase CSV: Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price at Transaction...
-                // Regex to handle quotes
                 const cols = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g).map(c => c.replace(/"/g, ''));
                 if (cols.length < 5) return;
-                
                 const type = cols[1].toLowerCase();
-                if (type !== 'buy' && type !== 'sell') return; // Skip converts/rewards for now
-
+                if (type !== 'buy' && type !== 'sell') return;
                 parsedTransactions.push({
                     date: new Date(cols[0]).toISOString(),
                     type: type === 'buy' ? 'Buy' : 'Sell',
@@ -490,7 +482,7 @@ async function handleImportCSV(event) {
                 if (cols.length < 6) return;
                 parsedTransactions.push({
                     date: new Date(cols[0]).toISOString(),
-                    type: cols[1], // Buy/Sell
+                    type: cols[1],
                     coin_symbol: cols[2],
                     amount: parseFloat(cols[3]),
                     price_per_coin: parseFloat(cols[4]),
@@ -501,21 +493,14 @@ async function handleImportCSV(event) {
             });
         }
 
-        if (parsedTransactions.length === 0) {
-            alert('Nepavyko nuskaityti jokių transakcijų. Patikrinkite CSV formatą.');
-            return;
-        }
+        if (parsedTransactions.length === 0) { alert('Nepavyko nuskaityti jokių transakcijų.'); return; }
 
         if (confirm(`Rasta ${parsedTransactions.length} transakcijų. Importuoti?`)) {
-            const success = await saveMultipleTransactions(parsedTransactions); // Requires Supabase update
-            if (success) {
-                alert('Importas sėkmingas!');
-                await loadAllData();
-            }
+            const success = await saveMultipleTransactions(parsedTransactions);
+            if (success) { alert('Importas sėkmingas!'); await loadAllData(); }
         }
     };
     reader.readAsText(file);
-    // Reset input so same file can be selected again
     event.target.value = '';
 }
 
