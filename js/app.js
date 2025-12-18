@@ -1,4 +1,4 @@
-// js/app.js - Versija 1.9.8 (Fix: Method Badge Display & Smart Import)
+// js/app.js - Versija 1.9.8 (Bulk Delete with Checkboxes)
 
 const APP_VERSION = '1.9.8';
 
@@ -7,17 +7,9 @@ const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
 // SPALVOS
 const CHART_COLORS = { 
-    KAS: '#2dd4bf',   // Teal
-    BTC: '#f97316',   // Orange
-    ETH: '#3b82f6',   // Blue
-    SOL: '#8b5cf6',   // Purple
-    BNB: '#eab308',   // Yellow
-    PEPE: '#22c55e',  // Green
-    MON: '#a855f7',   // Purple
-    ASTER: '#facc15', // Gold
-    JUP: '#84cc16',   // Lime
-    HUMA: '#d946ef',  // Pink
-    default: '#6b7280' // Gray
+    KAS: '#2dd4bf', BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308',
+    PEPE: '#22c55e', MON: '#a855f7', ASTER: '#facc15', JUP: '#84cc16', HUMA: '#d946ef',
+    default: '#6b7280'
 };
 
 const MONTH_NAMES_LT = ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'];
@@ -91,6 +83,57 @@ function setupAppListeners() {
     if (btnFetch) { btnFetch.replaceWith(btnFetch.cloneNode(true)); document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm); }
     const csvInput = document.getElementById('csv-file-input');
     if (csvInput) csvInput.addEventListener('change', handleImportCSV);
+    
+    // Select All Listener
+    const selectAllCheckbox = document.getElementById('select-all-tx');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => {
+            const checkboxes = document.querySelectorAll('.tx-checkbox');
+            checkboxes.forEach(cb => cb.checked = e.target.checked);
+            updateSelectionUI();
+        });
+    }
+}
+
+function updateSelectionUI() {
+    const selectedCount = document.querySelectorAll('.tx-checkbox:checked').length;
+    const btnDelete = document.getElementById('btn-delete-selected');
+    const countSpan = document.getElementById('selected-count');
+    
+    if (selectedCount > 0) {
+        btnDelete.classList.remove('hidden');
+        btnDelete.classList.add('flex');
+        countSpan.innerText = selectedCount;
+    } else {
+        btnDelete.classList.add('hidden');
+        btnDelete.classList.remove('flex');
+    }
+}
+
+async function deleteSelectedTransactions() {
+    const checkboxes = document.querySelectorAll('.tx-checkbox:checked');
+    if (checkboxes.length === 0) return;
+    
+    if (!confirm(`Ar tikrai norite ištrinti ${checkboxes.length} transakcijas?`)) return;
+    
+    const btn = document.getElementById('btn-delete-selected');
+    btn.innerText = "Trinama...";
+    btn.disabled = true;
+    
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    
+    // Delete one by one using existing function (safest without changing supabase.js)
+    let deletedCount = 0;
+    for (const id of ids) {
+        const success = await deleteTransaction(id);
+        if (success) deletedCount++;
+    }
+    
+    alert(`Ištrinta: ${deletedCount} iš ${ids.length}`);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete (0)';
+    document.getElementById('select-all-tx').checked = false;
+    await loadAllData();
 }
 
 function setupCalculator() {
@@ -126,6 +169,8 @@ async function loadAllData() {
         const holdings = updateDashboard();
         populateCoinSelect(holdings); renderAccordionJournal(); renderGoals(holdings);
         await generateHistoryChart(); renderAllocationChart(holdings); renderCoinCards(holdings);
+        // Reset selection UI
+        updateSelectionUI();
     } catch (e) {
         console.error('❌ Error loading data:', e);
         if (container) container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-red-400">Error loading data.</div>';
@@ -251,14 +296,14 @@ function renderAccordionJournal() {
             monthHeader.innerHTML = `<div class="flex items-center gap-2"><span class="text-sm font-semibold text-gray-300">${MONTH_NAMES_LT[month]}</span><span class="text-xs text-gray-600">(${txs.length})</span></div><i class="fa-solid fa-chevron-down text-gray-600 text-xs transition-transform month-chevron-${year}-${month}"></i>`;
             const txContainer = document.createElement('div'); txContainer.id = `month-${year}-${month}`; txContainer.className = (yearIndex === 0 && monthIndex === 0) ? 'block' : 'hidden';
             txs.forEach(tx => {
-                const txDiv = document.createElement('div'); txDiv.className = 'px-6 py-3 border-t border-gray-800/30 hover:bg-gray-900/30 transition-colors';
+                const txDiv = document.createElement('div'); 
+                txDiv.className = 'px-6 py-3 border-t border-gray-800/30 hover:bg-gray-900/30 transition-colors';
                 const dateObj = new Date(tx.date);
                 const dateStr = dateObj.toLocaleDateString('lt-LT', { day: '2-digit', month: '2-digit' }) + ' ' + dateObj.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit', hour12: false });
                 
                 const isBuy = ['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy'].includes(tx.type);
                 const isSell = ['Sell', 'Withdraw'].includes(tx.type);
                 
-                // --- FIX: Ensure Method is displayed ---
                 const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
                 const exchangeName = tx.exchange ? `<span class="text-[10px] text-gray-500 ml-2">${tx.exchange}</span>` : '';
                 const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
@@ -273,9 +318,42 @@ function renderAccordionJournal() {
                     txPerf = `<div class="text-[9px] ${pnlClass} mt-0.5 font-bold">PnL: ${sign}${formatMoney(pnlValue)} (${sign}${pnlPercent.toFixed(2)}%)</div>`;
                 }
 
-                // --- FIX: Added ${method} back into innerHTML below ---
-                txDiv.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1"><div class="flex items-center flex-wrap gap-1"><span class="font-bold text-sm ${isBuy ? 'text-green-500' : isSell ? 'text-red-500' : 'text-yellow-500'}">${tx.coin_symbol}</span><span class="text-xs text-gray-600">${tx.type}</span>${method}${exchangeName}</div><div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>${txPerf}${notesDisplay}</div><div class="text-right ml-4"><div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : isSell ? '-' : '+'}${Number(tx.amount).toFixed(4)}</div><div class="text-[10px] text-gray-500">@ ${formatPrice(tx.price_per_coin)}</div><div class="font-bold text-sm text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1"><i class="fa-solid fa-pen"></i></button><button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs p-1"><i class="fa-solid fa-trash"></i></button></div></div>`;
+                // Layout with Checkbox
+                txDiv.innerHTML = `
+                    <div class="flex items-start gap-3">
+                        <div class="pt-1.5">
+                            <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 text-primary-500 rounded border-gray-600 bg-gray-800 cursor-pointer transition" value="${tx.id}">
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center flex-wrap gap-1">
+                                        <span class="font-bold text-sm ${isBuy ? 'text-green-500' : isSell ? 'text-red-500' : 'text-yellow-500'}">${tx.coin_symbol}</span>
+                                        <span class="text-xs text-gray-600">${tx.type}</span>
+                                        ${method}${exchangeName}
+                                    </div>
+                                    <div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>
+                                    ${txPerf}
+                                    ${notesDisplay}
+                                </div>
+                                <div class="text-right ml-4">
+                                    <div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : isSell ? '-' : '+'}${Number(tx.amount).toFixed(4)}</div>
+                                    <div class="text-[10px] text-gray-500">@ ${formatPrice(tx.price_per_coin)}</div>
+                                    <div class="font-bold text-sm text-white mt-1">${formatMoney(tx.total_cost_usd)}</div>
+                                </div>
+                                <div class="flex flex-col gap-2 ml-3">
+                                    <button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1"><i class="fa-solid fa-pen"></i></button>
+                                    <button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs p-1"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                
                 txContainer.appendChild(txDiv);
+                
+                // Add listener to new checkbox
+                const checkbox = txDiv.querySelector('.tx-checkbox');
+                checkbox.addEventListener('change', updateSelectionUI);
             });
             monthHeader.addEventListener('click', () => { const isHidden = txContainer.classList.contains('hidden'); txContainer.classList.toggle('hidden'); const chevron = monthHeader.querySelector(`.month-chevron-${year}-${month}`); if (chevron) { if (isHidden) chevron.style.transform = 'rotate(180deg)'; else chevron.style.transform = 'rotate(0deg)'; } });
             monthDiv.appendChild(monthHeader); monthDiv.appendChild(txContainer); monthContainer.appendChild(monthDiv);
