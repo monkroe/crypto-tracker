@@ -1,31 +1,27 @@
-// js/app.js - Versija 1.9.7 (Colors, Celebration, PnL & Import)
+// js/app.js - Versija 1.9.8 (Fix: Method Badge Display & Smart Import)
 
-const APP_VERSION = '1.9.7';
+const APP_VERSION = '1.9.8';
 
 let coinsList = [], transactions = [], goals = [], prices = {}, myChart = null, allocationChart = null;
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
 
-// ATNAUJINTOS SPALVOS PAGAL TAVO MONETAS
+// SPALVOS
 const CHART_COLORS = { 
-    KAS: '#2dd4bf',   // Teal (KAS original)
+    KAS: '#2dd4bf',   // Teal
     BTC: '#f97316',   // Orange
     ETH: '#3b82f6',   // Blue
     SOL: '#8b5cf6',   // Purple
     BNB: '#eab308',   // Yellow
-    
-    // Tavo specifinės monetos
-    PEPE: '#22c55e',  // Green (Pepe green)
-    MON: '#a855f7',   // Purple (Monad)
-    ASTER: '#facc15', // Gold/Yellow (Aster)
-    JUP: '#84cc16',   // Lime Green (Jupiter)
-    HUMA: '#d946ef',  // Pink/Fuchsia (Huma)
-    
+    PEPE: '#22c55e',  // Green
+    MON: '#a855f7',   // Purple
+    ASTER: '#facc15', // Gold
+    JUP: '#84cc16',   // Lime
+    HUMA: '#d946ef',  // Pink
     default: '#6b7280' // Gray
 };
 
 const MONTH_NAMES_LT = ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'];
 
-// Kintamasis, kad nešvęstume to paties tikslo 100 kartų per tą pačią sesiją
 let celebratedGoals = new Set();
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -93,8 +89,6 @@ function setupAppListeners() {
     if (btnDeleteCoin) { btnDeleteCoin.replaceWith(btnDeleteCoin.cloneNode(true)); document.getElementById('btn-delete-coin').addEventListener('click', handleDeleteCoinSubmit); }
     const btnFetch = document.getElementById('btn-fetch-price');
     if (btnFetch) { btnFetch.replaceWith(btnFetch.cloneNode(true)); document.getElementById('btn-fetch-price').addEventListener('click', fetchPriceForForm); }
-    
-    // CSV Import Listener
     const csvInput = document.getElementById('csv-file-input');
     if (csvInput) csvInput.addEventListener('change', handleImportCSV);
 }
@@ -164,18 +158,17 @@ function updateDashboard() {
     transactions.forEach(tx => {
         if (!holdings[tx.coin_symbol]) holdings[tx.coin_symbol] = { qty: 0, invested: 0, totalCost: 0, totalAmount: 0 };
         const amount = Number(tx.amount), cost = Number(tx.total_cost_usd);
-        if (tx.type === 'Buy' || tx.type === 'Instant Buy' || tx.type === 'Recurring Buy' || tx.type === 'Limit Buy' || tx.type === 'Market Buy') { 
+        if (['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy'].includes(tx.type)) { 
             holdings[tx.coin_symbol].qty += amount; 
             holdings[tx.coin_symbol].invested += cost; 
             holdings[tx.coin_symbol].totalCost += cost; 
             holdings[tx.coin_symbol].totalAmount += amount; 
             totalInvested += cost; 
-        } else if (tx.type === 'Sell') { 
+        } else if (['Sell', 'Withdraw'].includes(tx.type)) { 
             holdings[tx.coin_symbol].qty -= amount; 
             holdings[tx.coin_symbol].invested -= cost; 
             totalInvested -= cost; 
-        } else if (tx.type === 'Staking Reward' || tx.type === 'Gift/Airdrop' || tx.type === 'Bonus') {
-            // Reward increases qty but cost is usually 0
+        } else if (['Staking Reward', 'Gift/Airdrop', 'Bonus'].includes(tx.type)) {
             holdings[tx.coin_symbol].qty += amount;
         }
     });
@@ -209,7 +202,6 @@ function renderAllocationChart(holdings) {
         if (data.qty > 0 && data.currentValue) { 
             chartData.push(data.currentValue); 
             labels.push(sym); 
-            // Use specific color if defined, otherwise default
             colors.push(CHART_COLORS[sym] || CHART_COLORS.default); 
         } 
     });
@@ -264,12 +256,13 @@ function renderAccordionJournal() {
                 const dateStr = dateObj.toLocaleDateString('lt-LT', { day: '2-digit', month: '2-digit' }) + ' ' + dateObj.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit', hour12: false });
                 
                 const isBuy = ['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy'].includes(tx.type);
-                const isSell = tx.type === 'Sell';
+                const isSell = ['Sell', 'Withdraw'].includes(tx.type);
+                
+                // --- FIX: Ensure Method is displayed ---
                 const method = tx.method ? `<span class="text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1">${tx.method}</span>` : '';
                 const exchangeName = tx.exchange ? `<span class="text-[10px] text-gray-500 ml-2">${tx.exchange}</span>` : '';
                 const notesDisplay = tx.notes ? `<div class="text-[10px] text-primary-400/80 italic mt-1"><i class="fa-regular fa-note-sticky mr-1"></i>${tx.notes}</div>` : '';
                 
-                // PnL Calculation
                 let txPerf = '';
                 const currentPrice = prices[coinsList.find(c=>c.symbol===tx.coin_symbol)?.coingecko_id]?.usd;
                 if (currentPrice && tx.price_per_coin > 0 && isBuy) {
@@ -280,7 +273,8 @@ function renderAccordionJournal() {
                     txPerf = `<div class="text-[9px] ${pnlClass} mt-0.5 font-bold">PnL: ${sign}${formatMoney(pnlValue)} (${sign}${pnlPercent.toFixed(2)}%)</div>`;
                 }
 
-                txDiv.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1"><div class="flex items-center flex-wrap gap-1"><span class="font-bold text-sm ${isBuy ? 'text-green-500' : isSell ? 'text-red-500' : 'text-yellow-500'}">${tx.coin_symbol}</span><span class="text-xs text-gray-600">${tx.type}</span>${exchangeName}</div><div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>${txPerf}${notesDisplay}</div><div class="text-right ml-4"><div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : isSell ? '-' : '+'}${Number(tx.amount).toFixed(4)}</div><div class="text-[10px] text-gray-500">@ ${formatPrice(tx.price_per_coin)}</div><div class="font-bold text-sm text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1"><i class="fa-solid fa-pen"></i></button><button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs p-1"><i class="fa-solid fa-trash"></i></button></div></div>`;
+                // --- FIX: Added ${method} back into innerHTML below ---
+                txDiv.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1"><div class="flex items-center flex-wrap gap-1"><span class="font-bold text-sm ${isBuy ? 'text-green-500' : isSell ? 'text-red-500' : 'text-yellow-500'}">${tx.coin_symbol}</span><span class="text-xs text-gray-600">${tx.type}</span>${method}${exchangeName}</div><div class="text-[10px] text-gray-600 mt-0.5">${dateStr}</div>${txPerf}${notesDisplay}</div><div class="text-right ml-4"><div class="text-xs text-gray-300 font-mono">${isBuy ? '+' : isSell ? '-' : '+'}${Number(tx.amount).toFixed(4)}</div><div class="text-[10px] text-gray-500">@ ${formatPrice(tx.price_per_coin)}</div><div class="font-bold text-sm text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx(${tx.id})" class="text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1"><i class="fa-solid fa-pen"></i></button><button onclick="onDeleteTx(${tx.id})" class="text-gray-500 hover:text-red-500 transition-colors text-xs p-1"><i class="fa-solid fa-trash"></i></button></div></div>`;
                 txContainer.appendChild(txDiv);
             });
             monthHeader.addEventListener('click', () => { const isHidden = txContainer.classList.contains('hidden'); txContainer.classList.toggle('hidden'); const chevron = monthHeader.querySelector(`.month-chevron-${year}-${month}`); if (chevron) { if (isHidden) chevron.style.transform = 'rotate(180deg)'; else chevron.style.transform = 'rotate(0deg)'; } });
@@ -385,7 +379,7 @@ async function handleTxSubmit(e) {
     const dStr = document.getElementById('tx-date-input').value, tStr = document.getElementById('tx-time-input').value || '00:00';
     if (!coinSymbol) { alert("Pasirinkite monetą!"); btn.innerText = oldText; btn.disabled = false; return; }
     const amount = parseFloat(rawAmount), price = parseFloat(rawPrice), total = parseFloat(rawTotal);
-    if (isNaN(amount) || isNaN(price) || isNaN(total) || amount <= 0) { // Removed price > 0 check for airdrops
+    if (isNaN(amount) || isNaN(price) || isNaN(total) || amount <= 0) { 
         alert("Įveskite teigiamus skaičius!"); btn.innerText = oldText; btn.disabled = false; return;
     }
     const localDate = new Date(`${dStr}T${tStr}:00`), finalDate = localDate.toISOString();
@@ -477,7 +471,7 @@ async function handleDeleteCoinSubmit() {
 }
 
 // ===========================================
-// CSV IMPORT (UPDATED for Kraken + Universal)
+// CSV IMPORT (SMART: Moves Method from Notes)
 // ===========================================
 async function handleImportCSV(event) {
     const file = event.target.files[0];
@@ -492,12 +486,11 @@ async function handleImportCSV(event) {
         const header = rows[0].toLowerCase();
         let parsedTransactions = [];
 
-        // Simple format detection logic
         if (header.includes('txid') && header.includes('pair')) {
             alert("Rekomenduojama naudoti 'Universal Format', nes Kraken duomenys yra sudėtingi.");
             return;
         } else if (header.includes('timestamp') && header.includes('transaction type')) {
-            // COINBASE (Simplified)
+            // COINBASE
             rows.slice(1).forEach(row => {
                 const cols = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g).map(c => c.replace(/"/g, ''));
                 if (cols.length < 5) return;
@@ -515,10 +508,23 @@ async function handleImportCSV(event) {
                 });
             });
         } else {
-            // UNIVERSAL (Default for your "kraken_missing_tx.csv")
+            // UNIVERSAL (Corrected logic for notes)
             rows.slice(1).forEach(row => {
                 const cols = row.split(',');
                 if (cols.length < 6) return;
+                
+                let method = cols[6] || '';
+                let note = cols[7] || '';
+
+                // SMART FIX: Check notes for method keywords
+                if (note.includes('Recurring Buy')) {
+                    method = 'Recurring Buy';
+                    note = note.replace('Recurring Buy', '').trim();
+                } else if (note.includes('Instant Buy')) {
+                    method = 'Instant Buy';
+                    note = note.replace('Instant Buy', '').trim();
+                }
+
                 parsedTransactions.push({
                     date: new Date(cols[0]).toISOString(),
                     type: cols[1],
@@ -526,8 +532,9 @@ async function handleImportCSV(event) {
                     amount: parseFloat(cols[3]),
                     price_per_coin: parseFloat(cols[4]),
                     total_cost_usd: parseFloat(cols[5]),
-                    exchange: cols[6] || '',
-                    notes: cols[7] || ''
+                    exchange: cols[6] || '', // Usually handled above, but keeping structure
+                    method: method,
+                    notes: note
                 });
             });
         }
