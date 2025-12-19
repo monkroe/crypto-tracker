@@ -1,6 +1,6 @@
 # Changelog
 
-## [v2.0.0] - 2024-12-19
+## [v2.0.0] - 2025-12-19
 
 ### 🔒 Saugumas (Security)
 - **Kritinis:** Pašalintas XSS pažeidžiamumas naudojant `textContent` ir `sanitizeText` funkcijas vietoj `innerHTML`.
@@ -28,4 +28,3 @@
 
 ## [v1.0.0] - Initial Release
 - Bazinė versija su transakcijų pridėjimu, PnL skaičiavimu ir grafikais.
-
