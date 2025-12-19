@@ -80,19 +80,23 @@ CREATE POLICY "Users can view own goals" ON crypto_goals FOR SELECT USING (auth.
 CREATE POLICY "Users can insert own goals" ON crypto_goals FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own goals" ON crypto_goals FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own goals" ON crypto_goals FOR DELETE USING (auth.uid() = user_id);
+```
+### 2. Projekto Failai
+​Faile js/supabase.js įrašykite savo projekto duomenis:
 
-2. Projekto Failai
-Faile js/supabase.js įrašykite savo projekto duomenis:
-const SUPABASE_URL = 'https://jusu-projektas.supabase.co';
+```javascript 
+const SUPABASE_URL = '[https://jusu-projektas.supabase.co](https://jusu-projektas.supabase.co)';
 const SUPABASE_ANON_KEY = 'jusu-anon-public-key';
+```
+### 3. WebAuthn (Passkey) Reikalavimai
+​Kad veiktų Face ID / Touch ID, projektas privalo būti talpinamas serveryje su HTTPS (pvz., Vercel, Netlify, GitHub Pages) arba testuojamas per localhost.
 
-3. WebAuthn (Passkey) Reikalavimai
-Kad veiktų Face ID / Touch ID, projektas privalo būti talpinamas serveryje su HTTPS (pvz., Vercel, Netlify, GitHub Pages) arba testuojamas per localhost.
-📊 CSV Importo Formatas
-Rekomenduojamas formatas importavimui:
+​📊 CSV Importo Formatas
+​Rekomenduojamas formatas importavimui:
+
+```csv
 Data,Tipas,Moneta,Kiekis,Kaina,Viso USD,Birža,Metodas,Pastabos
 2025-12-25,Buy,BTC,0.005,95000,475,Binance,Market Buy,Kalėdinis pirkimas
 2025-12-26,Sell,ETH,1.5,4500,6750,Kraken,Limit Sell,Pelnas
-
+```
 © 2025 LTV Media PRO
-
