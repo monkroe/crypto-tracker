@@ -17,7 +17,9 @@ Profesionalus kriptovaliutų portfelio valdymo įrankis su biometrine autentifik
 Eikite į [Supabase SQL Editor](https://supabase.com/dashboard) ir paleiskite šį kodą, kad sukurtumėte lenteles ir saugumo taisykles:
 
 ```sql
+-- ===============================================
 -- 1. SUPPORTED_COINS LENTELĖ
+-- ===============================================
 CREATE TABLE supported_coins (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -34,7 +36,9 @@ CREATE POLICY "Users can view own coins" ON supported_coins FOR SELECT USING (au
 CREATE POLICY "Users can insert own coins" ON supported_coins FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete own coins" ON supported_coins FOR DELETE USING (auth.uid() = user_id);
 
+-- ===============================================
 -- 2. CRYPTO_TRANSACTIONS LENTELĖ
+-- ===============================================
 CREATE TABLE crypto_transactions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -58,7 +62,9 @@ CREATE POLICY "Users can insert own transactions" ON crypto_transactions FOR INS
 CREATE POLICY "Users can update own transactions" ON crypto_transactions FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own transactions" ON crypto_transactions FOR DELETE USING (auth.uid() = user_id);
 
+-- ===============================================
 -- 3. CRYPTO_GOALS LENTELĖ
+-- ===============================================
 CREATE TABLE crypto_goals (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -74,3 +80,19 @@ CREATE POLICY "Users can view own goals" ON crypto_goals FOR SELECT USING (auth.
 CREATE POLICY "Users can insert own goals" ON crypto_goals FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own goals" ON crypto_goals FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own goals" ON crypto_goals FOR DELETE USING (auth.uid() = user_id);
+
+2. Projekto Failai
+Faile js/supabase.js įrašykite savo projekto duomenis:
+const SUPABASE_URL = 'https://jusu-projektas.supabase.co';
+const SUPABASE_ANON_KEY = 'jusu-anon-public-key';
+
+3. WebAuthn (Passkey) Reikalavimai
+Kad veiktų Face ID / Touch ID, projektas privalo būti talpinamas serveryje su HTTPS (pvz., Vercel, Netlify, GitHub Pages) arba testuojamas per localhost.
+📊 CSV Importo Formatas
+Rekomenduojamas formatas importavimui:
+Data,Tipas,Moneta,Kiekis,Kaina,Viso USD,Birža,Metodas,Pastabos
+2025-12-25,Buy,BTC,0.005,95000,475,Binance,Market Buy,Kalėdinis pirkimas
+2025-12-26,Sell,ETH,1.5,4500,6750,Kraken,Limit Sell,Pelnas
+
+© 2025 LTV Media PRO
+
