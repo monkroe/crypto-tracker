@@ -1,2 +1,76 @@
-# crypto-tracker
-Kripto valiutų sekėjas 
+# 🚀 Crypto Tracker v2.0.0
+
+Profesionalus kriptovaliutų portfelio valdymo įrankis su biometrine autentifikacija (Passkey/WebAuthn) ir aukščiausio lygio saugumu.
+
+## ✨ Pagrindinės Funkcijos
+
+- **Portfelio sekimas:** Realaus laiko kainos, PnL skaičiavimas, turto paskirstymo grafikai.
+- **Saugumas:** Pilna XSS apsauga, RLS (Row Level Security) duomenų bazės politika.
+- **Biometrinis prisijungimas:** Face ID / Touch ID / Windows Hello palaikymas.
+- **Masinis valdymas:** Greitas didelio kiekio transakcijų trynimas ir CSV importas.
+- **UI/UX:** Tamsus režimas, "Toast" pranešimai, interaktyvūs grafikai.
+
+## 🛠️ Setup Instrukcijos
+
+### 1. Supabase Konfigūracija
+
+Eikite į [Supabase SQL Editor](https://supabase.com/dashboard) ir paleiskite šį kodą, kad sukurtumėte lenteles ir saugumo taisykles:
+
+```sql
+-- 1. SUPPORTED_COINS LENTELĖ
+CREATE TABLE supported_coins (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    symbol TEXT NOT NULL,
+    coingecko_id TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_user_coin UNIQUE(user_id, symbol)
+);
+
+CREATE INDEX idx_supported_coins_user ON supported_coins(user_id);
+ALTER TABLE supported_coins ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own coins" ON supported_coins FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own coins" ON supported_coins FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own coins" ON supported_coins FOR DELETE USING (auth.uid() = user_id);
+
+-- 2. CRYPTO_TRANSACTIONS LENTELĖ
+CREATE TABLE crypto_transactions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    type TEXT NOT NULL,
+    coin_symbol TEXT NOT NULL,
+    exchange TEXT,
+    method TEXT,
+    notes TEXT,
+    amount NUMERIC NOT NULL CHECK (amount > 0),
+    price_per_coin NUMERIC NOT NULL CHECK (price_per_coin >= 0),
+    total_cost_usd NUMERIC NOT NULL CHECK (total_cost_usd >= 0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_transactions_user_date ON crypto_transactions(user_id, date DESC);
+ALTER TABLE crypto_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own transactions" ON crypto_transactions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own transactions" ON crypto_transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own transactions" ON crypto_transactions FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own transactions" ON crypto_transactions FOR DELETE USING (auth.uid() = user_id);
+
+-- 3. CRYPTO_GOALS LENTELĖ
+CREATE TABLE crypto_goals (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    coin_symbol TEXT NOT NULL,
+    target_amount NUMERIC NOT NULL CHECK (target_amount > 0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_user_goal UNIQUE(user_id, coin_symbol)
+);
+
+ALTER TABLE crypto_goals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own goals" ON crypto_goals FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own goals" ON crypto_goals FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own goals" ON crypto_goals FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own goals" ON crypto_goals FOR DELETE USING (auth.uid() = user_id);
