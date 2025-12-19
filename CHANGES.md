@@ -1,30 +1,57 @@
 # Changelog
 
-## [v2.0.0] - 2025-12-19
+Visa projekto pakeitimų istorija.
 
-### 🔒 Saugumas (Security)
-- **Kritinis:** Pašalintas XSS pažeidžiamumas naudojant `textContent` ir `sanitizeText` funkcijas vietoj `innerHTML`.
-- **Kritinis:** Įdiegtos SQL RLS (Row Level Security) politikos. Dabar vartotojai gali matyti ir redaguoti TIK savo duomenis.
-- **Atnaujinimas:** Supabase kredencialų valdymas pritaikytas saugiam kliento pusės (client-side) naudojimui su anoniminiu raktu.
+## [v2.0.0] - 2025-12-19 (Final Release)
+Didysis atnaujinimas su biometrine autentifikacija ir duomenų bazės saugumu.
 
 ### 🚀 Naujos Funkcijos
-- **WebAuthn / Passkey:** Pridėta galimybė prisijungti naudojant biometrinius duomenis (Face ID, Touch ID, Windows Hello).
-- **Toast Notifications:** Seni `alert()` pranešimai pakeisti moderniais, iššokančiais pranešimais.
-- **Nustatymai:** Sukurtas nustatymų modalinis langas (Settings Modal) Passkey valdymui.
-- **UI:** Pridėtas "Select All" funkcionalumas transakcijų istorijoje.
+- **WebAuthn / Passkey:** Face ID, Touch ID ir Windows Hello integracija prisijungimui.
+- **Settings Modal:** Naujas nustatymų langas biometrijos valdymui.
+- **Toast Notifications:** Modernūs pranešimai apie veiksmus (vietoj `alert()`).
+- **UI:** Pridėta "Select All" varnelė masiniam žymėjimui.
 
-### ⚡ Optimizacija (Performance)
-- **Bulk Delete:** Transakcijų trynimas pagreitintas 20x. Dabar trinama vienu SQL užklausimu naudojant `.in('id', ids)`.
-- **API Rate Limiting:** Įdiegta kainų talpykla (cache). Kainos iš CoinGecko atnaujinamos ne dažniau kaip kas 60 sek., kad būtų išvengta blokavimo.
-- **Event Delegation:** Optimizuotas checkbox'ų veikimas, sumažintas atminties naudojimas.
-- **Debounce:** Skaičiuoklė dabar reaguoja sklandžiau, nevykdo skaičiavimų kiekvienam klavišo paspaudimui.
-
-### 🐛 Ištaisytos Klaidos
-- **CSV Importas:** Ištaisyta klaida, kai `Exchange` laukelis būdavo tuščias. Dabar teisingai nuskaito 7-ąjį stulpelį.
-- **Import Logic:** `Method` laukelis automatiškai atpažįsta "Recurring Buy" arba "Instant Buy" iš pastabų.
-- **Checkbox:** Ištaisyta problema, kai "Select All" neveikdavo paslėptoms (collapsed) transakcijoms.
+### 🔒 Saugumas
+- **RLS (Row Level Security):** Duomenų bazė užrakinta. Vartotojai mato tik savo įrašus.
+- **Anon Key:** Perėjimas prie saugaus viešo rakto naudojimo.
 
 ---
 
-## [v1.0.0] - Initial Release
-- Bazinė versija su transakcijų pridėjimu, PnL skaičiavimu ir grafikais.
+## [v1.9.11] - 2025-12-18 (Performance Update)
+Optimizuotas veikimas dideliems duomenų kiekiams.
+
+### ⚡ Optimizacija
+- **Bulk Delete:** Transakcijų trynimas dabar vyksta viena užklausa (`.in()`), o ne ciklu. Greitis padidėjo ~20 kartų.
+- **Event Delegation:** Pataisytas atminties nutekėjimas ir checkbox'ų veikimas akordeonuose.
+- **API Cache:** Kainų užklausos saugomos 1 min., kad nebūtų viršytas CoinGecko limitas.
+- **Debounce:** Skaičiuoklė nebestabdo naršyklės rašant skaičius.
+
+---
+
+## [v1.9.10] - 2025-12-18 (Security Hotfix)
+Kritinis saugumo atnaujinimas.
+
+### 🐛 Ištaisytos Klaidos
+- **XSS Fix:** Panaikintas `innerHTML` naudojimas transakcijų atvaizdavime.
+- **Sanitization:** Pridėta `sanitizeText()` funkcija vartotojo įvesčiai valyti.
+
+---
+
+## [v1.9.9] - 2025-12-17 (CSV Logic Fix)
+Duomenų importo taisymas.
+
+### 🐛 Ištaisytos Klaidos
+- **CSV Importas:** Pataisyta logika, kai `Exchange` ir `Method` stulpeliai susimaišydavo.
+- **Smart Parsing:** Sistema dabar atpažįsta "Recurring Buy" iš pastabų laukelio.
+
+---
+
+## [v1.0.0] - 2025-12-13 (Project Start)
+Projekto pradžia.
+
+### ✨ Funkcijos
+- Prisijungimas su el. paštu.
+- Rankinis transakcijų pridėjimas.
+- Portfelio vertės skaičiavimas realiu laiku.
+- Pelnas/Nuostolis (PnL) grafikas.
+- Turto pasiskirstymo (Allocation) "donatų" diagrama.
