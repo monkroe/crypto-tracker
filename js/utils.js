@@ -26,9 +26,19 @@ export function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
     const toast = document.createElement('div');
-    const bg = type === 'success' ? 'bg-white border-l-4 border-green-500' : 'bg-white border-l-4 border-red-500';
+    let bg, icon;
+    if (type === 'success') {
+        bg = 'bg-white border-l-4 border-green-500';
+        icon = '✅';
+    } else if (type === 'info') {
+        bg = 'bg-white border-l-4 border-blue-500';
+        icon = 'ℹ️';
+    } else {
+        bg = 'bg-white border-l-4 border-red-500';
+        icon = '⚠️';
+    }
     toast.className = `toast ${bg} dark:bg-gray-800 shadow-xl rounded-r px-4 py-3 flex items-center gap-3 min-w-[300px]`;
-    toast.innerHTML = `<span class="text-xl">${type === 'success' ? '✅' : '⚠️'}</span><span class="text-sm font-bold text-gray-800 dark:text-white">${message}</span>`;
+    toast.innerHTML = `<span class="text-xl">${icon}</span><span class="text-sm font-bold text-gray-800 dark:text-white">${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);

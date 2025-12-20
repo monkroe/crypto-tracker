@@ -177,18 +177,82 @@ function setupEventListeners() {
     
     // Auth listeners
     document.getElementById('btn-login').onclick = async () => {
-        const email = document.getElementById('auth-email').value;
+        const btn = document.getElementById('btn-login');
+        const email = document.getElementById('auth-email').value.trim();
         const pass = document.getElementById('auth-pass').value;
-        const { error } = await window.userLogin(email, pass);
-        if (error) showToast(error.message, 'error'); else { showAppScreen(); await initData(); }
+        
+        // Validation
+        if (!email || !pass) {
+            showToast('Please enter email and password', 'error');
+            return;
+        }
+        
+        // Show loading state
+        const originalText = btn.textContent;
+        btn.textContent = 'Logging in...';
+        btn.disabled = true;
+        
+        try {
+            const result = await window.userLogin(email, pass);
+            console.log('Login result:', result); // Debug log
+            
+            if (result.error) {
+                console.error('Login error:', result.error);
+                showToast(result.error.message || 'Login failed', 'error');
+            } else if (result.data?.user) {
+                showToast('Login successful!', 'success');
+                showAppScreen();
+                await initData();
+            } else {
+                showToast('Login failed - please try again', 'error');
+            }
+        } catch (e) {
+            console.error('Login exception:', e);
+            showToast('Connection error - please try again', 'error');
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
     };
     
     document.getElementById('btn-signup').onclick = async () => {
-        const email = document.getElementById('auth-email').value;
+        const btn = document.getElementById('btn-signup');
+        const email = document.getElementById('auth-email').value.trim();
         const pass = document.getElementById('auth-pass').value;
-        const { error } = await window.userSignUp(email, pass);
-        if (error) showToast(error.message, 'error'); 
-        else showToast('Check your email for confirmation link!', 'success');
+        
+        // Validation
+        if (!email || !pass) {
+            showToast('Please enter email and password', 'error');
+            return;
+        }
+        
+        if (pass.length < 6) {
+            showToast('Password must be at least 6 characters', 'error');
+            return;
+        }
+        
+        // Show loading state
+        const originalText = btn.textContent;
+        btn.textContent = 'Signing up...';
+        btn.disabled = true;
+        
+        try {
+            const result = await window.userSignUp(email, pass);
+            console.log('Signup result:', result); // Debug log
+            
+            if (result.error) {
+                console.error('Signup error:', result.error);
+                showToast(result.error.message || 'Signup failed', 'error');
+            } else {
+                showToast('Check your email for confirmation link!', 'success');
+            }
+        } catch (e) {
+            console.error('Signup exception:', e);
+            showToast('Connection error - please try again', 'error');
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
     };
     
     document.getElementById('btn-logout').onclick = async () => { await window.userSignOut(); showAuthScreen(); };
