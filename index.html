@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Crypto Tracker - Portfolio Manager v2.0.1</title>
+    <title>Crypto Tracker - Portfolio Manager v2.0.2</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -115,11 +115,11 @@
                         <p id="header-total-value" class="text-lg font-bold text-gray-900 dark:text-white tracking-tight">$0.00</p>
                         <p class="text-[9px] text-gray-600 mt-0.5">Invested: <span id="total-invested" class="text-primary-600 dark:text-primary-400 font-bold">$0.00</span></p>
                     </div>
-                    <button id="btn-settings" class="text-gray-500 hover:text-primary-500 transition-colors" title="Settings">
-                        <i class="fa-solid fa-gear text-lg"></i>
+                    <button id="btn-settings" class="text-gray-500 hover:text-primary-500 transition-colors" title="Settings" aria-label="Open settings">
+                        <i class="fa-solid fa-gear text-lg" aria-hidden="true"></i>
                     </button>
-                    <button id="btn-logout" class="text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors" title="Atsijungti">
-                        <i class="fa-solid fa-right-from-bracket text-lg"></i>
+                    <button id="btn-logout" class="text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors" title="Atsijungti" aria-label="Log out">
+                        <i class="fa-solid fa-right-from-bracket text-lg" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
@@ -212,7 +212,7 @@
         <div class="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl border-t sm:border border-gray-200 dark:border-gray-800 p-5 space-y-5 animate-slide-up sm:animate-none max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center text-gray-900 dark:text-white">
                 <h3 class="font-bold text-lg" id="modal-title">New Transaction</h3>
-                <button onclick="closeModal('add-modal')" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="closeModal('add-modal')" aria-label="Close modal" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </div>
             <form id="add-tx-form" class="space-y-4">
                 <input type="hidden" id="tx-id">
@@ -303,7 +303,7 @@
         <div class="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl border border-gray-200 dark:border-gray-800 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center">
                 <h3 class="font-bold text-gray-900 dark:text-white text-xl">Settings</h3>
-                <button onclick="closeModal('settings-modal')" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="closeModal('settings-modal')" aria-label="Close settings" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </div>
             
             <div id="passkey-settings" class="hidden">
