@@ -1,9 +1,10 @@
-// js/app.js - v3.1.1 (Fixes)
+// js/app.js - v3.1.2 (Goals Restore)
 import { showToast, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state } from './logic.js';
-import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderAllocationChart, setupCalculator, setupThemeHandlers } from './ui.js';
+// Importuojame renderGoals
+import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderAllocationChart, setupCalculator, setupThemeHandlers, renderGoals } from './ui.js';
 
-const APP_VERSION = '3.1.1';
+const APP_VERSION = '3.1.2';
 
 document.addEventListener('DOMContentLoaded', async () => {
     debugLog(`✅ App v${APP_VERSION} starting...`);
@@ -39,6 +40,8 @@ function refreshUI() {
     renderCoinCards();
     renderTransactionJournal();
     renderAllocationChart();
+    // SVARBU: Iškviečiame tikslų atvaizdavimą
+    renderGoals();
     
     const coinSelects = [document.getElementById('tx-coin'), document.getElementById('delete-coin-select')];
     coinSelects.forEach(sel => {
@@ -53,7 +56,6 @@ function refreshUI() {
 }
 
 function setupEventListeners() {
-    // 1. SETTINGS
     const btnSettings = document.getElementById('btn-settings');
     if (btnSettings) {
         const newBtn = btnSettings.cloneNode(true);
@@ -64,7 +66,6 @@ function setupEventListeners() {
         });
     }
 
-    // 2. AUTH
     document.getElementById('btn-login').addEventListener('click', async () => {
         const email = document.getElementById('auth-email').value;
         const pass = document.getElementById('auth-pass').value;
@@ -73,15 +74,14 @@ function setupEventListeners() {
     });
     document.getElementById('btn-logout').addEventListener('click', async () => { await window.userSignOut(); showAuthScreen(); });
 
-    // 3. TRANSACTION FORM
+    // TRANSACTION FORM
     const txForm = document.getElementById('add-tx-form');
     const newTxForm = txForm.cloneNode(true);
     txForm.parentNode.replaceChild(newTxForm, txForm);
     
-    // Aktyvuojame skaičiuotuvą kaskart, kai forma persikrauna
     setupCalculator();
 
-    // 4. GET PRICE
+    // GET PRICE
     const btnGetPrice = document.getElementById('btn-fetch-price');
     if (btnGetPrice) {
         const newBtnPrice = btnGetPrice.cloneNode(true);
@@ -100,7 +100,6 @@ function setupEventListeners() {
                         const price = data[coin.coingecko_id].usd;
                         const priceInput = document.getElementById('tx-price');
                         priceInput.value = price;
-                        // Trigger calculator manually
                         priceInput.dispatchEvent(new Event('input'));
                         showToast(`Price: $${price}`, 'success');
                     }
@@ -110,7 +109,6 @@ function setupEventListeners() {
         });
     }
 
-    // 5. SAVE TRANSACTION
     newTxForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('btn-save');
@@ -121,7 +119,7 @@ function setupEventListeners() {
         const timeVal = document.getElementById('tx-time-input').value || '00:00';
         const fullDate = new Date(`${dateVal}T${timeVal}:00`).toISOString();
         
-        const id = document.getElementById('tx-id').value; // Check if editing
+        const id = document.getElementById('tx-id').value;
 
         const txData = {
             date: fullDate,
@@ -136,19 +134,10 @@ function setupEventListeners() {
         };
 
         let success = false;
-        // Logic: Update or Insert
         if (id) {
-            // Update logic (reikia įdėti į supabase.js arba naudoti update funkciją)
-             // NOTE: v3.1.0 supabase.js neturi explicit updateTransaction, naudojame workaround: delete then save (not ideal but quick fix) or add update logic.
-             // Let's rely on saveTransaction to be smart or add updateTransaction to window.
-             // For now, I'll assume we need to add updateTransaction to supabase.js, but since I cannot edit that file here, I will do a DELETE then INSERT for update.
-             // WAIT! Better to add update logic in supabase.js or logic.js?
-             // Since I can't edit supabase.js right now easily without resending it, let's assume saveTransaction handles insert. 
-             // We need window.updateTransaction. If it's missing, delete + insert.
              if (window.updateTransaction) {
                  success = await window.updateTransaction(id, txData);
              } else {
-                 // Fallback: Delete old, Insert new
                  await window.deleteTransaction(id);
                  success = await window.saveTransaction(txData);
              }
@@ -163,7 +152,7 @@ function setupEventListeners() {
             const now = new Date();
             document.getElementById('tx-date-input').value = now.toISOString().split('T')[0];
             document.getElementById('tx-time-input').value = now.toTimeString().slice(0, 5);
-            document.getElementById('tx-id').value = ''; // Clear ID
+            document.getElementById('tx-id').value = ''; 
             await initData();
         } else {
             showToast("Error saving", "error");
@@ -171,7 +160,6 @@ function setupEventListeners() {
         btn.textContent = oldText;
     });
     
-    // Global Functions
     window.onDeleteTx = async (id) => {
         if(confirm("Delete transaction?")) {
             await window.deleteTransaction(id);
@@ -180,7 +168,6 @@ function setupEventListeners() {
         }
     };
     
-    // RESTORED: Edit Transaction
     window.onEditTx = (id) => {
         const tx = state.transactions.find(t => t.id === id);
         if (!tx) return;
@@ -195,22 +182,17 @@ function setupEventListeners() {
         document.getElementById('tx-method').value = tx.method || 'Market Buy';
         document.getElementById('tx-notes').value = tx.notes || '';
         
-        // Date parsing
         const d = new Date(tx.date);
         document.getElementById('tx-date-input').value = d.toISOString().split('T')[0];
         document.getElementById('tx-time-input').value = d.toTimeString().slice(0, 5);
         
         document.getElementById('modal-title').textContent = "Edit Transaction";
         document.getElementById('add-modal').classList.remove('hidden');
-        
-        // Trigger calculator to re-bind values (optional)
         setupCalculator();
     };
     
-    // New TX Button Reset
-    const btnAdd = document.querySelector('button[onclick*="add-modal"]'); // Find the add button in HTML
+    const btnAdd = document.querySelector('button[onclick*="add-modal"]');
     if (btnAdd) {
-         // Override the inline onclick to clear the form
          btnAdd.onclick = (e) => {
              e.preventDefault();
              document.getElementById('add-tx-form').reset();
@@ -226,7 +208,6 @@ function setupEventListeners() {
     setupPasskeyListeners();
 }
 
-// PASSKEY HELPERS (Same as before)
 async function checkPasskeyStatus() {
     const section = document.getElementById('passkey-settings');
     if (!window.isWebAuthnSupported || !window.isWebAuthnSupported()) {
