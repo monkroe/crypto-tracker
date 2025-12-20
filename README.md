@@ -29,14 +29,19 @@ Profesionalus kriptovaliutų portfelio valdymo įrankis su **Modular JS** archit
 └── ...
 ```
 🛠️ Setup Instrukcijos
+
 ​1. Supabase Konfigūracija
+
 ​Eikite į Supabase SQL Editor ir įsitikinkite, kad sukurtos supported_coins, crypto_transactions ir crypto_goals lentelės (žr. senesnes versijas SQL kodui).
+
 ​2. Projekto Failai
+
 ​Faile js/supabase.js būtinai įrašykite savo projekto duomenis:
 ```const SUPABASE_URL = '[https://jusu-projektas.supabase.co](https://jusu-projektas.supabase.co)';
 const SUPABASE_ANON_KEY = 'jusu-anon-public-key';
 ```
 3. Paleidimas
+
 ​Kadangi naudojami ES6 moduliai (type="module"), projektą būtina leisti per serverį (Localhost arba Vercel/Netlify). Tiesioginis failo atidarymas (file://) neveiks dėl CORS politikos.
 
 ​© 2025 LTV Media PRO
