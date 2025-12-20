@@ -1,14 +1,80 @@
-// js/ui.js - Vartotojo sąsaja
-import { formatMoney, formatPrice, sanitizeText, showToast } from './utils.js';
+// js/ui.js - Vartotojo sąsaja (v3.0.1 Fix)
+import { formatMoney, formatPrice, showToast, debugLog } from './utils.js';
 import { state } from './logic.js';
 
 // Chart instances
-let pnlChart = null;
 let allocationChart = null;
 const CHART_COLORS = { 
     KAS: '#2dd4bf', BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308',
     PEPE: '#22c55e', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
 };
+
+// ===========================================
+// 1. INTERACTIVE UI (Calculator & Theme)
+// ===========================================
+
+export function setupCalculator() {
+    const amountIn = document.getElementById('tx-amount');
+    const priceIn = document.getElementById('tx-price');
+    const totalIn = document.getElementById('tx-total');
+    
+    if (!amountIn || !priceIn || !totalIn) return;
+
+    const val = (el) => parseFloat(el.value);
+    
+    // Debounce funkcija, kad neskaičiuotų per dažnai
+    const debounce = (func, wait) => { 
+        let timeout; 
+        return (...args) => { 
+            clearTimeout(timeout); 
+            timeout = setTimeout(() => func(...args), wait); 
+        }; 
+    };
+
+    // Logika: Jei keičiu A, perskaičiuoju B arba C
+    amountIn.addEventListener('input', debounce(() => { 
+        const a = val(amountIn), p = val(priceIn), t = val(totalIn); 
+        if(t > 0 && a > 0) priceIn.value = (t/a).toFixed(8); 
+        else if(p > 0) totalIn.value = (a*p).toFixed(2); 
+    }, 300));
+
+    priceIn.addEventListener('input', debounce(() => { 
+        const p = val(priceIn), a = val(amountIn), t = val(totalIn); 
+        if(t > 0 && p > 0) amountIn.value = (t/p).toFixed(6); 
+        else if(a > 0) totalIn.value = (a*p).toFixed(2); 
+    }, 300));
+
+    totalIn.addEventListener('input', debounce(() => { 
+        const t = val(totalIn), p = val(priceIn), a = val(amountIn); 
+        if(a > 0 && t > 0) priceIn.value = (t/a).toFixed(8); 
+        else if(p > 0) amountIn.value = (t/p).toFixed(6); 
+    }, 300));
+    
+    debugLog('🧮 Calculator initialized');
+}
+
+export function setupThemeHandlers() {
+    const btnToggle = document.getElementById('btn-toggle-theme');
+    if (btnToggle) {
+        // Pašaliname senus listenerius (jei būtų)
+        const newBtn = btnToggle.cloneNode(true);
+        btnToggle.parentNode.replaceChild(newBtn, btnToggle);
+        
+        newBtn.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.theme = 'light';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.theme = 'dark';
+            }
+        });
+    }
+}
+
+// ===========================================
+// 2. DASHBOARD RENDERING
+// ===========================================
 
 export function updateDashboardUI(totals) {
     document.getElementById('header-total-value').textContent = formatMoney(totals.totalValue);
@@ -28,7 +94,6 @@ export function renderCoinCards() {
     if (!container) return;
     container.innerHTML = '';
     
-    // Rikiuojame pagal vertę
     const sortedHoldings = Object.entries(state.holdings)
         .filter(([_, data]) => data.qty > 0)
         .sort((a, b) => b[1].currentValue - a[1].currentValue);
@@ -162,7 +227,7 @@ export function renderAllocationChart() {
     const chartData = [], labels = [], colors = [];
     
     Object.entries(state.holdings).forEach(([sym, data]) => {
-        if (data.qty > 0 && data.currentValue > 1) { // Rodo tik jei vertė > $1
+        if (data.qty > 0 && data.currentValue > 1) { 
             chartData.push(data.currentValue);
             labels.push(sym);
             colors.push(CHART_COLORS[sym] || CHART_COLORS.default);
@@ -192,10 +257,3 @@ export function renderAllocationChart() {
         }
     });
 }
-
-// Supaprastintas grafikas (Tik istorinis balansas be kainos spekuliacijų praeityje)
-export function renderHistoryChart() {
-    // Čia ateityje galėsime įdėti sudėtingesnį grafiką. 
-    // Kol kas, kad neklaidintume, rodysime tik paprastą liniją.
-}
-
