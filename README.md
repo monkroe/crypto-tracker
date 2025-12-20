@@ -37,7 +37,8 @@ Profesionalus kriptovaliutų portfelio valdymo įrankis su **Modular JS** archit
 ​2. Projekto Failai
 
 ​Faile js/supabase.js būtinai įrašykite savo projekto duomenis:
-```const SUPABASE_URL = '[https://jusu-projektas.supabase.co](https://jusu-projektas.supabase.co)';
+```
+const SUPABASE_URL = '[https://jusu-projektas.supabase.co](https://jusu-projektas.supabase.co)';
 const SUPABASE_ANON_KEY = 'jusu-anon-public-key';
 ```
 3. Paleidimas
