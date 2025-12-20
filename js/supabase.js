@@ -1,15 +1,15 @@
-// js/supabase.js - Versija 2.0.0 (Security + WebAuthn + Bulk Operations)
+// js/supabase.js - Versija 2.0.1 (Security + WebAuthn + Bulk Operations)
 
 // ======================================
 // 1. SUPABASE KONFIGŪRACIJA
 // ======================================
 // PAKEISKITE ŠIUOS DUOMENIS SAVO SUPABASE KREDENCIALAIS:
-const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; // Pvz: https://xyz.supabase.co
-const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW'; // Tik anon key!
+const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log('🔗 Supabase initialized v2.0.0');
+console.log('🔗 Supabase initialized v2.0.1');
 
 // ======================================
 // 2. AUTENTIFIKACIJA
@@ -51,32 +51,20 @@ async function userSignOut() {
 }
 
 // ======================================
-// 3. WEBAUTHN / PASSKEY PALAIKYMAS
+// 3. WEBAUTHN / PASSKEY PALAIKYMAS (LOCAL)
 // ======================================
 
-/**
- * Patikrina ar įrenginys palaiko WebAuthn
- */
 function isWebAuthnSupported() {
     return window.PublicKeyCredential !== undefined && 
            navigator.credentials !== undefined;
 }
 
-/**
- * Patikrina ar vartotojas turi užregistruotą passkey (supaprastinta versija)
- * Tikram gamybiniam naudojimui reikėtų tikrinti serverio pusėje.
- */
+// Tikriname lokaliai (asmeniniam naudojimui)
 async function hasPasskey() {
     if (!isWebAuthnSupported()) return false;
-    
-    // Tikriname vietinį indikatorių, nes naršyklė neleidžia tiesiogiai "paklausti" ar yra raktas
-    // be vartotojo interakcijos.
     return localStorage.getItem('webauthn_enabled') === 'true';
 }
 
-/**
- * Registruoja naują passkey
- */
 async function registerPasskey() {
     if (!isWebAuthnSupported()) {
         alert('❌ Jūsų įrenginys nepalaiko Passkey/Face ID.');
@@ -87,11 +75,9 @@ async function registerPasskey() {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
         
-        // Generuojame atsitiktinį challenge
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
 
-        // 1. Sukuriame WebAuthn credential
         const credential = await navigator.credentials.create({
             publicKey: {
                 challenge: challenge,
@@ -109,7 +95,7 @@ async function registerPasskey() {
                     { alg: -257, type: 'public-key' } // RS256
                 ],
                 authenticatorSelection: {
-                    authenticatorAttachment: 'platform', // Face ID / Touch ID
+                    authenticatorAttachment: 'platform', 
                     userVerification: 'required',
                     requireResidentKey: false
                 },
@@ -120,8 +106,7 @@ async function registerPasskey() {
         
         if (!credential) throw new Error('Credential creation failed');
         
-        // 2. Išsaugome ID lokaliai
-        // Pastaba: Tikram saugumui credential ID ir public key reiktų siųsti į serverį
+        // Išsaugome lokaliai (Local Device Lock)
         localStorage.setItem('webauthn_credential_id', arrayBufferToBase64(credential.rawId));
         localStorage.setItem('webauthn_enabled', 'true');
         
@@ -137,9 +122,6 @@ async function registerPasskey() {
     }
 }
 
-/**
- * Prisijungimas su passkey
- */
 async function loginWithPasskey() {
     if (!isWebAuthnSupported()) {
         return { data: null, error: new Error('WebAuthn not supported') };
@@ -152,11 +134,9 @@ async function loginWithPasskey() {
             throw new Error('No passkey registered');
         }
         
-        // Generuojame atsitiktinį challenge
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
 
-        // 1. Gaunamas credential iš įrenginio
         const credential = await navigator.credentials.get({
             publicKey: {
                 challenge: challenge,
@@ -174,18 +154,11 @@ async function loginWithPasskey() {
         
         console.log('✅ Biometric check passed');
         
-        // Čia simuliuojame prisijungimą.
-        // SVARBU: Kadangi Supabase JS klientas dar neturi pilno client-side Passkey login palaikymo be serverio,
-        // mes naudojame tai kaip "2-ąjį faktorių" arba patogumo priemonę.
-        // Jei sesija galioja - tiesiog leidžiame. Jei ne - vartotojas turės įvesti slaptažodį.
-        
+        // Patikriname sesiją
         const { data: { session } } = await _supabase.auth.getSession();
         if (session) {
             return { data: { session }, error: null };
         } else {
-            // Jei sesijos nėra, WebAuthn vienas pats (be serverio) negali išduoti naujo tokeno.
-            // Reikėtų naudoti Supabase MFA API, bet tai sudėtingiau.
-            // Šiuo atveju grąžiname klaidą, kad reikia prisijungti su slaptažodžiu.
             alert("Saugumo sumetimais, prašome vieną kartą prisijungti su slaptažodžiu, kad atnaujintumėte sesiją.");
             return { data: null, error: new Error('Session expired') };
         }
@@ -196,10 +169,7 @@ async function loginWithPasskey() {
     }
 }
 
-/**
- * Išregistruoja passkey
- */
-async function removePasskey(factorId) {
+async function removePasskey() {
     try {
         localStorage.removeItem('webauthn_credential_id');
         localStorage.removeItem('webauthn_enabled');
@@ -246,19 +216,15 @@ async function saveTransaction(txData) {
         return true;
     } catch (e) {
         console.error('Save transaction error:', e);
-        throw e; // Leisti app.js pagauti klaidą
+        throw e;
     }
 }
 
-/**
- * Masinis transakcijų išsaugojimas (CSV importui)
- */
 async function saveMultipleTransactions(txArray) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return false;
         
-        // Pridedame user_id prie kiekvieno įrašo
         const dataWithUser = txArray.map(tx => ({ 
             ...tx, 
             user_id: user.id 
@@ -314,9 +280,6 @@ async function deleteTransaction(id) {
     }
 }
 
-/**
- * Masinis transakcijų trynimas (NAUJA - Optimizuota)
- */
 async function deleteMultipleTransactions(ids) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
@@ -369,7 +332,6 @@ async function saveNewCoin(coinData) {
         if (error) throw error;
         return true;
     } catch (e) {
-        // Ignoruojame unikalumo klaidą (jei moneta jau yra)
         if (e.code !== '23505') { 
             throw e;
         }
@@ -422,7 +384,6 @@ async function saveOrUpdateGoal(symbol, target) {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return false;
         
-        // Upsert funkcija (įterpia arba atnaujina)
         const { error } = await _supabase
             .from('crypto_goals')
             .upsert({ 
@@ -442,7 +403,7 @@ async function saveOrUpdateGoal(symbol, target) {
 }
 
 // ======================================
-// 7. HELPER FUNKCIJOS (WebAuthn)
+// 7. HELPER FUNKCIJOS
 // ======================================
 function base64ToUint8Array(base64) {
     const binary = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
@@ -466,4 +427,4 @@ function arrayBufferToBase64(buffer) {
     return btoa(binary);
 }
 
-console.log('✅ Supabase.js loaded successfully v2.0.0');
+console.log('✅ Supabase.js loaded successfully v2.0.1');
