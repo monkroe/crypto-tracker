@@ -61,27 +61,84 @@ window.onDeleteTx = async (id) => {
 };
 
 window.onEditTx = (id) => {
-    const tx = state.transactions.find(t => t.id === id);
-    if (!tx) return;
-    
-    // Užpildom formą
-    document.getElementById('tx-id').value = tx.id;
-    document.getElementById('tx-type').value = tx.type;
-    document.getElementById('tx-coin').value = tx.coin_symbol;
-    document.getElementById('tx-amount').value = tx.amount;
-    document.getElementById('tx-price').value = tx.price_per_coin;
-    document.getElementById('tx-total').value = tx.total_cost_usd;
-    document.getElementById('tx-exchange').value = tx.exchange || '';
-    document.getElementById('tx-method').value = tx.method || 'Market Buy';
-    document.getElementById('tx-notes').value = tx.notes || '';
-    
-    // Data
-    const d = new Date(tx.date);
-    document.getElementById('tx-date-input').value = d.toISOString().split('T')[0];
-    document.getElementById('tx-time-input').value = d.toTimeString().slice(0, 5);
-    
-    document.getElementById('modal-title').textContent = "Edit Transaction";
-    document.getElementById('add-modal').classList.remove('hidden');
+    try {
+        console.log('Editing transaction:', id);
+        
+        const tx = state.transactions.find(t => t.id === id || t.id === String(id));
+        if (!tx) {
+            console.error('Transaction not found:', id);
+            showToast('Transaction not found', 'error');
+            return;
+        }
+        
+        console.log('Found transaction:', tx);
+        
+        // Fill form fields with null checks
+        const setVal = (elId, value) => {
+            const el = document.getElementById(elId);
+            if (el) el.value = value ?? '';
+            else console.warn('Element not found:', elId);
+        };
+        
+        setVal('tx-id', tx.id);
+        setVal('tx-type', tx.type || 'Buy');
+        setVal('tx-amount', tx.amount);
+        setVal('tx-price', tx.price_per_coin);
+        setVal('tx-total', tx.total_cost_usd);
+        setVal('tx-exchange', tx.exchange || '');
+        setVal('tx-method', tx.method || 'Market Buy');
+        setVal('tx-notes', tx.notes || '');
+        
+        // Handle coin select - need to ensure option exists
+        const coinSelect = document.getElementById('tx-coin');
+        if (coinSelect) {
+            // Check if option exists, if not add it temporarily
+            const optionExists = Array.from(coinSelect.options).some(opt => opt.value === tx.coin_symbol);
+            if (!optionExists && tx.coin_symbol) {
+                const opt = document.createElement('option');
+                opt.value = tx.coin_symbol;
+                opt.textContent = tx.coin_symbol;
+                coinSelect.appendChild(opt);
+            }
+            coinSelect.value = tx.coin_symbol;
+        }
+        
+        // Handle date/time
+        try {
+            const d = new Date(tx.date);
+            if (!isNaN(d.getTime())) {
+                setVal('tx-date-input', d.toISOString().split('T')[0]);
+                setVal('tx-time-input', d.toTimeString().slice(0, 5));
+            } else {
+                // Fallback to today
+                const now = new Date();
+                setVal('tx-date-input', now.toISOString().split('T')[0]);
+                setVal('tx-time-input', now.toTimeString().slice(0, 5));
+            }
+        } catch (dateErr) {
+            console.warn('Date parsing error:', dateErr);
+            const now = new Date();
+            setVal('tx-date-input', now.toISOString().split('T')[0]);
+            setVal('tx-time-input', now.toTimeString().slice(0, 5));
+        }
+        
+        // Update modal title and show
+        const modalTitle = document.getElementById('modal-title');
+        if (modalTitle) modalTitle.textContent = "Edit Transaction";
+        
+        const modal = document.getElementById('add-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            console.log('Edit modal opened');
+        } else {
+            console.error('Modal element not found');
+            showToast('Could not open edit form', 'error');
+        }
+        
+    } catch (e) {
+        console.error('Edit transaction error:', e);
+        showToast('Error opening edit form: ' + e.message, 'error');
+    }
 };
 
 function setupEventListeners() {
@@ -110,11 +167,21 @@ function setupEventListeners() {
         };
 
         let success = false;
-        if (id) {
-            await window.deleteTransaction(id); 
-            success = await window.saveTransaction(txData);
-        } else {
-            success = await window.saveTransaction(txData);
+        console.log('Saving transaction, edit mode:', !!id, 'txData:', txData);
+        
+        try {
+            if (id) {
+                console.log('Updating transaction:', id);
+                const deleteResult = await window.deleteTransaction(id);
+                console.log('Delete old result:', deleteResult);
+                success = await window.saveTransaction(txData);
+                console.log('Save new result:', success);
+            } else {
+                success = await window.saveTransaction(txData);
+            }
+        } catch (saveErr) {
+            console.error('Save error:', saveErr);
+            showToast('Error saving transaction', 'error');
         }
 
         if (success) {
