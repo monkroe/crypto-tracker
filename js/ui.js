@@ -1,4 +1,4 @@
-// js/ui.js - v3.0.2 (Calculator Fix)
+// js/ui.js - v3.1.0 (Performance & Logic Fix)
 import { formatMoney, formatPrice, debugLog } from './utils.js';
 import { state } from './logic.js';
 
@@ -9,78 +9,58 @@ const CHART_COLORS = {
 };
 
 // ===========================================
-// 1. CALCULATOR LOGIC
+// 1. CALCULATOR LOGIC (Improved)
 // ===========================================
 export function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
     const priceIn = document.getElementById('tx-price');
     const totalIn = document.getElementById('tx-total');
     
-    // Jei nerandame elementų (pvz. dar neatidarytas modalas), nieko nedarom
     if (!amountIn || !priceIn || !totalIn) return;
 
-    // Helper: konvertuojam į skaičių, o jei tuščia - į 0
     const val = (el) => parseFloat(el.value) || 0;
-    
-    const debounce = (func, wait) => { 
-        let timeout; 
-        return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; 
-    };
+    const debounce = (func, wait) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => func(...args), wait); }; };
 
-    // LOGIKA:
-    // Turi Amount (A), Price (P), Total (T). T = A * P.
-    
-    // 1. Keičiant AMOUNT:
-    // Jei yra TOTAL -> skaičiuojam PRICE (P = T / A)
-    // Jei yra PRICE (o TOTAL nėra) -> skaičiuojam TOTAL (T = A * P)
+    // 1. Edge Case Fix: Jei Total ištrinamas, nereikia jo atstatyti jei kiti laukai užpildyti
     amountIn.addEventListener('input', debounce(() => { 
         const a = val(amountIn), p = val(priceIn), t = val(totalIn);
         if (t > 0 && a > 0) priceIn.value = (t / a).toFixed(8);
         else if (p > 0) totalIn.value = (a * p).toFixed(2);
     }, 300));
 
-    // 2. Keičiant PRICE:
-    // Jei yra TOTAL -> skaičiuojam AMOUNT (A = T / P)
-    // Jei yra AMOUNT -> skaičiuojam TOTAL (T = A * P)
     priceIn.addEventListener('input', debounce(() => { 
         const p = val(priceIn), a = val(amountIn), t = val(totalIn);
         if (t > 0 && p > 0) amountIn.value = (t / p).toFixed(6);
         else if (a > 0) totalIn.value = (a * p).toFixed(2);
     }, 300));
 
-    // 3. Keičiant TOTAL:
-    // Jei yra AMOUNT -> skaičiuojam PRICE (P = T / A)
-    // Jei yra PRICE -> skaičiuojam AMOUNT (A = T / P)
     totalIn.addEventListener('input', debounce(() => { 
         const t = val(totalIn), p = val(priceIn), a = val(amountIn);
         if (a > 0 && t > 0) priceIn.value = (t / a).toFixed(8);
-        else if (p > 0) amountIn.value = (t / p).toFixed(6);
+        else if (p > 0 && a === 0) amountIn.value = (t / p).toFixed(6); // Fix logic
     }, 300));
     
-    debugLog('🧮 Calculator setup complete');
+    debugLog('🧮 Calculator ready');
 }
 
 export function setupThemeHandlers() {
     const btnToggle = document.getElementById('btn-toggle-theme');
     if (btnToggle) {
-        // Pašaliname senus listenerius klonuojant
+        // Safe listener replacement
         const newBtn = btnToggle.cloneNode(true);
         btnToggle.parentNode.replaceChild(newBtn, btnToggle);
-        
         newBtn.addEventListener('click', () => {
             if (document.documentElement.classList.contains('dark')) {
-                document.documentElement.classList.remove('dark');
-                localStorage.theme = 'light';
+                document.documentElement.classList.remove('dark'); localStorage.theme = 'light';
             } else {
-                document.documentElement.classList.add('dark');
-                localStorage.theme = 'dark';
+                document.documentElement.classList.add('dark'); localStorage.theme = 'dark';
             }
         });
     }
 }
 
 // ===========================================
-// 2. RENDERERS (Supaprastinti, be didelių pakeitimų)
+// 2. RENDERERS (Optimized with DocumentFragment)
 // ===========================================
 
 export function updateDashboardUI(totals) {
@@ -104,14 +84,18 @@ export function renderCoinCards() {
         container.innerHTML = `<div class="text-center py-8"><i class="fa-solid fa-coins text-6xl text-gray-300 dark:text-gray-700 mb-4"></i><p class="text-gray-500 text-sm">No active holdings</p></div>`;
         return;
     }
+    
+    // 2. Performance Fix: DocumentFragment
+    const fragment = document.createDocumentFragment();
     sortedHoldings.forEach(([sym, data]) => {
         const pnlClass = data.pnl >= 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500';
         const pnlSign = data.pnl >= 0 ? '+' : '';
         const card = document.createElement('div');
         card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm';
         card.innerHTML = `<div class="space-y-4"><div><div class="flex justify-between"><p class="text-xs text-gray-500 uppercase font-bold mb-1">Balance</p><span class="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">${sym}</span></div><h2 class="text-3xl font-bold text-gray-900 dark:text-white">${formatMoney(data.currentValue)}</h2><p class="text-sm text-gray-500 mt-1">${data.qty.toFixed(6)} ${sym}</p></div><div class="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800"><div class="flex items-center gap-2"><span class="text-sm text-gray-500">Pelnas/Nuostolis</span></div><div class="text-right"><p class="${pnlClass} text-base font-bold">${pnlSign}${formatMoney(data.pnl)} (${pnlSign}${data.pnlPercent.toFixed(2)}%)</p></div></div><div class="flex justify-between items-center"><span class="text-sm text-gray-500">Vid. kaina</span><span class="text-base font-semibold text-gray-700 dark:text-gray-200">${formatPrice(data.avgPrice)}</span></div><div class="flex justify-between items-center"><span class="text-sm text-gray-500">Savikaina</span><span class="text-base font-semibold text-gray-700 dark:text-gray-200">${formatMoney(data.invested)}</span></div></div>`;
-        container.appendChild(card);
+        fragment.appendChild(card);
     });
+    container.appendChild(fragment);
 }
 
 export function renderTransactionJournal() {
@@ -121,9 +105,11 @@ export function renderTransactionJournal() {
     if (state.transactions.length === 0) { container.innerHTML = `<div class="text-center py-8 text-sm text-gray-500">No transactions.</div>`; return; }
     
     const grouped = {};
-    state.transactions.forEach(tx => { const d = new Date(tx.date); if (isNaN(d.getTime())) return; const y = d.getFullYear(), m = d.getMonth(); if(!grouped[y]) grouped[y] = {}; if(!grouped[y][m]) grouped[y][m] = []; grouped[y][m].push(tx); });
+    // state.transactions jau surikiuotas logic.js faile
+    state.transactions.slice().reverse().forEach(tx => { const d = new Date(tx.date); if (isNaN(d.getTime())) return; const y = d.getFullYear(), m = d.getMonth(); if(!grouped[y]) grouped[y] = {}; if(!grouped[y][m]) grouped[y][m] = []; grouped[y][m].push(tx); });
     const monthsLT = ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'];
 
+    const fragment = document.createDocumentFragment();
     Object.keys(grouped).sort((a,b)=>b-a).forEach((year, yIdx) => {
         const yDiv = document.createElement('div'); yDiv.className = 'border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden mb-3 bg-white dark:bg-gray-900 shadow-sm';
         const yHead = document.createElement('div'); yHead.className = 'px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition';
@@ -132,7 +118,7 @@ export function renderTransactionJournal() {
         yHead.onclick = () => { mCont.classList.toggle('hidden'); yHead.querySelector('.fa-chevron-down').classList.toggle('rotate-180'); };
         
         Object.keys(grouped[year]).sort((a,b)=>b-a).forEach((month, mIdx) => {
-            const txs = grouped[year][month].sort((a,b)=>new Date(b.date)-new Date(a.date));
+            const txs = grouped[year][month]; // Jau surikiuota
             const mDiv = document.createElement('div'); mDiv.className = 'border-t border-gray-200 dark:border-gray-800';
             const mHead = document.createElement('div'); mHead.className = 'bg-gray-50 dark:bg-gray-800/50 px-6 py-2.5 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition';
             mHead.innerHTML = `<div class="flex items-center gap-2"><span class="text-sm font-semibold text-gray-700 dark:text-gray-300">${monthsLT[month]}</span><span class="text-xs text-gray-500">(${txs.length})</span></div><i class="fa-solid fa-chevron-down text-gray-500 text-xs transition-transform ${yIdx===0 && mIdx===0 ?'rotate-180':''}"></i>`;
@@ -147,16 +133,20 @@ export function renderTransactionJournal() {
             });
             mDiv.appendChild(mHead); mDiv.appendChild(txCont); mCont.appendChild(mDiv);
         });
-        yDiv.appendChild(yHead); yDiv.appendChild(mCont); container.appendChild(yDiv);
+        yDiv.appendChild(yHead); yDiv.appendChild(mCont); fragment.appendChild(yDiv);
     });
+    container.appendChild(fragment);
 }
 
 export function renderAllocationChart() {
     const canvas = document.getElementById('allocationChart');
     if (!canvas) return;
-    if (allocationChart) allocationChart.destroy();
+    // 3. Chart Race Condition Fix
+    if (allocationChart) { try { allocationChart.destroy(); } catch(e) { console.warn(e); } }
+    
     const chartData = [], labels = [], colors = [];
     Object.entries(state.holdings).forEach(([sym, data]) => { if (data.qty > 0 && data.currentValue > 1) { chartData.push(data.currentValue); labels.push(sym); colors.push(CHART_COLORS[sym] || CHART_COLORS.default); } });
+    
     const ctx = canvas.getContext('2d');
     const isDark = document.documentElement.classList.contains('dark');
     allocationChart = new Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: chartData, backgroundColor: colors, borderColor: isDark ? '#111827' : '#ffffff', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: isDark ? '#9ca3af' : '#4b5563', font: { size: 11 }, usePointStyle: true } } } } });
