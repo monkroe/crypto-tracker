@@ -64,7 +64,7 @@ window.onEditTx = (id) => {
     try {
         console.log('Editing transaction:', id);
         
-        const tx = state.transactions.find(t => t.id === id || t.id === String(id));
+        const tx = state.transactions.find(t => String(t.id) === String(id));
         if (!tx) {
             console.error('Transaction not found:', id);
             showToast('Transaction not found', 'error');
@@ -408,7 +408,72 @@ function setupEventListeners() {
              document.getElementById('add-modal').classList.remove('hidden');
          }
     }
+    
+    // Select All checkbox
+    const selectAllCheckbox = document.getElementById('select-all-tx');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.onchange = () => {
+            const isChecked = selectAllCheckbox.checked;
+            document.querySelectorAll('.tx-checkbox').forEach(cb => {
+                cb.checked = isChecked;
+            });
+            updateDeleteSelectedButton();
+        };
+    }
+
+    // Delete Selected button
+    const deleteSelectedBtn = document.getElementById('btn-delete-selected');
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.onclick = async () => {
+            const selectedIds = Array.from(document.querySelectorAll('.tx-checkbox:checked'))
+                .map(cb => cb.dataset.txId);
+            
+            if (selectedIds.length === 0) {
+                showToast('No transactions selected', 'error');
+                return;
+            }
+            
+            if (!confirm(`Delete ${selectedIds.length} transaction(s)?`)) return;
+            
+            deleteSelectedBtn.disabled = true;
+            deleteSelectedBtn.setAttribute('aria-label', 'Deleting selected transactions');
+            deleteSelectedBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+            
+            // Use Promise.all for concurrent deletions
+            const results = await Promise.all(selectedIds.map(id => window.deleteTransaction(id)));
+            const deleted = results.filter(Boolean).length;
+            
+            showToast(`Deleted ${deleted} transaction(s)`, 'success');
+            document.getElementById('select-all-tx').checked = false;
+            await initData();
+            
+            deleteSelectedBtn.disabled = false;
+            deleteSelectedBtn.removeAttribute('aria-label');
+            deleteSelectedBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete (<span id="selected-count">0</span>)';
+        };
+    }
 }
+
+// Helper function to update delete button visibility
+function updateDeleteSelectedButton() {
+    const selectedCount = document.querySelectorAll('.tx-checkbox:checked').length;
+    const deleteBtn = document.getElementById('btn-delete-selected');
+    const countSpan = document.getElementById('selected-count');
+    
+    if (deleteBtn) {
+        if (selectedCount > 0) {
+            deleteBtn.classList.remove('hidden');
+            deleteBtn.classList.add('flex');
+        } else {
+            deleteBtn.classList.add('hidden');
+            deleteBtn.classList.remove('flex');
+        }
+    }
+    if (countSpan) countSpan.textContent = selectedCount;
+}
+
+// Make updateDeleteSelectedButton available globally for checkbox changes
+window.updateDeleteSelectedButton = updateDeleteSelectedButton;
 
 // Calculator Logic moved here or imported? Kept simple inside setupCalculator
 function setupCalculator() {
