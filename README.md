@@ -1,14 +1,14 @@
-# 🚀 Crypto Tracker v2.0.2
+# 🚀 Crypto Tracker v2.0.3
 
-Profesionalus kriptovaliutų portfelio valdymo įrankis su biometrine autentifikacija (Passkey/WebAuthn), automatine tema, optimizuotu veikimu ir aukščiausio lygio saugumu.
+Profesionalus kriptovaliutų portfelio valdymo įrankis su interaktyviais grafikais, biometrine autentifikacija ir automatine tema.
 
 ## ✨ Pagrindinės Funkcijos
 
-- **Portfelio sekimas:** Realaus laiko kainos, PnL skaičiavimas, turto paskirstymo grafikai.
-- **Saugumas:** Pilna XSS apsauga (`sanitizeText`), griežta įvesties validacija, RLS (Row Level Security).
+- **Advanced Charting:** Interaktyvus PnL grafikas su laiko filtrais (1W, 1M, 3M, 6M, 1Y, 5Y, ALL) ir vizualiniais patobulinimais.
+- **Portfelio sekimas:** Realaus laiko kainos, PnL skaičiavimas, turto paskirstymas.
+- **Saugumas:** Pilna XSS apsauga, RLS duomenų bazės politika, saugus CSV nuskaitymas.
 - **Biometrinis prisijungimas:** Face ID / Touch ID / Windows Hello palaikymas (Local Device Lock).
-- **Masinis valdymas:** Greitas didelio kiekio transakcijų trynimas ir išmanus CSV importas.
-- **UI/UX:** Automatinė šviesi/tamsi tema, "Toast" pranešimai be dublikatų, prieinamumo (A11y) patobulinimai.
+- **UI/UX:** Automatinė šviesi/tamsi tema, "Toast" pranešimai, pritaikytas dizainas mobiliesiems.
 
 ## 🛠️ Setup Instrukcijos
 
