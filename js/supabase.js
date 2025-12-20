@@ -1,8 +1,8 @@
 // js/supabase.js - v3.0.2 (Fix: Global Exports)
 
 // ⚠️ ĮKLIJUOKITE SAVO DUOMENIS ČIA:
-const SUPABASE_URL = 'JŪSŲ_SUPABASE_URL_ČIA'; 
-const SUPABASE_ANON_KEY = 'JŪSŲ_SUPABASE_ANON_KEY_ČIA';
+const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
 if (SUPABASE_URL.includes('JŪSŲ') || SUPABASE_ANON_KEY.includes('JŪSŲ')) {
     console.error('❌ TRŪKSTA SUPABASE RAKTŲ! Įrašykite juos js/supabase.js faile.');
