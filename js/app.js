@@ -1,6 +1,13 @@
-// js/app.js - Versija 2.0.1 (UI Polish + Performance + Auto Theme)
+// js/app.js - Versija 2.0.2 (Production Ready + All Fixes)
 
-const APP_VERSION = '2.0.1';
+const APP_VERSION = '2.0.2';
+
+// Debug Mode (Enable in console: localStorage.setItem('debug', 'true'))
+const DEBUG_MODE = localStorage.getItem('debug') === 'true';
+
+function debugLog(...args) {
+    if (DEBUG_MODE) console.log(...args);
+}
 
 // Global State
 let coinsList = [];
@@ -31,7 +38,7 @@ const CACHE_DURATION = 60000; // 1 minute
 // INITIALIZATION
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log(`✅ App started v${APP_VERSION}`);
+    debugLog(`✅ App started v${APP_VERSION}`);
     const versionEl = document.getElementById('app-version');
     if (versionEl) versionEl.textContent = APP_VERSION;
     
@@ -163,7 +170,7 @@ function setupAuthHandlers() {
                     const { data, error } = await loginWithPasskey();
                     if (error) throw error;
                 } catch (e) {
-                    console.error('Passkey login error:', e);
+                    debugLog('Passkey login error:', e);
                     errText.textContent = "Passkey prisijungimas nepavyko.";
                     errText.classList.remove('hidden');
                 } finally {
@@ -266,7 +273,6 @@ async function openSettingsModal() {
             btnSetup.classList.add('hidden');
             btnRemove.classList.remove('hidden');
             
-            // Remove old listeners
             const newBtnRemove = btnRemove.cloneNode(true);
             btnRemove.parentNode.replaceChild(newBtnRemove, btnRemove);
             
@@ -275,7 +281,7 @@ async function openSettingsModal() {
                     const success = await removePasskey();
                     if (success) {
                         showToast('Passkey pašalintas.', 'success');
-                        openSettingsModal(); // Refresh
+                        openSettingsModal();
                     }
                 }
             });
@@ -284,7 +290,6 @@ async function openSettingsModal() {
             btnSetup.classList.remove('hidden');
             btnRemove.classList.add('hidden');
             
-            // Remove old listeners
             const newBtnSetup = btnSetup.cloneNode(true);
             btnSetup.parentNode.replaceChild(newBtnSetup, btnSetup);
             
@@ -292,7 +297,7 @@ async function openSettingsModal() {
                 const success = await registerPasskey();
                 if (success) {
                     showToast('Passkey sėkmingai įjungtas!', 'success');
-                    openSettingsModal(); // Refresh
+                    openSettingsModal();
                 }
             });
         }
@@ -300,23 +305,25 @@ async function openSettingsModal() {
 }
 
 // ============================================
-// TOAST NOTIFICATIONS
+// TOAST NOTIFICATIONS (FIXED)
 // ============================================
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
     
+    // Strip emojis from message to prevent duplicates
+    const cleanMsg = message.replace(/[✅❌ℹ️⚠️🎉🚀💰📊🔒⚡]/g, '').trim();
+    
     const toast = document.createElement('div');
     toast.className = `toast bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 shadow-2xl min-w-[250px]`;
     
     const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-    const textColor = type === 'success' ? 'text-green-600 dark:text-green-400' : type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400';
     const msgColor = 'text-gray-800 dark:text-gray-200';
 
     toast.innerHTML = `
         <div class="flex items-center gap-2">
             <span class="text-lg">${icon}</span>
-            <span class="${msgColor} text-sm font-medium">${message}</span>
+            <span class="${msgColor} text-sm font-medium">${cleanMsg}</span>
         </div>
     `;
     
@@ -365,12 +372,18 @@ function clearData() {
 }
 
 async function loadAllData() {
-    console.log('📊 Loading all data...');
+    debugLog('📊 Loading all data...');
     
-    // Show spinner only on initial load if empty
     const container = document.getElementById('journal-accordion');
     if (container && transactions.length === 0) {
-        container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</div>';
+        // Loading skeleton
+        container.innerHTML = `
+            <div class="animate-pulse space-y-3">
+                <div class="h-20 bg-gray-200 dark:bg-gray-800 rounded-xl"></div>
+                <div class="h-20 bg-gray-200 dark:bg-gray-800 rounded-xl"></div>
+                <div class="h-20 bg-gray-200 dark:bg-gray-800 rounded-xl"></div>
+            </div>
+        `;
     }
     
     try {
@@ -384,7 +397,7 @@ async function loadAllData() {
         transactions = Array.isArray(txData) ? txData : [];
         goals = Array.isArray(goalsData) ? goalsData : [];
         
-        console.log(`✅ Loaded: ${coinsList.length} coins, ${transactions.length} transactions`);
+        debugLog(`Loaded: ${coinsList.length} coins, ${transactions.length} transactions`);
         
         if (coinsList.length > 0) {
             await fetchCurrentPrices();
@@ -398,7 +411,6 @@ async function loadAllData() {
         renderAllocationChart(holdings);
         renderCoinCards(holdings);
         
-        // Reset selection UI
         updateSelectionUI();
         
     } catch (e) {
@@ -417,7 +429,7 @@ async function fetchCurrentPrices() {
     
     const now = Date.now();
     if (now - lastFetchTime < CACHE_DURATION && Object.keys(priceCache).length > 0) {
-        console.log('💰 Using cached prices');
+        debugLog('💰 Using cached prices');
         prices = { ...priceCache };
         return;
     }
@@ -431,7 +443,7 @@ async function fetchCurrentPrices() {
             prices = { ...prices, ...newPrices };
             priceCache = { ...prices };
             lastFetchTime = now;
-            console.log('💰 Prices updated');
+            debugLog('💰 Prices updated');
         }
     } catch (e) {
         console.warn("⚠️ Price fetch error:", e);
@@ -463,7 +475,7 @@ async function fetchPriceForForm() {
             const priceInput = document.getElementById('tx-price');
             priceInput.value = price;
             priceInput.dispatchEvent(new Event('input'));
-            console.log(`✅ Price: ${symbol} = $${price}`);
+            debugLog(`Price: ${symbol} = $${price}`);
             showToast(`Price updated: ${formatPrice(price)}`, 'success');
         } else {
             throw new Error('Price not found');
@@ -547,7 +559,6 @@ function setupCalculator() {
 function formatMoney(value) {
     const num = Number(value);
     if (isNaN(num)) return '$0.00';
-    // en-US uses comma for thousands, dot for decimals
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -562,8 +573,8 @@ function formatPrice(value) {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
-        minimumFractionDigits: 2, // At least 2 decimals for prices like 87,000.00
-        maximumFractionDigits: 8  // Up to 8 for small coins
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
     }).format(num);
 }
 
@@ -571,6 +582,21 @@ function sanitizeText(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function parseCSVNumber(val) {
+    if (typeof val !== 'string') return parseFloat(val);
+    val = val.trim();
+    const lastComma = val.lastIndexOf(',');
+    const lastDot = val.lastIndexOf('.');
+    
+    if (lastComma > lastDot) {
+        // EU format
+        return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    } else {
+        // US format
+        return parseFloat(val.replace(/,/g, ''));
+    }
 }
 
 const padTo2Digits = (num) => String(num).padStart(2, '0');
@@ -640,7 +666,6 @@ function updateDashboard() {
     const pnlPercentEl = document.getElementById('total-pnl-percent');
     pnlPercentEl.textContent = (pnl >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%';
     
-    // Adjust colors for Light/Dark mode compatibility
     if (pnl >= 0) {
         pnlPercentEl.classList.remove('bg-red-100', 'text-red-600', 'dark:bg-red-900', 'dark:text-red-300');
         pnlPercentEl.classList.add('bg-green-100', 'text-green-600', 'dark:bg-green-900', 'dark:text-green-300');
@@ -683,7 +708,6 @@ async function deleteSelectedTransactions() {
     
     const ids = Array.from(checkboxes).map(cb => cb.value);
     
-    // Use bulk delete if available
     const success = await deleteMultipleTransactions(ids);
     
     if (success) {
@@ -700,7 +724,7 @@ async function deleteSelectedTransactions() {
 }
 
 // ============================================
-// CHARTS
+// CHARTS (with Dark Mode support)
 // ============================================
 function renderAllocationChart(holdings) {
     const canvas = document.getElementById('allocationChart');
@@ -773,11 +797,10 @@ async function generateHistoryChart() {
         return;
     }
     
-    // 1. Group transactions by date (O(N))
     const dailyChanges = {};
     const dates = transactions.map(t => new Date(t.date).getTime());
     const minDate = new Date(Math.min(...dates));
-    const maxDate = new Date(); // Today
+    const maxDate = new Date();
     
     transactions.forEach(tx => {
         const dateStr = new Date(tx.date).toISOString().split('T')[0];
@@ -787,14 +810,12 @@ async function generateHistoryChart() {
     
     const labels = [];
     const data = [];
-    const balances = {}; // Running balances
+    const balances = {};
     
-    // 2. Iterate days once (O(D))
     for (let d = new Date(minDate); d <= maxDate; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         labels.push(dateStr);
         
-        // Apply daily changes
         if (dailyChanges[dateStr]) {
             dailyChanges[dateStr].forEach(tx => {
                 const amount = Number(tx.amount);
@@ -806,7 +827,6 @@ async function generateHistoryChart() {
             });
         }
         
-        // Calculate daily value using CURRENT prices (Approximation)
         let dailyValue = 0;
         for (const [sym, qty] of Object.entries(balances)) {
             if (qty > 0) {
@@ -835,7 +855,7 @@ function renderChart(labels, data) {
     
     let borderColor = '#2dd4bf';
     if (data.length > 1 && data[data.length - 1] < data[0]) {
-        borderColor = '#f87171'; // Red if down
+        borderColor = '#f87171';
     }
     
     myChart = new Chart(ctx, {
@@ -886,7 +906,15 @@ function renderCoinCards(holdings) {
     const activeHoldings = Object.entries(holdings).filter(([_, data]) => data.qty > 0);
     
     if (activeHoldings.length === 0) {
-        container.innerHTML = '<p class="text-center text-gray-500 text-sm py-4">No active holdings</p>';
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fa-solid fa-coins text-6xl text-gray-300 dark:text-gray-700 mb-4"></i>
+                <p class="text-gray-500 text-sm mb-2">No active holdings yet</p>
+                <button onclick="openModal('add-modal')" class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-sm font-medium">
+                    Add your first transaction →
+                </button>
+            </div>
+        `;
         return;
     }
     
@@ -947,7 +975,7 @@ function renderCoinCards(holdings) {
 }
 
 // ============================================
-// TRANSACTION HISTORY (Auto Theme)
+// TRANSACTION HISTORY (Safe DOM manipulation)
 // ============================================
 function renderAccordionJournal() {
     const container = document.getElementById('journal-accordion');
@@ -956,7 +984,12 @@ function renderAccordionJournal() {
     container.innerHTML = '';
     
     if (transactions.length === 0) {
-        container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-gray-600">No transactions yet.</div>';
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fa-solid fa-receipt text-6xl text-gray-300 dark:text-gray-700 mb-4"></i>
+                <p class="text-gray-500 text-sm">No transactions yet</p>
+            </div>
+        `;
         return;
     }
     
@@ -1047,7 +1080,6 @@ function renderAccordionJournal() {
                 const isBuy = ['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy'].includes(tx.type);
                 const isSell = ['Sell', 'Withdraw'].includes(tx.type);
                 
-                // Create elements safely
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'tx-checkbox form-checkbox h-4 w-4 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-pointer transition';
@@ -1093,7 +1125,6 @@ function renderAccordionJournal() {
                 
                 leftCol.appendChild(dateDiv);
                 
-                // PnL calculation
                 const currentPrice = prices[coinsList.find(c => c.symbol === tx.coin_symbol)?.coingecko_id]?.usd;
                 if (currentPrice && tx.price_per_coin > 0 && isBuy) {
                     const pnlValue = (currentPrice - tx.price_per_coin) * tx.amount;
@@ -1142,11 +1173,13 @@ function renderAccordionJournal() {
                 const editBtn = document.createElement('button');
                 editBtn.className = 'text-gray-400 hover:text-yellow-500 transition-colors text-xs p-1';
                 editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                editBtn.setAttribute('aria-label', 'Edit transaction');
                 editBtn.onclick = () => onEditTx(tx.id);
                 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'text-gray-400 hover:text-red-500 transition-colors text-xs p-1';
                 deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                deleteBtn.setAttribute('aria-label', 'Delete transaction');
                 deleteBtn.onclick = () => onDeleteTx(tx.id);
                 
                 actionsCol.appendChild(editBtn);
@@ -1172,7 +1205,6 @@ function renderAccordionJournal() {
                 txContainer.appendChild(txDiv);
             });
             
-            // Month toggle
             monthHeader.addEventListener('click', () => {
                 const isHidden = txContainer.classList.contains('hidden');
                 txContainer.classList.toggle('hidden');
@@ -1188,7 +1220,6 @@ function renderAccordionJournal() {
             monthContainer.appendChild(monthDiv);
         });
         
-        // Year toggle
         yearHeader.addEventListener('click', () => {
             const isHidden = monthContainer.classList.contains('hidden');
             monthContainer.classList.toggle('hidden');
@@ -1223,7 +1254,7 @@ function renderGoals(holdings) {
     
     section.classList.remove('hidden');
     
-    // Sort goals: Highest percentage first
+    // Sort goals: Highest percentage first (closest to completion)
     const sortedGoals = [...goals].sort((a, b) => {
         const qtyA = holdings[a.coin_symbol]?.qty || 0;
         const targetA = Number(a.target_amount) || 1;
@@ -1269,6 +1300,7 @@ function renderGoals(holdings) {
         const editBtn = document.createElement('button');
         editBtn.className = 'text-gray-400 hover:text-yellow-500 transition-colors';
         editBtn.innerHTML = '<i class="fa-solid fa-pen text-[10px]"></i>';
+        editBtn.setAttribute('aria-label', `Edit goal for ${goal.coin_symbol}`);
         editBtn.onclick = () => onEditGoal(goal.coin_symbol, target);
         
         rightSide.appendChild(percentage);
@@ -1386,7 +1418,7 @@ function populateCoinSelect(holdings) {
 }
 
 // ============================================
-// TRANSACTION HANDLERS
+// TRANSACTION HANDLERS (FIXED: Better validation)
 // ============================================
 async function handleTxSubmit(e) {
     e.preventDefault();
@@ -1415,8 +1447,10 @@ async function handleTxSubmit(e) {
     const price = parseFloat(rawPrice);
     const total = parseFloat(rawTotal);
     
-    if (isNaN(amount) || isNaN(price) || isNaN(total) || amount <= 0) {
-        showToast("Įveskite teigiamus skaičius!", "error");
+    // FIXED: Better validation (negative numbers)
+    if (isNaN(amount) || isNaN(price) || isNaN(total) || 
+        amount <= 0 || price < 0 || total < 0) {
+        showToast("Įveskite teisingus (teigiamus) skaičius!", "error");
         btn.textContent = oldText;
         btn.disabled = false;
         return;
@@ -1598,8 +1632,26 @@ async function handleDeleteCoinSubmit() {
 }
 
 // ============================================
-// CSV IMPORT/EXPORT
+// CSV IMPORT/EXPORT (Smart Parse)
 // ============================================
+function parseCSVNumber(val) {
+    if (typeof val !== 'string') return parseFloat(val);
+    
+    val = val.trim();
+    
+    // Check for "1.234,56" (EU) vs "1,234.56" (US)
+    const lastComma = val.lastIndexOf(',');
+    const lastDot = val.lastIndexOf('.');
+    
+    if (lastComma > lastDot) {
+        // EU: Replace dots with nothing, replace comma with dot
+        return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    } else {
+        // US: Replace commas with nothing
+        return parseFloat(val.replace(/,/g, ''));
+    }
+}
+
 async function handleImportCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1618,12 +1670,18 @@ async function handleImportCSV(event) {
         const header = rows[0].toLowerCase();
         let parsedTransactions = [];
         
+        // Detect Separator
+        const semicolonCount = (header.match(/;/g) || []).length;
+        const commaCount = (header.match(/,/g) || []).length;
+        const separator = semicolonCount > commaCount ? ';' : ',';
+        
         if (header.includes('txid') && header.includes('pair')) {
             showToast("Rekomenduojama naudoti 'Universal Format', nes Kraken duomenys yra sudėtingi.", "info");
             return;
         } else if (header.includes('timestamp') && header.includes('transaction type')) {
-            // COINBASE FORMAT
+            // COINBASE
             rows.slice(1).forEach(row => {
+                // Regex for CSV split handling quotes
                 const cols = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g).map(c => c.replace(/"/g, ''));
                 if (cols.length < 5) return;
                 
@@ -1634,27 +1692,24 @@ async function handleImportCSV(event) {
                     date: new Date(cols[0]).toISOString(),
                     type: type === 'buy' ? 'Buy' : 'Sell',
                     coin_symbol: cols[2],
-                    amount: parseFloat(cols[3]),
-                    price_per_coin: parseFloat(cols[4]),
-                    total_cost_usd: parseFloat(cols[5]),
+                    amount: parseCSVNumber(cols[3]),
+                    price_per_coin: parseCSVNumber(cols[4]),
+                    total_cost_usd: parseCSVNumber(cols[5]),
                     exchange: 'Coinbase',
                     method: '',
                     notes: cols[8] || ''
                 });
             });
         } else {
-            // UNIVERSAL FORMAT (Robust for comma and semicolon)
+            // UNIVERSAL
             rows.slice(1).forEach(row => {
-                const separator = row.includes(';') ? ';' : ',';
                 const cols = row.split(separator);
-                
                 if (cols.length < 6) return;
                 
                 let exchange = cols[6] || '';
                 let method = cols[7] || '';
                 let note = cols[8] || '';
                 
-                // Smart Fix: Recurring Buy
                 if (note.includes('Recurring Buy')) {
                     method = 'Recurring Buy';
                     note = note.replace('Recurring Buy', '').trim();
@@ -1662,17 +1717,14 @@ async function handleImportCSV(event) {
                     method = 'Instant Buy';
                     note = note.replace('Instant Buy', '').trim();
                 }
-
-                // Helper to clean numbers (replace comma with dot if needed for EU format)
-                const cleanNum = (val) => parseFloat(val.replace(',', '.'));
                 
                 parsedTransactions.push({
                     date: new Date(cols[0]).toISOString(),
                     type: cols[1],
                     coin_symbol: cols[2],
-                    amount: cleanNum(cols[3]),
-                    price_per_coin: cleanNum(cols[4]),
-                    total_cost_usd: cleanNum(cols[5]),
+                    amount: parseCSVNumber(cols[3]),
+                    price_per_coin: parseCSVNumber(cols[4]),
+                    total_cost_usd: parseCSVNumber(cols[5]),
                     exchange: exchange,
                     method: method,
                     notes: note
@@ -1756,4 +1808,4 @@ function setupGlobalErrorHandler() {
     });
 }
 
-console.log('✅ App.js loaded successfully v' + APP_VERSION);
+debugLog('✅ App.js loaded successfully v' + APP_VERSION);
