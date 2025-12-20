@@ -128,14 +128,19 @@ export function renderTransactionJournal() {
             card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 mb-2 shadow-sm flex justify-between items-start';
             // FIX: Mygtukai šalia ir be teksto, su window.onEditTx
             card.innerHTML = `
-                <div class="flex-1">
-                    <div class="flex items-center flex-wrap">
-                        <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
-                        <span class="text-xs text-gray-500 ml-2 font-bold">${tx.type}</span>
-                        ${badges}
+                <div class="flex items-start gap-3">
+                    <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 mt-1 text-primary-500 rounded border-gray-300 dark:border-gray-600" 
+                           data-tx-id="${tx.id}" 
+                           onchange="window.updateDeleteSelectedButton()">
+                    <div class="flex-1">
+                        <div class="flex items-center flex-wrap">
+                            <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
+                            <span class="text-xs text-gray-500 ml-2 font-bold">${tx.type}</span>
+                            ${badges}
+                        </div>
+                        <div class="text-[10px] text-gray-400 mt-1">${new Date(tx.date).toLocaleString()}</div>
+                        ${pnlHTML}
                     </div>
-                    <div class="text-[10px] text-gray-400 mt-1">${new Date(tx.date).toLocaleString()}</div>
-                    ${pnlHTML}
                 </div>
                 <div class="text-right flex flex-col items-end">
                     <div class="text-xs font-mono font-bold text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
