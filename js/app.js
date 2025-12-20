@@ -1,6 +1,6 @@
-// js/app.js - Versija 2.0.7 (Isolated Chart Logic + Date Fixes)
+// js/app.js - Versija 2.0.8 (Fix: Missing updateSelectionUI)
 
-const APP_VERSION = '2.0.7';
+const APP_VERSION = '2.0.8';
 
 // Debug Mode
 const DEBUG_MODE = localStorage.getItem('debug') === 'true';
@@ -16,6 +16,7 @@ let prices = {};
 let myChart = null;
 let allocationChart = null;
 let celebratedGoals = new Set();
+let currentFactorId = null;
 let currentTimeframe = 'ALL'; 
 
 // Constants
@@ -97,7 +98,6 @@ window.changeTimeframe = function(tf) {
     const indicator = document.getElementById('tf-indicator');
     if (indicator) indicator.textContent = tf;
 
-    // Wrap in try-catch to prevent UI freeze
     try {
         generateHistoryChart();
     } catch (e) {
@@ -360,18 +360,16 @@ async function loadAllData() {
         renderAccordionJournal();
         renderGoals(holdings);
         
-        // ISOLATED CHART LOADING - If this fails, the rest still works
         try {
             await generateHistoryChart();
         } catch (chartError) {
             console.error("⚠️ Chart Error:", chartError);
-            // Optionally render an empty chart or error message in chart container
             renderChart(['Error'], [0]);
         }
         
         renderAllocationChart(holdings);
         renderCoinCards(holdings);
-        updateSelectionUI();
+        updateSelectionUI(); // THIS WILL NOW WORK
     } catch (e) {
         console.error('❌ CRITICAL ERROR:', e);
         if (container) {
@@ -530,7 +528,7 @@ function updateDashboard() {
 }
 
 // ============================================
-// CHART GENERATION (SAFE MODE v2.0.7)
+// CHART GENERATION (SAFE MODE)
 // ============================================
 async function generateHistoryChart() {
     if (transactions.length === 0) { renderChart(['No data'], [0]); return; }
@@ -544,9 +542,6 @@ async function generateHistoryChart() {
     let startDate = new Date(firstTxDate);
     const now = new Date();
     
-    // Safety check for invalid dates
-    if (isNaN(firstTxDate.getTime())) { console.error("Invalid firstTxDate"); return; }
-
     switch (currentTimeframe) {
         case '1W': startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7); break;
         case '1M': startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()); break;
@@ -572,7 +567,6 @@ async function generateHistoryChart() {
     const data = [];
     let runningBalances = {};
     
-    // Pre-calc loop
     for (let d = new Date(firstTxDate); d < startDate; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         if (dailyChanges[dateStr]) {
@@ -590,7 +584,6 @@ async function generateHistoryChart() {
     let loopDate = new Date(startDate);
     loopDate.setDate(loopDate.getDate() - 1);
 
-    // Main Chart Loop - Safety limit 365*5 days to prevent infinite loops on bad dates
     let safeGuard = 0;
     while (loopDate <= now && safeGuard < 2000) {
         loopDate.setDate(loopDate.getDate() + 1);
@@ -696,6 +689,41 @@ function renderChart(labels, data) {
 }
 
 // ============================================
+// UI UPDATES (ADDED MISSING FUNCTIONS)
+// ============================================
+function updateSelectionUI() {
+    const selectedCount = document.querySelectorAll('.tx-checkbox:checked').length;
+    const btnDelete = document.getElementById('btn-delete-selected');
+    const countSpan = document.getElementById('selected-count');
+    
+    if (btnDelete && countSpan) {
+        if (selectedCount > 0) {
+            btnDelete.classList.remove('hidden');
+            btnDelete.style.display = 'flex';
+            countSpan.textContent = selectedCount;
+        } else {
+            btnDelete.classList.add('hidden');
+            btnDelete.style.display = 'none';
+        }
+    }
+}
+
+window.deleteSelectedTransactions = async function() {
+    const checkboxes = document.querySelectorAll('.tx-checkbox:checked');
+    if (checkboxes.length === 0) return;
+    if (!confirm(`Ar tikrai norite ištrinti ${checkboxes.length} transakcijas?`)) return;
+    
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    if (await deleteMultipleTransactions(ids)) {
+        showToast(`Ištrinta: ${ids.length} transakcijos`, 'success');
+        document.getElementById('select-all-tx').checked = false;
+        await loadAllData();
+    } else {
+        showToast('Klaida trinant', 'error');
+    }
+};
+
+// ============================================
 // RENDERERS (Allocation, Cards, Goals, Journal)
 // ============================================
 function renderAllocationChart(holdings) {
@@ -783,7 +811,6 @@ function renderAccordionJournal() {
     const grouped = {};
     transactions.forEach(tx => { 
         const d = new Date(tx.date); 
-        // SAFETY CHECK
         if (isNaN(d.getTime())) return;
         const y = d.getFullYear(), m = d.getMonth(); if(!grouped[y]) grouped[y] = {}; if(!grouped[y][m]) grouped[y][m] = []; grouped[y][m].push(tx); 
     });
@@ -858,7 +885,7 @@ function showCelebration(symbol) {
 }
 
 // ============================================
-// HANDLERS (Tx, Coins, Import - UPDATED 2.0.7)
+// HANDLERS (Tx, Coins, Import - UPDATED 2.0.8)
 // ============================================
 async function handleTxSubmit(e) {
     e.preventDefault();
@@ -870,13 +897,8 @@ async function handleTxSubmit(e) {
     
     if (!coinSymbol || isNaN(amount) || amount <= 0 || price < 0 || total < 0) { showToast("Check inputs!", "error"); btn.textContent = oldText; btn.disabled = false; return; }
     
-    // ISO DATE FIX
-    const dStr = document.getElementById('tx-date-input').value;
-    const tStr = document.getElementById('tx-time-input').value || '00:00';
-    const isoDate = new Date(`${dStr}T${tStr}:00`).toISOString();
-
     const txData = {
-        date: isoDate,
+        date: new Date(`${document.getElementById('tx-date-input').value}T${document.getElementById('tx-time-input').value || '00:00'}:00`).toISOString(),
         type: document.getElementById('tx-type').value, coin_symbol: coinSymbol, exchange: document.getElementById('tx-exchange').value || null,
         method: document.getElementById('tx-method').value, notes: document.getElementById('tx-notes').value || null,
         amount: amount, price_per_coin: price, total_cost_usd: total
@@ -917,7 +939,7 @@ async function handleImportCSV(e) {
         
         rows.slice(1).forEach(row => {
             const cols = row.split(sep); if(cols.length < 6) return;
-            // SAFARI FIX: Replace space with T in date if missing
+            // SAFARI FIX: Replace space with T in date
             let dateStr = cols[0];
             if (dateStr.includes(' ') && !dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
             
@@ -933,7 +955,6 @@ async function handleImportCSV(e) {
         });
         
         if (parsed.length > 0 && confirm(`Import ${parsed.length} txs?`)) {
-            // AUTO-ADD MISSING COINS
             const uniqueSymbols = [...new Set(parsed.map(p => p.coin_symbol))];
             const existingSymbols = coinsList.map(c => c.symbol.toUpperCase());
             const missingSymbols = uniqueSymbols.filter(s => !existingSymbols.includes(s));
