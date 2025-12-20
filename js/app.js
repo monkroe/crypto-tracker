@@ -1,6 +1,6 @@
 // js/app.js - v3.3.0 (Fixed Scope & Events)
 import { showToast, parseCSV, debugLog, sanitizeText } from './utils.js';
-import { loadInitialData, calculateHoldings, state } from './logic.js';
+import { loadInitialData, calculateHoldings, state, resetPriceCache } from './logic.js';
 import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, setupThemeHandlers } from './ui.js';
 
 const APP_VERSION = '3.3.0';
@@ -226,12 +226,47 @@ function setupEventListeners() {
     // 3. Coins
     document.getElementById('btn-save-coin').onclick = async () => {
         const symbol = document.getElementById('new-coin-symbol').value.toUpperCase();
-        const id = document.getElementById('new-coin-id').value.toLowerCase();
-        if(!symbol || !id) return showToast('Fill all fields', 'error');
-        if (await window.saveNewCoin({ symbol, coingecko_id: id })) {
-            showToast('Coin Added', 'success');
-            document.getElementById('new-coin-modal').classList.add('hidden');
-            await initData();
+        const coingeckoId = document.getElementById('new-coin-id').value.toLowerCase().trim();
+        
+        if(!symbol || !coingeckoId) return showToast('Fill all fields', 'error');
+        
+        // Validate CoinGecko ID before saving
+        const btn = document.getElementById('btn-save-coin');
+        const originalText = btn.textContent;
+        btn.textContent = 'Validating...';
+        btn.disabled = true;
+        
+        try {
+            // Check if the CoinGecko ID is valid
+            const testRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coingeckoId)}&vs_currencies=usd`);
+            if (!testRes.ok) throw new Error('API error');
+            const testData = await testRes.json();
+            
+            if (!testData[coingeckoId]) {
+                showToast(`Invalid CoinGecko ID: "${coingeckoId}". Check https://coingecko.com for correct ID.`, 'error');
+                btn.textContent = originalText;
+                btn.disabled = false;
+                return;
+            }
+            
+            // Save the coin
+            if (await window.saveNewCoin({ symbol, coingecko_id: coingeckoId })) {
+                showToast('Coin Added', 'success');
+                document.getElementById('new-coin-modal').classList.add('hidden');
+                
+                // Reset price cache to force refresh
+                if (window.resetPriceCache) window.resetPriceCache();
+                
+                await initData();
+            } else {
+                showToast('Failed to save coin', 'error');
+            }
+        } catch (e) {
+            console.error('Coin validation error:', e);
+            showToast('Could not validate coin. Check your internet connection.', 'error');
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
         }
     };
 
@@ -357,24 +392,48 @@ function setupEventListeners() {
     
     // Fetch Price
     document.getElementById('btn-fetch-price').onclick = async () => {
+        const btn = document.getElementById('btn-fetch-price');
         const coinSymbol = document.getElementById('tx-coin').value;
         const coin = state.coins.find(c => c.symbol === coinSymbol);
+        
         if (!coin) {
             showToast('Select a coin first', 'error');
             return;
         }
+        
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+        
         try {
             const encodedId = encodeURIComponent(coin.coingecko_id);
             const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodedId}&vs_currencies=usd`);
-            if (!res.ok) throw new Error('API request failed');
+            
+            if (!res.ok) {
+                if (res.status === 429) {
+                    showToast('Rate limited. Try again in a minute.', 'error');
+                } else {
+                    showToast('API error. Try again later.', 'error');
+                }
+                return;
+            }
+            
             const data = await res.json();
+            
             if (data[coin.coingecko_id]?.usd) {
                 document.getElementById('tx-price').value = data[coin.coingecko_id].usd;
                 document.getElementById('tx-price').dispatchEvent(new Event('input'));
                 showToast('Price fetched!', 'success');
+            } else {
+                showToast(`Price not found for ${coin.symbol}. Check CoinGecko ID.`, 'error');
+                console.error('CoinGecko response:', data, 'Expected ID:', coin.coingecko_id);
             }
         } catch (e) {
-            showToast('Failed to fetch price', 'error');
+            console.error('Fetch price error:', e);
+            showToast('Network error. Check your connection.', 'error');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     };
     

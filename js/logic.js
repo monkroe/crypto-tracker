@@ -97,3 +97,11 @@ export function calculateHoldings() {
         totalPnLPercent: totalInvestedPortfolio > 0 ? ((totalValuePortfolio - totalInvestedPortfolio) / totalInvestedPortfolio) * 100 : 0
     };
 }
+
+export function resetPriceCache() {
+    state.lastFetchTime = 0;
+    console.log('Price cache reset');
+}
+
+// Expose resetPriceCache to window
+window.resetPriceCache = resetPriceCache;
