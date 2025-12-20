@@ -1,4 +1,4 @@
-// js/supabase.js - Versija 2.0.2 (Production Ready + WebAuthn Local)
+// js/supabase.js - Versija 2.0.3 (Production Ready + WebAuthn Local)
 
 // ======================================
 // 1. SUPABASE KONFIGŪRACIJA
@@ -9,7 +9,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log('🔗 Supabase initialized v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '2.0.2'));
+console.log('🔗 Supabase initialized v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '2.0.3'));
 
 // ======================================
 // 2. AUTENTIFIKACIJA
@@ -435,4 +435,4 @@ function arrayBufferToBase64(buffer) {
     return btoa(binary);
 }
 
-console.log('✅ Supabase.js loaded successfully v2.0.2');
+console.log('✅ Supabase.js loaded successfully v2.0.3');
