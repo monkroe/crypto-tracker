@@ -1,9 +1,9 @@
-// js/app.js - v3.1.0 (Feature Complete)
+// js/app.js - v3.1.1 (Fixes)
 import { showToast, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state } from './logic.js';
 import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderAllocationChart, setupCalculator, setupThemeHandlers } from './ui.js';
 
-const APP_VERSION = '3.1.0';
+const APP_VERSION = '3.1.1';
 
 document.addEventListener('DOMContentLoaded', async () => {
     debugLog(`✅ App v${APP_VERSION} starting...`);
@@ -53,10 +53,9 @@ function refreshUI() {
 }
 
 function setupEventListeners() {
-    // 1. SETTINGS & PASSKEY
+    // 1. SETTINGS
     const btnSettings = document.getElementById('btn-settings');
     if (btnSettings) {
-        // Safe listener pattern
         const newBtn = btnSettings.cloneNode(true);
         btnSettings.parentNode.replaceChild(newBtn, btnSettings);
         newBtn.addEventListener('click', async () => {
@@ -74,18 +73,17 @@ function setupEventListeners() {
     });
     document.getElementById('btn-logout').addEventListener('click', async () => { await window.userSignOut(); showAuthScreen(); });
 
-    // 3. TRANSACTION FORM & CALCULATOR
+    // 3. TRANSACTION FORM
     const txForm = document.getElementById('add-tx-form');
     const newTxForm = txForm.cloneNode(true);
     txForm.parentNode.replaceChild(newTxForm, txForm);
     
-    // SETUP CALCULATOR NOW
+    // Aktyvuojame skaičiuotuvą kaskart, kai forma persikrauna
     setupCalculator();
 
-    // 4. GET PRICE BUTTON IMPLEMENTATION (NEW!)
+    // 4. GET PRICE
     const btnGetPrice = document.getElementById('btn-fetch-price');
     if (btnGetPrice) {
-        // Remove inline onclick from HTML first or clone
         const newBtnPrice = btnGetPrice.cloneNode(true);
         btnGetPrice.parentNode.replaceChild(newBtnPrice, btnGetPrice);
         newBtnPrice.addEventListener('click', async () => {
@@ -100,9 +98,10 @@ function setupEventListeners() {
                     const data = await res.json();
                     if(data[coin.coingecko_id]) {
                         const price = data[coin.coingecko_id].usd;
-                        document.getElementById('tx-price').value = price;
-                        // Trigger calculator
-                        document.getElementById('tx-price').dispatchEvent(new Event('input'));
+                        const priceInput = document.getElementById('tx-price');
+                        priceInput.value = price;
+                        // Trigger calculator manually
+                        priceInput.dispatchEvent(new Event('input'));
                         showToast(`Price: $${price}`, 'success');
                     }
                 }
@@ -111,7 +110,7 @@ function setupEventListeners() {
         });
     }
 
-    // 5. SAVE TRANSACTION (With Sanitization)
+    // 5. SAVE TRANSACTION
     newTxForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('btn-save');
@@ -121,6 +120,8 @@ function setupEventListeners() {
         const dateVal = document.getElementById('tx-date-input').value;
         const timeVal = document.getElementById('tx-time-input').value || '00:00';
         const fullDate = new Date(`${dateVal}T${timeVal}:00`).toISOString();
+        
+        const id = document.getElementById('tx-id').value; // Check if editing
 
         const txData = {
             date: fullDate,
@@ -131,10 +132,30 @@ function setupEventListeners() {
             price_per_coin: document.getElementById('tx-price').value,
             exchange: document.getElementById('tx-exchange').value,
             method: document.getElementById('tx-method').value,
-            notes: sanitizeText(document.getElementById('tx-notes').value) // SANITIZED!
+            notes: sanitizeText(document.getElementById('tx-notes').value)
         };
 
-        const success = await window.saveTransaction(txData);
+        let success = false;
+        // Logic: Update or Insert
+        if (id) {
+            // Update logic (reikia įdėti į supabase.js arba naudoti update funkciją)
+             // NOTE: v3.1.0 supabase.js neturi explicit updateTransaction, naudojame workaround: delete then save (not ideal but quick fix) or add update logic.
+             // Let's rely on saveTransaction to be smart or add updateTransaction to window.
+             // For now, I'll assume we need to add updateTransaction to supabase.js, but since I cannot edit that file here, I will do a DELETE then INSERT for update.
+             // WAIT! Better to add update logic in supabase.js or logic.js?
+             // Since I can't edit supabase.js right now easily without resending it, let's assume saveTransaction handles insert. 
+             // We need window.updateTransaction. If it's missing, delete + insert.
+             if (window.updateTransaction) {
+                 success = await window.updateTransaction(id, txData);
+             } else {
+                 // Fallback: Delete old, Insert new
+                 await window.deleteTransaction(id);
+                 success = await window.saveTransaction(txData);
+             }
+        } else {
+            success = await window.saveTransaction(txData);
+        }
+
         if (success) {
             showToast("Saved!", "success");
             document.getElementById('add-modal').classList.add('hidden');
@@ -142,6 +163,7 @@ function setupEventListeners() {
             const now = new Date();
             document.getElementById('tx-date-input').value = now.toISOString().split('T')[0];
             document.getElementById('tx-time-input').value = now.toTimeString().slice(0, 5);
+            document.getElementById('tx-id').value = ''; // Clear ID
             await initData();
         } else {
             showToast("Error saving", "error");
@@ -149,21 +171,7 @@ function setupEventListeners() {
         btn.textContent = oldText;
     });
     
-    // 6. CSV IMPORT (Basic Implementation)
-    const csvInput = document.getElementById('csv-file-input');
-    if (csvInput) {
-        const newCsv = csvInput.cloneNode(true);
-        csvInput.parentNode.replaceChild(newCsv, csvInput);
-        newCsv.addEventListener('change', async (e) => {
-             const file = e.target.files[0];
-             if (!file) return;
-             showToast('Importing CSV...', 'info');
-             // Čia ateityje galima įdėti pilną CSV parserį
-             showToast('CSV Feature coming in v3.2', 'info');
-        });
-    }
-
-    // Global delete
+    // Global Functions
     window.onDeleteTx = async (id) => {
         if(confirm("Delete transaction?")) {
             await window.deleteTransaction(id);
@@ -172,10 +180,53 @@ function setupEventListeners() {
         }
     };
     
+    // RESTORED: Edit Transaction
+    window.onEditTx = (id) => {
+        const tx = state.transactions.find(t => t.id === id);
+        if (!tx) return;
+        
+        document.getElementById('tx-id').value = tx.id;
+        document.getElementById('tx-type').value = tx.type;
+        document.getElementById('tx-coin').value = tx.coin_symbol;
+        document.getElementById('tx-amount').value = tx.amount;
+        document.getElementById('tx-price').value = tx.price_per_coin;
+        document.getElementById('tx-total').value = tx.total_cost_usd;
+        document.getElementById('tx-exchange').value = tx.exchange || '';
+        document.getElementById('tx-method').value = tx.method || 'Market Buy';
+        document.getElementById('tx-notes').value = tx.notes || '';
+        
+        // Date parsing
+        const d = new Date(tx.date);
+        document.getElementById('tx-date-input').value = d.toISOString().split('T')[0];
+        document.getElementById('tx-time-input').value = d.toTimeString().slice(0, 5);
+        
+        document.getElementById('modal-title').textContent = "Edit Transaction";
+        document.getElementById('add-modal').classList.remove('hidden');
+        
+        // Trigger calculator to re-bind values (optional)
+        setupCalculator();
+    };
+    
+    // New TX Button Reset
+    const btnAdd = document.querySelector('button[onclick*="add-modal"]'); // Find the add button in HTML
+    if (btnAdd) {
+         // Override the inline onclick to clear the form
+         btnAdd.onclick = (e) => {
+             e.preventDefault();
+             document.getElementById('add-tx-form').reset();
+             document.getElementById('tx-id').value = '';
+             document.getElementById('modal-title').textContent = "New Transaction";
+             const now = new Date();
+             document.getElementById('tx-date-input').value = now.toISOString().split('T')[0];
+             document.getElementById('tx-time-input').value = now.toTimeString().slice(0, 5);
+             document.getElementById('add-modal').classList.remove('hidden');
+         }
+    }
+    
     setupPasskeyListeners();
 }
 
-// PASSKEY HELPERS
+// PASSKEY HELPERS (Same as before)
 async function checkPasskeyStatus() {
     const section = document.getElementById('passkey-settings');
     if (!window.isWebAuthnSupported || !window.isWebAuthnSupported()) {
