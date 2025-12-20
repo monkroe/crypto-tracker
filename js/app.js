@@ -182,7 +182,81 @@ function setupEventListeners() {
         const { error } = await window.userLogin(email, pass);
         if (error) showToast(error.message, 'error'); else { showAppScreen(); await initData(); }
     };
+    
+    document.getElementById('btn-signup').onclick = async () => {
+        const email = document.getElementById('auth-email').value;
+        const pass = document.getElementById('auth-pass').value;
+        const { error } = await window.userSignUp(email, pass);
+        if (error) showToast(error.message, 'error'); 
+        else showToast('Check your email for confirmation link!', 'success');
+    };
+    
     document.getElementById('btn-logout').onclick = async () => { await window.userSignOut(); showAuthScreen(); };
+    
+    // Export CSV
+    document.getElementById('btn-export-csv').onclick = () => {
+        if (state.transactions.length === 0) {
+            showToast('No transactions to export', 'error');
+            return;
+        }
+        const headers = ['date', 'type', 'coin_symbol', 'amount', 'price_per_coin', 'total_cost_usd', 'exchange', 'method', 'notes'];
+        const csvContent = [
+            headers.join(','),
+            ...state.transactions.map(tx => 
+                headers.map(h => {
+                    const value = (tx[h] || '').toString();
+                    // Escape quotes and wrap in quotes, escape newlines and carriage returns
+                    return `"${value.replace(/"/g, '""').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
+                }).join(',')
+            )
+        ].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `crypto-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        showToast('CSV exported!', 'success');
+    };
+    
+    // Fetch Price
+    document.getElementById('btn-fetch-price').onclick = async () => {
+        const coinSymbol = document.getElementById('tx-coin').value;
+        const coin = state.coins.find(c => c.symbol === coinSymbol);
+        if (!coin) {
+            showToast('Select a coin first', 'error');
+            return;
+        }
+        try {
+            const encodedId = encodeURIComponent(coin.coingecko_id);
+            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodedId}&vs_currencies=usd`);
+            if (!res.ok) throw new Error('API request failed');
+            const data = await res.json();
+            if (data[coin.coingecko_id]?.usd) {
+                document.getElementById('tx-price').value = data[coin.coingecko_id].usd;
+                document.getElementById('tx-price').dispatchEvent(new Event('input'));
+                showToast('Price fetched!', 'success');
+            }
+        } catch (e) {
+            showToast('Failed to fetch price', 'error');
+        }
+    };
+    
+    // Passkey buttons
+    document.getElementById('btn-setup-passkey').onclick = async () => {
+        if (await window.registerPasskey()) {
+            showToast('Passkey enabled!', 'success');
+            await checkPasskeyStatus();
+        }
+    };
+
+    document.getElementById('btn-remove-passkey').onclick = async () => {
+        if (confirm('Remove passkey from this device?')) {
+            await window.removePasskey();
+            showToast('Passkey removed', 'success');
+            await checkPasskeyStatus();
+        }
+    };
     
     // Add Button Reset
     const btnAdd = document.querySelector('button[onclick*="add-modal"]');
@@ -221,8 +295,29 @@ function setupCalculator() {
 
 // Passkey functions
 async function checkPasskeyStatus() {
-    // ... (Keep existing logic, omitted for brevity but include in file)
+    const settingsSection = document.getElementById('passkey-settings');
+    const statusEl = document.getElementById('passkey-status');
+    const setupBtn = document.getElementById('btn-setup-passkey');
+    const removeBtn = document.getElementById('btn-remove-passkey');
+    
+    if (!window.isWebAuthnSupported()) {
+        if (settingsSection) settingsSection.classList.add('hidden');
+        return;
+    }
+    
+    if (settingsSection) settingsSection.classList.remove('hidden');
+    
+    const hasKey = await window.hasPasskey();
+    if (hasKey) {
+        if (statusEl) statusEl.textContent = 'Enabled';
+        if (setupBtn) setupBtn.classList.add('hidden');
+        if (removeBtn) removeBtn.classList.remove('hidden');
+    } else {
+        if (statusEl) statusEl.textContent = 'Not set up';
+        if (setupBtn) setupBtn.classList.remove('hidden');
+        if (removeBtn) removeBtn.classList.add('hidden');
+    }
 }
-function setupThemeHandlers() { /* Already in UI */ }
+
 function showAppScreen() { document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden'); }
 function showAuthScreen() { document.getElementById('auth-screen').classList.remove('hidden'); document.getElementById('app-content').classList.add('hidden'); }
