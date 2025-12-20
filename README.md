@@ -1,20 +1,20 @@
-# 🚀 Crypto Tracker v2.0.0
+# 🚀 Crypto Tracker v2.0.2
 
-Profesionalus kriptovaliutų portfelio valdymo įrankis su biometrine autentifikacija (Passkey/WebAuthn) ir aukščiausio lygio saugumu.
+Profesionalus kriptovaliutų portfelio valdymo įrankis su biometrine autentifikacija (Passkey/WebAuthn), automatine tema, optimizuotu veikimu ir aukščiausio lygio saugumu.
 
 ## ✨ Pagrindinės Funkcijos
 
 - **Portfelio sekimas:** Realaus laiko kainos, PnL skaičiavimas, turto paskirstymo grafikai.
-- **Saugumas:** Pilna XSS apsauga, RLS (Row Level Security) duomenų bazės politika.
-- **Biometrinis prisijungimas:** Face ID / Touch ID / Windows Hello palaikymas.
-- **Masinis valdymas:** Greitas didelio kiekio transakcijų trynimas ir CSV importas.
-- **UI/UX:** Tamsus režimas, "Toast" pranešimai, interaktyvūs grafikai.
+- **Saugumas:** Pilna XSS apsauga (`sanitizeText`), griežta įvesties validacija, RLS (Row Level Security).
+- **Biometrinis prisijungimas:** Face ID / Touch ID / Windows Hello palaikymas (Local Device Lock).
+- **Masinis valdymas:** Greitas didelio kiekio transakcijų trynimas ir išmanus CSV importas.
+- **UI/UX:** Automatinė šviesi/tamsi tema, "Toast" pranešimai be dublikatų, prieinamumo (A11y) patobulinimai.
 
 ## 🛠️ Setup Instrukcijos
 
 ### 1. Supabase Konfigūracija
 
-Eikite į [Supabase SQL Editor](https://supabase.com/dashboard) ir paleiskite šį kodą, kad sukurtumėte lenteles ir saugumo taisykles:
+Eikite į [Supabase SQL Editor](https://supabase.com/dashboard) ir paleiskite šį kodą (jei dar nesukūrėte lentelių):
 
 ```sql
 -- ===============================================
