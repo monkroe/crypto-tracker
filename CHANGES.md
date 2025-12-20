@@ -2,13 +2,28 @@
 
 Visa projekto pakeitimų istorija.
 
+## [v2.0.1] - 2025-12-19 (UI & Performance Polish)
+Našumo optimizacija, temos valdymas ir UI patobulinimai.
+
+### ⚡ Optimizacija
+- **Smart Charting:** Perrašytas grafiko generavimo algoritmas. Dideli duomenų kiekiai (tūkstančiai transakcijų) dabar užsikrauna akimirksniu nestabdant naršyklės.
+
+### 🎨 UI/UX
+- **Theme Auto-detect:** Pridėtas automatinis šviesios/tamsios temos aptikimas pagal įrenginio nustatymus.
+- **Theme Toggle:** Galimybė rankiniu būdu perjungti temą nustatymuose.
+- **Goals Sorting:** Tikslai dabar automatiškai rikiuojami pagal pasiekimo procentą (arčiausiai tikslo esantys rodomi viršuje).
+- **Number Formatting:** Pakeistas skaičių formatas į `87,958.07` (kablelis tūkstančiams, taškas centams) geresniam skaitomumui.
+- **Toast Fixes:** Panaikintos pasikartojančios ikonos (dvigubos varnelės) pranešimuose.
+
+---
+
 ## [v2.0.0] - 2025-12-19 (Final Release)
 Didysis atnaujinimas su biometrine autentifikacija ir duomenų bazės saugumu.
 
 ### 🚀 Naujos Funkcijos
-- **WebAuthn / Passkey:** Face ID, Touch ID ir Windows Hello integracija prisijungimui.
+- **WebAuthn / Passkey:** Face ID, Touch ID ir Windows Hello integracija prisijungimui (Local Device).
 - **Settings Modal:** Naujas nustatymų langas biometrijos valdymui.
-- **Toast Notifications:** Modernūs pranešimai apie veiksmus (vietoj `alert()`).
+- **Toast Notifications:** Modernūs pranešimai apie veiksmus.
 - **UI:** Pridėta "Select All" varnelė masiniam žymėjimui.
 
 ### 🔒 Saugumas
