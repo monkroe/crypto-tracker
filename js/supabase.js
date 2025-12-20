@@ -3,7 +3,7 @@
 // ⚠️ ĮKLIJUOKITE SAVO DUOMENIS ČIA:
 // Replace these placeholders with your actual Supabase credentials from https://supabase.com/dashboard
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; // Example: 'https://xyzcompany.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW'; // Must be a JWT token starting with 'eyJ...'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjaXVlcmNtaHJ4cXhubmRrdmJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2Njg1NzAsImV4cCI6MjA4MTI0NDU3MH0.j5PLJI-8Brcx4q7wFXdmWcciRlBXS3Z2w9O50yAbDWs'; // Must be a JWT token starting with 'eyJ...'
 
 // 1. Griežtesnė konfigūracijos patikra
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || 
