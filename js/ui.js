@@ -1,4 +1,4 @@
-// js/ui.js - v3.1.1 (Restored Features)
+// js/ui.js - v3.1.3 (PnL Format Fix & Goals)
 import { formatMoney, formatPrice, debugLog } from './utils.js';
 import { state } from './logic.js';
 
@@ -9,7 +9,7 @@ const CHART_COLORS = {
 };
 
 // ===========================================
-// 1. CALCULATOR LOGIC (Aggressive Fix)
+// 1. CALCULATOR LOGIC
 // ===========================================
 export function setupCalculator() {
     const amountIn = document.getElementById('tx-amount');
@@ -18,32 +18,32 @@ export function setupCalculator() {
     
     if (!amountIn || !priceIn || !totalIn) return;
 
-    const val = (el) => parseFloat(el.value);
+    const val = (el) => parseFloat(el.value) || 0;
     
-    // Funkcija skaičiavimui be debounce, kad reaguotų iškart
     const calculate = (source) => {
         const a = val(amountIn);
         const p = val(priceIn);
         const t = val(totalIn);
 
-        if (source === 'amount') {
-            if (p > 0) totalIn.value = (a * p).toFixed(2);
-            else if (t > 0) priceIn.value = (t / a).toFixed(8);
-        } else if (source === 'price') {
-            if (a > 0) totalIn.value = (a * p).toFixed(2);
-            else if (t > 0) amountIn.value = (t / p).toFixed(6);
-        } else if (source === 'total') {
+        if (source === 'total') {
             if (a > 0) priceIn.value = (t / a).toFixed(8);
             else if (p > 0) amountIn.value = (t / p).toFixed(6);
         }
+        else if (source === 'amount') {
+            if (t > 0) priceIn.value = (t / a).toFixed(8);
+            else if (p > 0) totalIn.value = (a * p).toFixed(2);
+        }
+        else if (source === 'price') {
+            if (a > 0) totalIn.value = (a * p).toFixed(2);
+            else if (t > 0) amountIn.value = (t / p).toFixed(6);
+        }
     };
 
-    // Remove old listeners to be safe (clone node hack handled in app.js)
     amountIn.oninput = () => calculate('amount');
     priceIn.oninput = () => calculate('price');
     totalIn.oninput = () => calculate('total');
     
-    debugLog('🧮 Calculator active');
+    debugLog('🧮 Calculator active v3.1.3');
 }
 
 export function setupThemeHandlers() {
@@ -62,7 +62,7 @@ export function setupThemeHandlers() {
 }
 
 // ===========================================
-// 2. RENDERERS
+// 2. DASHBOARD & GOALS
 // ===========================================
 
 export function updateDashboardUI(totals) {
@@ -74,6 +74,53 @@ export function updateDashboardUI(totals) {
     const pnlPercentEl = document.getElementById('total-pnl-percent');
     pnlPercentEl.textContent = (totals.totalPnL >= 0 ? '+' : '') + totals.totalPnLPercent.toFixed(2) + '%';
     pnlPercentEl.className = `text-xs font-bold px-2 py-0.5 rounded ${totals.totalPnL >= 0 ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300'}`;
+}
+
+export function renderGoals() {
+    const container = document.getElementById('goals-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (state.goals.length === 0) { 
+        document.getElementById('goals-section').classList.add('hidden'); 
+        return; 
+    }
+    document.getElementById('goals-section').classList.remove('hidden');
+
+    const sortedGoals = [...state.goals].sort((a, b) => {
+        const qtyA = state.holdings[a.coin_symbol]?.qty || 0;
+        const targetA = Number(a.target_amount) || 1;
+        const pctA = (qtyA / targetA);
+        const qtyB = state.holdings[b.coin_symbol]?.qty || 0;
+        const targetB = Number(b.target_amount) || 1;
+        const pctB = (qtyB / targetB);
+        return pctB - pctA;
+    });
+
+    const fragment = document.createDocumentFragment();
+    sortedGoals.forEach(goal => {
+        const cur = state.holdings[goal.coin_symbol]?.qty || 0;
+        const tgt = Number(goal.target_amount);
+        const pct = Math.min(100, (cur/tgt)*100);
+        
+        const div = document.createElement('div');
+        div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm';
+        div.innerHTML = `
+            <div class="flex justify-between text-xs mb-1">
+                <span class="font-bold text-gray-800 dark:text-gray-300">${goal.coin_symbol}</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-primary-600 dark:text-primary-400 font-bold">${pct.toFixed(1)}%</span>
+                </div>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-primary-500 h-1.5 rounded-full transition-all duration-500" style="width:${pct}%"></div>
+            </div>
+            <div class="text-[9px] text-gray-500 mt-1 text-right font-mono">
+                ${cur.toLocaleString(undefined, {maximumFractionDigits: 2})} / ${tgt.toLocaleString()}
+            </div>`;
+        fragment.appendChild(div);
+    });
+    container.appendChild(fragment);
 }
 
 export function renderCoinCards() {
@@ -99,6 +146,9 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
+// ===========================================
+// 3. JOURNAL (Fixed PnL Format)
+// ===========================================
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
@@ -106,7 +156,6 @@ export function renderTransactionJournal() {
     if (state.transactions.length === 0) { container.innerHTML = `<div class="text-center py-8 text-sm text-gray-500">No transactions.</div>`; return; }
     
     const grouped = {};
-    // state.transactions already sorted in logic.js
     state.transactions.slice().reverse().forEach(tx => { const d = new Date(tx.date); if (isNaN(d.getTime())) return; const y = d.getFullYear(), m = d.getMonth(); if(!grouped[y]) grouped[y] = {}; if(!grouped[y][m]) grouped[y][m] = []; grouped[y][m].push(tx); });
     const monthsLT = ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'];
 
@@ -131,26 +180,31 @@ export function renderTransactionJournal() {
                 const isSell = ['Sell', 'Withdraw'].includes(tx.type);
                 const color = isBuy ? 'text-green-600 dark:text-green-500' : (isSell ? 'text-red-600 dark:text-red-500' : 'text-yellow-600 dark:text-yellow-500');
                 
-                // --- PnL LOGIC RESTORED ---
+                // --- PnL LOGIC FIXED ---
                 let pnlEl = '';
                 const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
-                if (coin && state.prices[coin.coingecko_id] && tx.price_per_coin > 0 && isBuy) {
-                    const curP = state.prices[coin.coingecko_id].usd;
-                    const diff = curP - tx.price_per_coin;
-                    const pct = (diff / tx.price_per_coin) * 100;
-                    const cls = diff >= 0 ? 'text-red-500' : 'text-red-500'; // Wait, positive should be green?
-                    // Correction: Profit is Green, Loss is Red
-                    const finalCls = diff >= 0 ? 'text-green-500' : 'text-red-500';
+                if (coin && state.prices[coin.coingecko_id] && tx.total_cost_usd > 0 && isBuy) {
+                    const curPrice = state.prices[coin.coingecko_id].usd;
                     
+                    // Dabartinė vertė šios transakcijos kiekio
+                    const currentVal = tx.amount * curPrice;
+                    // Pelnas = Dabartinė vertė - Sumokėta kaina
+                    const pnlVal = currentVal - tx.total_cost_usd;
+                    const pnlPct = (pnlVal / tx.total_cost_usd) * 100;
+                    
+                    const finalCls = pnlVal >= 0 ? 'text-green-500' : 'text-red-500';
+                    const sign = pnlVal >= 0 ? '+' : '';
+                    
+                    // FORMATAS: PnL: -$0.74 (-1.4%)
                     pnlEl = `<div class="text-[10px] ${finalCls} mt-1 font-mono font-bold">
-                        Price: ${formatPrice(tx.price_per_coin)} → ${formatPrice(curP)} (${pct.toFixed(2)}%)
+                        PnL: ${sign}${formatMoney(pnlVal)} (${sign}${pnlPct.toFixed(2)}%)
                     </div>`;
                 }
 
-                // --- BADGES RESTORED ---
+                // --- BADGES ---
                 let methodBadge = '';
                 if (tx.method && tx.method !== 'Market Buy') {
-                    methodBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] border border-gray-600 text-gray-500 dark:text-gray-400">${tx.method}</span>`;
+                    methodBadge = `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">${tx.method}</span>`;
                 }
                 if (tx.exchange) {
                     methodBadge += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] text-gray-400">${tx.exchange}</span>`;
@@ -162,7 +216,7 @@ export function renderTransactionJournal() {
                 <div class="flex-1">
                     <div class="flex justify-between items-start">
                         <div>
-                            <div class="flex items-center">
+                            <div class="flex items-center flex-wrap gap-y-1">
                                 <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
                                 <span class="text-xs text-gray-500 ml-2 font-bold">${tx.type}</span>
                                 ${methodBadge}
