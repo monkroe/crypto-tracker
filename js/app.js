@@ -174,8 +174,13 @@ function setupEventListeners() {
                 console.log('Updating transaction:', id);
                 const deleteResult = await window.deleteTransaction(id);
                 console.log('Delete old result:', deleteResult);
-                success = await window.saveTransaction(txData);
-                console.log('Save new result:', success);
+                if (deleteResult) {
+                    success = await window.saveTransaction(txData);
+                    console.log('Save new result:', success);
+                } else {
+                    console.error('Failed to delete old transaction');
+                    showToast('Failed to update transaction', 'error');
+                }
             } else {
                 success = await window.saveTransaction(txData);
             }
