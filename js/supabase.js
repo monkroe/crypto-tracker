@@ -1,4 +1,4 @@
-// js/supabase.js - Versija 2.0.1 (Security + WebAuthn + Bulk Operations)
+// js/supabase.js - Versija 2.0.2 (Production Ready + WebAuthn Local)
 
 // ======================================
 // 1. SUPABASE KONFIGŪRACIJA
@@ -9,7 +9,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log('🔗 Supabase initialized v2.0.1');
+console.log('🔗 Supabase initialized v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '2.0.2'));
 
 // ======================================
 // 2. AUTENTIFIKACIJA
@@ -51,7 +51,7 @@ async function userSignOut() {
 }
 
 // ======================================
-// 3. WEBAUTHN / PASSKEY PALAIKYMAS (LOCAL)
+// 3. WEBAUTHN / PASSKEY PALAIKYMAS (LOCAL DEVICE ONLY)
 // ======================================
 
 function isWebAuthnSupported() {
@@ -74,6 +74,11 @@ async function registerPasskey() {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
+        
+        // Informuojame vartotoją apie LocalStorage ribojimus
+        if (!confirm('⚠️ DĖMESIO: Passkey bus išsaugotas tik šiame įrenginyje (naršyklėje). Jei išvalysite naršyklės istoriją/slapukus, Passkey reikės kurti iš naujo. Tęsti?')) {
+            return false;
+        }
         
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
@@ -159,6 +164,8 @@ async function loginWithPasskey() {
         if (session) {
             return { data: { session }, error: null };
         } else {
+            // Supabase reikalauja server-side patvirtinimo tikram prisijungimui be slaptažodžio.
+            // Local WebAuthn veikia kaip papildomas saugiklis (PIN/FaceID) esamai sesijai.
             alert("Saugumo sumetimais, prašome vieną kartą prisijungti su slaptažodžiu, kad atnaujintumėte sesiją.");
             return { data: null, error: new Error('Session expired') };
         }
@@ -384,6 +391,7 @@ async function saveOrUpdateGoal(symbol, target) {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return false;
         
+        // Upsert funkcija (įterpia arba atnaujina)
         const { error } = await _supabase
             .from('crypto_goals')
             .upsert({ 
@@ -427,4 +435,4 @@ function arrayBufferToBase64(buffer) {
     return btoa(binary);
 }
 
-console.log('✅ Supabase.js loaded successfully v2.0.1');
+console.log('✅ Supabase.js loaded successfully v2.0.2');
