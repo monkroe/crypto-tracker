@@ -1,4 +1,4 @@
-// js/ui.js - v3.2.0 (Fixed UI Layout)
+// js/ui.js - v3.3.0
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
 
@@ -8,31 +8,16 @@ const CHART_COLORS = {
     PEPE: '#22c55e', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
 };
 
-export function setupCalculator() {
-    const amountIn = document.getElementById('tx-amount');
-    const priceIn = document.getElementById('tx-price');
-    const totalIn = document.getElementById('tx-total');
-    if (!amountIn || !priceIn || !totalIn) return;
-    const val = (el) => parseFloat(el.value) || 0;
-    const calculate = (source) => {
-        const a = val(amountIn), p = val(priceIn), t = val(totalIn);
-        if (source === 'total') { if (a > 0) priceIn.value = (t / a).toFixed(8); else if (p > 0) amountIn.value = (t / p).toFixed(6); }
-        else if (source === 'amount') { if (t > 0) priceIn.value = (t / a).toFixed(8); else if (p > 0) totalIn.value = (a * p).toFixed(2); }
-        else if (source === 'price') { if (a > 0) totalIn.value = (a * p).toFixed(2); else if (t > 0) amountIn.value = (t / p).toFixed(6); }
-    };
-    amountIn.oninput = () => calculate('amount');
-    priceIn.oninput = () => calculate('price');
-    totalIn.oninput = () => calculate('total');
-}
-
 export function setupThemeHandlers() {
     const btn = document.getElementById('btn-toggle-theme');
-    if (!btn) return;
-    btn.onclick = () => {
-        const html = document.documentElement;
-        html.classList.toggle('dark');
-        localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
-    };
+    // FIX: Tiesioginis priskyrimas be cloneNode
+    if (btn) {
+        btn.onclick = () => {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
+        };
+    }
 }
 
 export function updateDashboardUI(totals) {
@@ -50,7 +35,11 @@ export function renderGoals() {
     const container = document.getElementById('goals-container');
     if (!container) return;
     container.innerHTML = '';
-    if (state.goals.length === 0) { document.getElementById('goals-section').classList.add('hidden'); return; }
+    
+    if (state.goals.length === 0) { 
+        document.getElementById('goals-section').classList.add('hidden'); 
+        return; 
+    }
     document.getElementById('goals-section').classList.remove('hidden');
 
     const fragment = document.createDocumentFragment();
@@ -58,6 +47,7 @@ export function renderGoals() {
         const cur = state.holdings[goal.coin_symbol]?.qty || 0;
         const tgt = Number(goal.target_amount);
         const pct = Math.min(100, (cur/tgt)*100);
+        
         const div = document.createElement('div');
         div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm mb-2';
         div.innerHTML = `
@@ -120,7 +110,6 @@ export function renderTransactionJournal() {
             const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
             const color = isBuy ? 'text-green-500' : 'text-red-500';
             
-            // PnL Calc
             let pnlHTML = '';
             const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
             if (isBuy && coin && state.prices[coin.coingecko_id]) {
@@ -131,13 +120,13 @@ export function renderTransactionJournal() {
                 pnlHTML = `<div class="text-[10px] ${pnlCls} font-mono font-bold mt-1">PnL: ${pnlVal>=0?'+':''}$${pnlVal.toFixed(2)} (${pnlVal>=0?'+':''}${pnlPct.toFixed(2)}%)</div>`;
             }
 
-            // Badges (VISI matomi)
             let badges = '';
             if (tx.exchange) badges += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
             if (tx.method && tx.method !== 'Market Buy') badges += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
 
             const card = document.createElement('div');
             card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 mb-2 shadow-sm flex justify-between items-start';
+            // FIX: Mygtukai šalia ir be teksto, su window.onEditTx
             card.innerHTML = `
                 <div class="flex-1">
                     <div class="flex items-center flex-wrap">
@@ -152,8 +141,8 @@ export function renderTransactionJournal() {
                     <div class="text-xs font-mono font-bold text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
                     <div class="font-bold text-sm text-white mt-0.5">${formatMoney(tx.total_cost_usd)}</div>
                     <div class="flex gap-3 mt-3">
-                        <button onclick="window.onEditTx('${tx.id}')" class="text-gray-500 hover:text-yellow-500 transition-colors"><i class="fa-solid fa-pen text-sm"></i></button>
-                        <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-500 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash text-sm"></i></button>
+                        <button onclick="window.onEditTx('${tx.id}')" class="text-gray-500 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-sm"></i></button>
+                        <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-500 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-sm"></i></button>
                     </div>
                 </div>`;
             fragment.appendChild(card);
@@ -163,5 +152,31 @@ export function renderTransactionJournal() {
 }
 
 export function renderAllocationChart() {
-    // Chart logic same as before (omitted for brevity, keep existing)
+    const canvas = document.getElementById('allocationChart');
+    if (!canvas) return;
+    
+    // FIX: Saugus naikinimas
+    if (allocationChart) {
+        allocationChart.destroy();
+        allocationChart = null;
+    }
+    
+    const chartData = [], labels = [], colors = [];
+    Object.entries(state.holdings).forEach(([sym, data]) => { 
+        if (data.qty > 0 && data.currentValue > 1) { 
+            chartData.push(data.currentValue); 
+            labels.push(sym); 
+            colors.push(CHART_COLORS[sym] || CHART_COLORS.default); 
+        } 
+    });
+    
+    if (chartData.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    const isDark = document.documentElement.classList.contains('dark');
+    allocationChart = new Chart(ctx, { 
+        type: 'doughnut', 
+        data: { labels: labels, datasets: [{ data: chartData, backgroundColor: colors, borderColor: isDark ? '#111827' : '#ffffff', borderWidth: 2 }] }, 
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: isDark ? '#9ca3af' : '#4b5563', font: { size: 11 }, usePointStyle: true } } } } 
+    });
 }
