@@ -1,14 +1,22 @@
 // js/supabase.js - v3.1.0 (Robust Config)
 
 // ⚠️ ĮKLIJUOKITE SAVO DUOMENIS ČIA:
-const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
-const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
+// Replace these placeholders with your actual Supabase credentials from https://supabase.com/dashboard
+const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE'; // Example: 'https://xyzcompany.supabase.co'
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE'; // Must be a JWT token starting with 'eyJ...'
 
 // 1. Griežtesnė konfigūracijos patikra
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('JŪSŲ') || SUPABASE_ANON_KEY.includes('JŪSŲ')) {
-    console.error('❌ CRITICAL: SUPABASE CONFIG MISSING in js/supabase.js');
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || 
+    SUPABASE_URL.includes('YOUR_SUPABASE_URL_HERE') || 
+    SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY_HERE') ||
+    SUPABASE_URL.includes('JŪSŲ') || 
+    SUPABASE_ANON_KEY.includes('JŪSŲ') ||
+    !SUPABASE_ANON_KEY.startsWith('eyJ')) {
+    console.error('❌ CRITICAL: SUPABASE CONFIG MISSING or INVALID in js/supabase.js');
+    console.error('💡 The anon key must be a valid JWT token starting with "eyJ..."');
+    console.error('💡 Get your credentials from: https://supabase.com/dashboard → Settings → API');
     // Sustabdome vykdymą, kad vartotojas pamatytų klaidą
-    throw new Error('⚠️ Nustatykite SUPABASE_URL ir SUPABASE_ANON_KEY faile js/supabase.js');
+    throw new Error('⚠️ Nustatykite SUPABASE_URL ir SUPABASE_ANON_KEY faile js/supabase.js. Anon key must be a JWT token (starts with "eyJ").');
 }
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
