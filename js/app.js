@@ -239,7 +239,7 @@ function setupEventListeners() {
         try {
             // Check if the CoinGecko ID is valid
             const testRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coingeckoId)}&vs_currencies=usd`);
-            if (!testRes.ok) throw new Error('API error');
+            if (!testRes.ok) throw new Error(`API error: ${testRes.status} ${testRes.statusText}`);
             const testData = await testRes.json();
             
             if (!testData[coingeckoId]) {
@@ -255,7 +255,7 @@ function setupEventListeners() {
                 document.getElementById('new-coin-modal').classList.add('hidden');
                 
                 // Reset price cache to force refresh
-                if (window.resetPriceCache) window.resetPriceCache();
+                resetPriceCache();
                 
                 await initData();
             } else {
@@ -263,7 +263,7 @@ function setupEventListeners() {
             }
         } catch (e) {
             console.error('Coin validation error:', e);
-            showToast('Could not validate coin. Check your internet connection.', 'error');
+            showToast('Could not validate coin. Please try again later.', 'error');
         } finally {
             btn.textContent = originalText;
             btn.disabled = false;
