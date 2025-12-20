@@ -436,18 +436,19 @@ function setupEventListeners() {
             if (!confirm(`Delete ${selectedIds.length} transaction(s)?`)) return;
             
             deleteSelectedBtn.disabled = true;
+            deleteSelectedBtn.setAttribute('aria-label', 'Deleting selected transactions');
             deleteSelectedBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
             
-            let deleted = 0;
-            for (const id of selectedIds) {
-                if (await window.deleteTransaction(id)) deleted++;
-            }
+            // Use Promise.all for concurrent deletions
+            const results = await Promise.all(selectedIds.map(id => window.deleteTransaction(id)));
+            const deleted = results.filter(Boolean).length;
             
             showToast(`Deleted ${deleted} transaction(s)`, 'success');
             document.getElementById('select-all-tx').checked = false;
             await initData();
             
             deleteSelectedBtn.disabled = false;
+            deleteSelectedBtn.removeAttribute('aria-label');
             deleteSelectedBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete (<span id="selected-count">0</span>)';
         };
     }
