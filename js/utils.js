@@ -1,4 +1,4 @@
-// js/utils.js - v3.2.0
+// js/utils.js - v3.3.0
 export const DEBUG_MODE = localStorage.getItem('debug') === 'true';
 
 export function debugLog(...args) {
@@ -34,24 +34,20 @@ export function showToast(message, type = 'success') {
     setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
-// Paprastas CSV parseris
+// FIX: Griežtesnis CSV skaitymas
 export function parseCSV(text) {
     const lines = text.split('\n').filter(l => l.trim());
     if (lines.length < 2) return [];
-    
-    // Bandome atspėti skirtuką (; arba ,)
     const separator = (lines[0].match(/;/g) || []).length > (lines[0].match(/,/g) || []).length ? ';' : ',';
     
     return lines.slice(1).map(line => {
         const cols = line.split(separator).map(c => c.trim().replace(/^"|"$/g, ''));
-        if (cols.length < 4) return null; // Reikia bent datos, tipo, simbolio, kiekio
-        
-        // CSV formatas: Date, Type, Coin, Amount, Price, Total, Exchange, Method, Notes
+        if (cols.length < 3) return null;
         return {
-            date: cols[0], // Reiks validuoti
+            date: cols[0], 
             type: cols[1] || 'Buy',
             coin_symbol: cols[2]?.toUpperCase(),
-            amount: parseFloat(cols[3].replace(',', '.')) || 0,
+            amount: parseFloat(cols[3]?.replace(',', '.') || 0),
             price_per_coin: parseFloat(cols[4]?.replace(',', '.') || 0),
             total_cost_usd: parseFloat(cols[5]?.replace(',', '.') || 0),
             exchange: cols[6] || '',
