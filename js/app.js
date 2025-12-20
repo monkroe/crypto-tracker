@@ -1,6 +1,6 @@
-// js/app.js - Versija 2.0.8 (Fix: Missing updateSelectionUI)
+// js/app.js - Versija 2.0.9 (Fixed Method Display & Goals Sorting)
 
-const APP_VERSION = '2.0.8';
+const APP_VERSION = '2.0.9';
 
 // Debug Mode
 const DEBUG_MODE = localStorage.getItem('debug') === 'true';
@@ -16,7 +16,6 @@ let prices = {};
 let myChart = null;
 let allocationChart = null;
 let celebratedGoals = new Set();
-let currentFactorId = null;
 let currentTimeframe = 'ALL'; 
 
 // Constants
@@ -369,7 +368,7 @@ async function loadAllData() {
         
         renderAllocationChart(holdings);
         renderCoinCards(holdings);
-        updateSelectionUI(); // THIS WILL NOW WORK
+        updateSelectionUI(); 
     } catch (e) {
         console.error('❌ CRITICAL ERROR:', e);
         if (container) {
@@ -689,7 +688,7 @@ function renderChart(labels, data) {
 }
 
 // ============================================
-// UI UPDATES (ADDED MISSING FUNCTIONS)
+// UI UPDATES (RESTORED)
 // ============================================
 function updateSelectionUI() {
     const selectedCount = document.querySelectorAll('.tx-checkbox:checked').length;
@@ -846,9 +845,15 @@ function renderAccordionJournal() {
                     pnlEl = `<div class="text-[9px] ${cls} mt-0.5 font-bold">PnL: ${sign}${formatMoney(val)} (${sign}${pct.toFixed(2)}%)</div>`;
                 }
 
+                // METHOD BADGE RESTORED
+                let methodBadge = '';
+                if (tx.method) {
+                    methodBadge = `<span class="text-[9px] text-gray-500 border border-gray-200 dark:border-gray-700 rounded px-1 ml-1">${tx.method}</span>`;
+                }
+
                 const div = document.createElement('div'); div.className = 'px-6 py-3 border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition flex items-start gap-3';
                 div.innerHTML = `<input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 mt-1" value="${tx.id}">
-                <div class="flex-1"><div class="flex justify-between items-start"><div><span class="font-bold text-sm ${color}">${tx.coin_symbol}</span><span class="text-xs text-gray-500 ml-2">${tx.type}</span><div class="text-[10px] text-gray-500 mt-0.5">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>${pnlEl}</div><div class="text-right"><div class="text-xs text-gray-600 dark:text-gray-300 font-mono">${isBuy?'+':isSell?'-':'+'}${Number(tx.amount).toFixed(4)}</div><div class="font-bold text-sm text-gray-800 dark:text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500"><i class="fa-solid fa-pen text-xs"></i></button><button onclick="onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button></div></div></div>`;
+                <div class="flex-1"><div class="flex justify-between items-start"><div><span class="font-bold text-sm ${color}">${tx.coin_symbol}</span><span class="text-xs text-gray-500 ml-2">${tx.type}</span>${methodBadge}<div class="text-[10px] text-gray-500 mt-0.5">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>${pnlEl}</div><div class="text-right"><div class="text-xs text-gray-600 dark:text-gray-300 font-mono">${isBuy?'+':isSell?'-':'+'}${Number(tx.amount).toFixed(4)}</div><div class="font-bold text-sm text-gray-800 dark:text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500"><i class="fa-solid fa-pen text-xs"></i></button><button onclick="onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button></div></div></div>`;
                 txCont.appendChild(div);
             });
             mDiv.appendChild(mHead); mDiv.appendChild(txCont); mCont.appendChild(mDiv);
@@ -864,7 +869,20 @@ function renderGoals(holdings) {
     if (goals.length === 0) { document.getElementById('goals-section').classList.add('hidden'); return; }
     document.getElementById('goals-section').classList.remove('hidden');
     
-    [...goals].sort((a,b) => (holdings[b.coin_symbol]?.qty/b.target_amount) - (holdings[a.coin_symbol]?.qty/a.target_amount)).forEach(goal => {
+    // SORTING RESTORED (Stable Sort)
+    const sortedGoals = [...goals].sort((a, b) => {
+        const qtyA = holdings[a.coin_symbol]?.qty || 0;
+        const targetA = Number(a.target_amount) || 1;
+        const pctA = targetA > 0 ? (qtyA / targetA) : 0;
+
+        const qtyB = holdings[b.coin_symbol]?.qty || 0;
+        const targetB = Number(b.target_amount) || 1;
+        const pctB = targetB > 0 ? (qtyB / targetB) : 0;
+
+        return pctB - pctA;
+    });
+    
+    sortedGoals.forEach(goal => {
         const cur = holdings[goal.coin_symbol]?.qty || 0, tgt = Number(goal.target_amount), pct = Math.min(100, (cur/tgt)*100);
         if (pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) { showCelebration(goal.coin_symbol); celebratedGoals.add(goal.coin_symbol); }
         const div = document.createElement('div'); div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm';
@@ -885,7 +903,7 @@ function showCelebration(symbol) {
 }
 
 // ============================================
-// HANDLERS (Tx, Coins, Import - UPDATED 2.0.8)
+// HANDLERS (Tx, Coins, Import - UPDATED 2.0.9)
 // ============================================
 async function handleTxSubmit(e) {
     e.preventDefault();
@@ -955,6 +973,7 @@ async function handleImportCSV(e) {
         });
         
         if (parsed.length > 0 && confirm(`Import ${parsed.length} txs?`)) {
+            // AUTO-ADD MISSING COINS
             const uniqueSymbols = [...new Set(parsed.map(p => p.coin_symbol))];
             const existingSymbols = coinsList.map(c => c.symbol.toUpperCase());
             const missingSymbols = uniqueSymbols.filter(s => !existingSymbols.includes(s));
