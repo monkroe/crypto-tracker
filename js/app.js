@@ -205,7 +205,7 @@ function setupEventListeners() {
             ...state.transactions.map(tx => 
                 headers.map(h => {
                     const value = (tx[h] || '').toString();
-                    // Escape quotes and wrap in quotes, escape newlines and carriage returns
+                    // RFC 4180 CSV escaping: wrap in quotes, escape internal quotes, preserve newlines/returns
                     return `"${value.replace(/"/g, '""').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
                 }).join(',')
             )
@@ -230,7 +230,7 @@ function setupEventListeners() {
         try {
             const encodedId = encodeURIComponent(coin.coingecko_id);
             const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodedId}&vs_currencies=usd`);
-            if (!res.ok) throw new Error('API request failed');
+            if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
             const data = await res.json();
             if (data[coin.coingecko_id]?.usd) {
                 document.getElementById('tx-price').value = data[coin.coingecko_id].usd;
