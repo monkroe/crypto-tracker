@@ -203,7 +203,11 @@ function setupEventListeners() {
         const csvContent = [
             headers.join(','),
             ...state.transactions.map(tx => 
-                headers.map(h => `"${(tx[h] || '').toString().replace(/"/g, '""')}"`).join(',')
+                headers.map(h => {
+                    const value = (tx[h] || '').toString();
+                    // Escape quotes and wrap in quotes, handle newlines
+                    return `"${value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '')}"`;
+                }).join(',')
             )
         ].join('\n');
         
@@ -224,7 +228,8 @@ function setupEventListeners() {
             return;
         }
         try {
-            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.coingecko_id}&vs_currencies=usd`);
+            const encodedId = encodeURIComponent(coin.coingecko_id);
+            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodedId}&vs_currencies=usd`);
             const data = await res.json();
             if (data[coin.coingecko_id]?.usd) {
                 document.getElementById('tx-price').value = data[coin.coingecko_id].usd;

@@ -15,8 +15,8 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY ||
     console.error('❌ CRITICAL: SUPABASE CONFIG MISSING or INVALID in js/supabase.js');
     console.error('💡 The anon key must be a valid JWT token starting with "eyJ..."');
     console.error('💡 Get your credentials from: https://supabase.com/dashboard → Settings → API');
-    // Sustabdome vykdymą, kad vartotojas pamatytų klaidą
-    throw new Error('⚠️ Nustatykite SUPABASE_URL ir SUPABASE_ANON_KEY faile js/supabase.js. Anon key must be a JWT token (starts with "eyJ").');
+    // Stop execution so the developer sees the error
+    throw new Error('⚠️ Set SUPABASE_URL and SUPABASE_ANON_KEY in js/supabase.js. Anon key must be a JWT token (starts with "eyJ").');
 }
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
