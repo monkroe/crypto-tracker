@@ -1,6 +1,6 @@
-// js/app.js - Versija 2.0.3 (Advanced Charting + Timeframes + Visual Polish)
+// js/app.js - Versija 2.0.7 (Isolated Chart Logic + Date Fixes)
 
-const APP_VERSION = '2.0.3';
+const APP_VERSION = '2.0.7';
 
 // Debug Mode
 const DEBUG_MODE = localStorage.getItem('debug') === 'true';
@@ -16,8 +16,7 @@ let prices = {};
 let myChart = null;
 let allocationChart = null;
 let celebratedGoals = new Set();
-let currentFactorId = null;
-let currentTimeframe = 'ALL'; // Default Timeframe
+let currentTimeframe = 'ALL'; 
 
 // Constants
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
@@ -79,31 +78,46 @@ function showAuthScreen() {
 }
 
 // ============================================
-// TIMEFRAME HANDLING (NEW v2.0.3)
+// TIMEFRAME HANDLING
 // ============================================
 window.changeTimeframe = function(tf) {
-    if (currentTimeframe === tf) return; // No change
+    if (currentTimeframe === tf) return;
     currentTimeframe = tf;
     
-    // Update UI Buttons
     document.querySelectorAll('.tf-btn').forEach(btn => {
         if (btn.dataset.tf === tf) {
-            // Active State
             btn.classList.remove('text-gray-400', 'hover:text-gray-900', 'dark:hover:text-white');
             btn.classList.add('text-white', 'bg-gray-800', 'dark:bg-gray-600', 'shadow-sm');
         } else {
-            // Inactive State
             btn.classList.add('text-gray-400', 'hover:text-gray-900', 'dark:hover:text-white');
             btn.classList.remove('text-white', 'bg-gray-800', 'dark:bg-gray-600', 'shadow-sm');
         }
     });
 
-    // Update Indicator Text
     const indicator = document.getElementById('tf-indicator');
     if (indicator) indicator.textContent = tf;
 
-    // Regenerate Chart
-    generateHistoryChart();
+    // Wrap in try-catch to prevent UI freeze
+    try {
+        generateHistoryChart();
+    } catch (e) {
+        console.error("Chart update error:", e);
+    }
+};
+
+// ============================================
+// EMERGENCY RESET
+// ============================================
+window.emergencyReset = async function() {
+    if (!confirm("⚠️ AR TIKRAI? Tai ištrins visas transakcijas.")) return;
+    const btn = document.getElementById('btn-emergency');
+    if(btn) btn.textContent = "Trinama...";
+    try {
+        const { error } = await _supabase.from('crypto_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) throw error;
+        alert("✅ Išvalyta! Perkraunama...");
+        location.reload();
+    } catch (e) { alert("Klaida: " + e.message); }
 };
 
 // ============================================
@@ -166,24 +180,29 @@ function setupAuthHandlers() {
     });
     
     if (isWebAuthnSupported()) {
-        document.getElementById('passkey-section').classList.remove('hidden');
-        document.getElementById('btn-passkey-login').addEventListener('click', async () => {
-            const btn = document.getElementById('btn-passkey-login');
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<div class="spinner mx-auto"></div>';
-            btn.disabled = true;
-            try {
-                const { error } = await loginWithPasskey();
-                if (error) throw error;
-            } catch (e) {
-                debugLog('Passkey login error:', e);
-                errText.textContent = "Passkey prisijungimas nepavyko.";
-                errText.classList.remove('hidden');
-            } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
-            }
-        });
+        const pkSection = document.getElementById('passkey-section');
+        if(pkSection) pkSection.classList.remove('hidden');
+        
+        const pkBtn = document.getElementById('btn-passkey-login');
+        if(pkBtn) {
+            pkBtn.addEventListener('click', async () => {
+                const btn = document.getElementById('btn-passkey-login');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<div class="spinner mx-auto"></div>';
+                btn.disabled = true;
+                try {
+                    const { data, error } = await loginWithPasskey();
+                    if (error) throw error;
+                } catch (e) {
+                    debugLog('Passkey login error:', e);
+                    errText.textContent = "Passkey prisijungimas nepavyko.";
+                    errText.classList.remove('hidden');
+                } finally {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+            });
+        }
     }
 }
 
@@ -340,13 +359,32 @@ async function loadAllData() {
         populateCoinSelect(holdings);
         renderAccordionJournal();
         renderGoals(holdings);
-        await generateHistoryChart(); // Initial chart load
+        
+        // ISOLATED CHART LOADING - If this fails, the rest still works
+        try {
+            await generateHistoryChart();
+        } catch (chartError) {
+            console.error("⚠️ Chart Error:", chartError);
+            // Optionally render an empty chart or error message in chart container
+            renderChart(['Error'], [0]);
+        }
+        
         renderAllocationChart(holdings);
         renderCoinCards(holdings);
         updateSelectionUI();
     } catch (e) {
-        console.error('❌ Error loading data:', e);
-        if (container) container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-red-400">Error loading data.</div>';
+        console.error('❌ CRITICAL ERROR:', e);
+        if (container) {
+            container.innerHTML = `
+                <div class="p-6 text-center bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-900/50">
+                    <i class="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-2"></i>
+                    <p class="text-sm text-red-600 dark:text-red-400 font-bold">Klaida užkraunant duomenis</p>
+                    <p class="text-xs text-red-500/80 mb-4">${e.message}</p>
+                    <button id="btn-emergency" onclick="emergencyReset()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-trash-can"></i> IŠVALYTI DUOMENIS
+                    </button>
+                </div>`;
+        }
     }
 }
 
@@ -492,18 +530,23 @@ function updateDashboard() {
 }
 
 // ============================================
-// ADVANCED CHART GENERATION (v2.0.3)
+// CHART GENERATION (SAFE MODE v2.0.7)
 // ============================================
 async function generateHistoryChart() {
     if (transactions.length === 0) { renderChart(['No data'], [0]); return; }
     
     const dailyChanges = {};
-    const allDates = transactions.map(t => new Date(t.date).getTime());
-    const firstTxDate = new Date(Math.min(...allDates));
+    const validDates = transactions.map(t => new Date(t.date).getTime()).filter(t => !isNaN(t));
+    
+    if (validDates.length === 0) { renderChart(['No data'], [0]); return; }
+    
+    const firstTxDate = new Date(Math.min(...validDates));
     let startDate = new Date(firstTxDate);
     const now = new Date();
     
-    // Timeframe Logic
+    // Safety check for invalid dates
+    if (isNaN(firstTxDate.getTime())) { console.error("Invalid firstTxDate"); return; }
+
     switch (currentTimeframe) {
         case '1W': startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7); break;
         case '1M': startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()); break;
@@ -513,19 +556,23 @@ async function generateHistoryChart() {
         case '5Y': startDate = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate()); break;
         case 'ALL': startDate = new Date(firstTxDate); break;
     }
-    if (startDate < firstTxDate) startDate = firstTxDate;
+    
+    if (startDate < firstTxDate || isNaN(startDate.getTime())) startDate = firstTxDate;
 
     transactions.forEach(tx => {
-        const dateStr = new Date(tx.date).toISOString().split('T')[0];
-        if (!dailyChanges[dateStr]) dailyChanges[dateStr] = [];
-        dailyChanges[dateStr].push(tx);
+        const d = new Date(tx.date);
+        if (!isNaN(d.getTime())) {
+            const dateStr = d.toISOString().split('T')[0];
+            if (!dailyChanges[dateStr]) dailyChanges[dateStr] = [];
+            dailyChanges[dateStr].push(tx);
+        }
     });
     
     const labels = [];
     const data = [];
     let runningBalances = {};
     
-    // Pre-calculate balances before startDate
+    // Pre-calc loop
     for (let d = new Date(firstTxDate); d < startDate; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         if (dailyChanges[dateStr]) {
@@ -540,11 +587,15 @@ async function generateHistoryChart() {
         }
     }
 
-    // Generate Chart Data
     let loopDate = new Date(startDate);
-    loopDate.setDate(loopDate.getDate() - 1); // Buffer
+    loopDate.setDate(loopDate.getDate() - 1);
 
-    for (; loopDate <= now; loopDate.setDate(loopDate.getDate() + 1)) {
+    // Main Chart Loop - Safety limit 365*5 days to prevent infinite loops on bad dates
+    let safeGuard = 0;
+    while (loopDate <= now && safeGuard < 2000) {
+        loopDate.setDate(loopDate.getDate() + 1);
+        safeGuard++;
+        
         const dateStr = loopDate.toISOString().split('T')[0];
         let label = (currentTimeframe === '1W' || currentTimeframe === '1M') 
             ? loopDate.toLocaleDateString('lt-LT', { day: '2-digit', month: 'short' })
@@ -700,6 +751,8 @@ function renderCoinCards(holdings) {
     }
     
     activeHoldings.forEach(([sym, data]) => {
+        const coin = coinsList.find(c => c.symbol === sym) || { symbol: sym }; 
+        
         let pnlPercent = 0, pnlAmount = 0, pnlClass = 'text-gray-400', pnlSign = '';
         if (data.averageBuyPrice && data.currentPrice) {
             pnlPercent = ((data.currentPrice - data.averageBuyPrice) / data.averageBuyPrice) * 100;
@@ -713,7 +766,7 @@ function renderCoinCards(holdings) {
         card.innerHTML = `
             <div class="space-y-4">
                 <div><p class="text-xs text-gray-500 uppercase font-bold mb-1">Balance</p><h2 class="text-3xl font-bold text-gray-900 dark:text-white">${formatMoney(data.currentValue)}</h2><p class="text-sm text-gray-500 mt-1">${data.qty.toFixed(6)} ${sanitizeText(sym)}</p></div>
-                <div class="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800"><div class="flex items-center gap-2"><span class="text-sm text-gray-500">Unrealized Return</span><i class="fa-solid fa-arrow-trend-up text-gray-400 text-xs"></i></div><div class="text-right"><p class="${pnlClass} text-base font-bold">${pnlSign}${formatMoney(pnlAmount)} (${pnlSign}${pnlPercent.toFixed(2)}%)</p></div></div>
+                <div class="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800"><div class="flex items-center gap-2"><span class="text-sm text-gray-500">Unrealized Return</span><i class="fa-solid fa-arrow-up-right-from-square text-gray-400 text-xs"></i></div><div class="text-right"><p class="${pnlClass} text-base font-bold">${pnlSign}${formatMoney(pnlAmount)} (${pnlSign}${pnlPercent.toFixed(2)}%)</p></div></div>
                 <div class="flex justify-between items-center"><span class="text-sm text-gray-500">Avg Buy Price</span><span class="text-base font-semibold text-gray-700 dark:text-gray-200">${formatPrice(data.averageBuyPrice)}</span></div>
                 <div class="flex justify-between items-center"><span class="text-sm text-gray-500">Cost Basis</span><span class="text-base font-semibold text-gray-700 dark:text-gray-200">${formatMoney(data.invested)}</span></div>
             </div>`;
@@ -728,15 +781,18 @@ function renderAccordionJournal() {
     if (transactions.length === 0) { container.innerHTML = `<div class="text-center py-8 text-sm text-gray-500">No transactions</div>`; return; }
     
     const grouped = {};
-    transactions.forEach(tx => { const d = new Date(tx.date); const y = d.getFullYear(), m = d.getMonth(); if(!grouped[y]) grouped[y] = {}; if(!grouped[y][m]) grouped[y][m] = []; grouped[y][m].push(tx); });
+    transactions.forEach(tx => { 
+        const d = new Date(tx.date); 
+        // SAFETY CHECK
+        if (isNaN(d.getTime())) return;
+        const y = d.getFullYear(), m = d.getMonth(); if(!grouped[y]) grouped[y] = {}; if(!grouped[y][m]) grouped[y][m] = []; grouped[y][m].push(tx); 
+    });
     
     Object.keys(grouped).sort((a,b)=>b-a).forEach((year, yIdx) => {
         const yDiv = document.createElement('div'); yDiv.className = 'border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden mb-3 bg-white dark:bg-gray-900 shadow-sm';
         const yHead = document.createElement('div'); yHead.className = 'px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition';
         yHead.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-calendar text-primary-500"></i><span class="font-bold text-gray-800 dark:text-white">${year}</span></div><i class="fa-solid fa-chevron-down text-gray-400 transition-transform ${yIdx===0?'rotate-180':''}"></i>`;
-        
         const mCont = document.createElement('div'); mCont.className = yIdx===0 ? 'block' : 'hidden';
-        
         yHead.onclick = () => { mCont.classList.toggle('hidden'); yHead.querySelector('.fa-chevron-down').classList.toggle('rotate-180'); };
         
         Object.keys(grouped[year]).sort((a,b)=>b-a).forEach((month, mIdx) => {
@@ -744,7 +800,6 @@ function renderAccordionJournal() {
             const mDiv = document.createElement('div'); mDiv.className = 'border-t border-gray-200 dark:border-gray-800';
             const mHead = document.createElement('div'); mHead.className = 'bg-gray-50 dark:bg-gray-800/50 px-6 py-2.5 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition';
             mHead.innerHTML = `<div class="flex items-center gap-2"><span class="text-sm font-semibold text-gray-700 dark:text-gray-300">${MONTH_NAMES_LT[month]}</span><span class="text-xs text-gray-500">(${txs.length})</span></div><i class="fa-solid fa-chevron-down text-gray-500 text-xs transition-transform ${yIdx===0 && mIdx===0 ?'rotate-180':''}"></i>`;
-            
             const txCont = document.createElement('div'); txCont.className = (yIdx===0 && mIdx===0) ? 'block' : 'hidden';
             mHead.onclick = () => { txCont.classList.toggle('hidden'); mHead.querySelector('.fa-chevron-down').classList.toggle('rotate-180'); };
             
@@ -752,24 +807,21 @@ function renderAccordionJournal() {
                 const isBuy = ['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy'].includes(tx.type);
                 const isSell = ['Sell', 'Withdraw'].includes(tx.type);
                 const color = isBuy ? 'text-green-600 dark:text-green-500' : (isSell ? 'text-red-600 dark:text-red-500' : 'text-yellow-600 dark:text-yellow-500');
+                
+                let pnlEl = '';
+                const coin = coinsList.find(c => c.symbol === tx.coin_symbol);
+                if (coin && prices[coin.coingecko_id] && tx.price_per_coin > 0 && isBuy) {
+                    const curP = prices[coin.coingecko_id].usd;
+                    const val = (curP - tx.price_per_coin) * tx.amount;
+                    const pct = ((curP - tx.price_per_coin) / tx.price_per_coin) * 100;
+                    const cls = val >= 0 ? 'text-green-500' : 'text-red-500';
+                    const sign = val >= 0 ? '+' : '';
+                    pnlEl = `<div class="text-[9px] ${cls} mt-0.5 font-bold">PnL: ${sign}${formatMoney(val)} (${sign}${pct.toFixed(2)}%)</div>`;
+                }
+
                 const div = document.createElement('div'); div.className = 'px-6 py-3 border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition flex items-start gap-3';
                 div.innerHTML = `<input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 mt-1" value="${tx.id}">
-                <div class="flex-1">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span><span class="text-xs text-gray-500 ml-2">${tx.type}</span>
-                            <div class="text-[10px] text-gray-500 mt-0.5">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-xs text-gray-600 dark:text-gray-300 font-mono">${isBuy?'+':isSell?'-':'+'}${Number(tx.amount).toFixed(4)}</div>
-                            <div class="font-bold text-sm text-gray-800 dark:text-white mt-1">${formatMoney(tx.total_cost_usd)}</div>
-                        </div>
-                        <div class="flex flex-col gap-2 ml-3">
-                            <button onclick="onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500"><i class="fa-solid fa-pen text-xs"></i></button>
-                            <button onclick="onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button>
-                        </div>
-                    </div>
-                </div>`;
+                <div class="flex-1"><div class="flex justify-between items-start"><div><span class="font-bold text-sm ${color}">${tx.coin_symbol}</span><span class="text-xs text-gray-500 ml-2">${tx.type}</span><div class="text-[10px] text-gray-500 mt-0.5">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>${pnlEl}</div><div class="text-right"><div class="text-xs text-gray-600 dark:text-gray-300 font-mono">${isBuy?'+':isSell?'-':'+'}${Number(tx.amount).toFixed(4)}</div><div class="font-bold text-sm text-gray-800 dark:text-white mt-1">${formatMoney(tx.total_cost_usd)}</div></div><div class="flex flex-col gap-2 ml-3"><button onclick="onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500"><i class="fa-solid fa-pen text-xs"></i></button><button onclick="onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button></div></div></div>`;
                 txCont.appendChild(div);
             });
             mDiv.appendChild(mHead); mDiv.appendChild(txCont); mCont.appendChild(mDiv);
@@ -788,7 +840,6 @@ function renderGoals(holdings) {
     [...goals].sort((a,b) => (holdings[b.coin_symbol]?.qty/b.target_amount) - (holdings[a.coin_symbol]?.qty/a.target_amount)).forEach(goal => {
         const cur = holdings[goal.coin_symbol]?.qty || 0, tgt = Number(goal.target_amount), pct = Math.min(100, (cur/tgt)*100);
         if (pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) { showCelebration(goal.coin_symbol); celebratedGoals.add(goal.coin_symbol); }
-        
         const div = document.createElement('div'); div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm';
         div.innerHTML = `<div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-800 dark:text-gray-300">${goal.coin_symbol}</span><div class="flex items-center gap-2"><span class="text-primary-600 dark:text-primary-400 font-bold">${pct.toFixed(1)}%</span><button onclick="onEditGoal('${goal.coin_symbol}', ${tgt})" class="text-gray-400 hover:text-yellow-500"><i class="fa-solid fa-pen text-[10px]"></i></button></div></div><div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden"><div class="bg-primary-500 h-1.5 rounded-full transition-all duration-500" style="width:${pct}%"></div></div><div class="text-[9px] text-gray-500 mt-1 text-right font-mono">${cur.toLocaleString(undefined, {maximumFractionDigits: 2})} / ${tgt.toLocaleString()}</div>`;
         container.appendChild(div);
@@ -807,7 +858,7 @@ function showCelebration(symbol) {
 }
 
 // ============================================
-// HANDLERS (Tx, Coins, Import)
+// HANDLERS (Tx, Coins, Import - UPDATED 2.0.7)
 // ============================================
 async function handleTxSubmit(e) {
     e.preventDefault();
@@ -819,8 +870,13 @@ async function handleTxSubmit(e) {
     
     if (!coinSymbol || isNaN(amount) || amount <= 0 || price < 0 || total < 0) { showToast("Check inputs!", "error"); btn.textContent = oldText; btn.disabled = false; return; }
     
+    // ISO DATE FIX
+    const dStr = document.getElementById('tx-date-input').value;
+    const tStr = document.getElementById('tx-time-input').value || '00:00';
+    const isoDate = new Date(`${dStr}T${tStr}:00`).toISOString();
+
     const txData = {
-        date: new Date(`${document.getElementById('tx-date-input').value}T${document.getElementById('tx-time-input').value || '00:00'}:00`).toISOString(),
+        date: isoDate,
         type: document.getElementById('tx-type').value, coin_symbol: coinSymbol, exchange: document.getElementById('tx-exchange').value || null,
         method: document.getElementById('tx-method').value, notes: document.getElementById('tx-notes').value || null,
         amount: amount, price_per_coin: price, total_cost_usd: total
@@ -849,6 +905,7 @@ async function handleDeleteCoinSubmit() {
     }
 }
 
+// FIXED: SAFE DATE PARSING & AUTO-CREATE
 async function handleImportCSV(e) {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
@@ -860,15 +917,37 @@ async function handleImportCSV(e) {
         
         rows.slice(1).forEach(row => {
             const cols = row.split(sep); if(cols.length < 6) return;
+            // SAFARI FIX: Replace space with T in date if missing
+            let dateStr = cols[0];
+            if (dateStr.includes(' ') && !dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+            
             parsed.push({
-                date: new Date(cols[0]).toISOString(), type: cols[1], coin_symbol: cols[2],
-                amount: parseCSVNumber(cols[3]), price_per_coin: parseCSVNumber(cols[4]), total_cost_usd: parseCSVNumber(cols[5]),
+                date: new Date(dateStr).toISOString(), 
+                type: cols[1], 
+                coin_symbol: cols[2].toUpperCase(), 
+                amount: parseCSVNumber(cols[3]), 
+                price_per_coin: parseCSVNumber(cols[4]), 
+                total_cost_usd: parseCSVNumber(cols[5]),
                 exchange: cols[6]||'', method: cols[7]||'', notes: cols[8]||''
             });
         });
         
         if (parsed.length > 0 && confirm(`Import ${parsed.length} txs?`)) {
-            if (await saveMultipleTransactions(parsed)) { showToast('Import success!', 'success'); await loadAllData(); }
+            // AUTO-ADD MISSING COINS
+            const uniqueSymbols = [...new Set(parsed.map(p => p.coin_symbol))];
+            const existingSymbols = coinsList.map(c => c.symbol.toUpperCase());
+            const missingSymbols = uniqueSymbols.filter(s => !existingSymbols.includes(s));
+            
+            if (missingSymbols.length > 0) {
+                const coinPromises = missingSymbols.map(sym => saveNewCoin({ symbol: sym, coingecko_id: sym.toLowerCase() }));
+                await Promise.all(coinPromises);
+                showToast(`Auto-added ${missingSymbols.length} new coins`, 'success');
+            }
+
+            if (await saveMultipleTransactions(parsed)) { 
+                showToast('Import success!', 'success'); 
+                await loadAllData(); 
+            }
         }
     };
     reader.readAsText(file); e.target.value = '';
