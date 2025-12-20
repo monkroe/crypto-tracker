@@ -1,37 +1,31 @@
-// js/supabase.js - v3.0.2 (Fix: Global Exports)
+// js/supabase.js - v3.1.0 (Robust Config)
 
 // ⚠️ ĮKLIJUOKITE SAVO DUOMENIS ČIA:
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; 
 const SUPABASE_ANON_KEY = 'sb_publishable_2Mie2DLsYQgNxshA3Z8hVA_tBzvLOZW';
 
-if (SUPABASE_URL.includes('JŪSŲ') || SUPABASE_ANON_KEY.includes('JŪSŲ')) {
-    console.error('❌ TRŪKSTA SUPABASE RAKTŲ! Įrašykite juos js/supabase.js faile.');
+// 1. Griežtesnė konfigūracijos patikra
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('JŪSŲ') || SUPABASE_ANON_KEY.includes('JŪSŲ')) {
+    console.error('❌ CRITICAL: SUPABASE CONFIG MISSING in js/supabase.js');
+    // Sustabdome vykdymą, kad vartotojas pamatytų klaidą
+    throw new Error('⚠️ Nustatykite SUPABASE_URL ir SUPABASE_ANON_KEY faile js/supabase.js');
 }
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 window._supabase = _supabase;
 
-console.log('🔗 Supabase Connected v3.0.2');
+console.log('🔗 Supabase Connected v3.1.0');
 
 // ======================================
-// 1. GLOBAL UTILS (WEBAUTHN) - PATAISYTA
+// WEBAUTHN (Passkey)
 // ======================================
-
-// Helperiai, kad nereiktų kartoti
 function stringToUint8Array(str) { return new TextEncoder().encode(str); }
 function arrayBufferToBase64(buffer) {
     let binary = ''; const bytes = new Uint8Array(buffer);
     for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
 }
-function base64ToUint8Array(base64) {
-    const binary = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-}
 
-// EKSPORTUOJAME Į WINDOW, KAD MATYTŲ app.js
 window.isWebAuthnSupported = function() {
     return window.PublicKeyCredential !== undefined && navigator.credentials !== undefined;
 };
@@ -46,12 +40,10 @@ window.registerPasskey = async function() {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
-        
         if (!confirm('Passkey bus išsaugotas tik šiame įrenginyje. Tęsti?')) return false;
         
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
-
         const credential = await navigator.credentials.create({
             publicKey: {
                 challenge: challenge,
@@ -62,7 +54,6 @@ window.registerPasskey = async function() {
                 timeout: 60000, attestation: 'none'
             }
         });
-        
         if (!credential) throw new Error('Failed');
         localStorage.setItem('webauthn_credential_id', arrayBufferToBase64(credential.rawId));
         localStorage.setItem('webauthn_enabled', 'true');
@@ -77,22 +68,16 @@ window.removePasskey = async function() {
 };
 
 // ======================================
-// 2. AUTH & DATA (Be pakeitimų)
+// AUTH & DATA
 // ======================================
-
 window.userSignUp = async function(email, password) {
-    try { return await _supabase.auth.signUp({ email, password }); } 
-    catch (e) { return { error: e }; }
+    try { return await _supabase.auth.signUp({ email, password }); } catch (e) { return { error: e }; }
 };
-
 window.userLogin = async function(email, password) {
-    try { return await _supabase.auth.signInWithPassword({ email, password }); } 
-    catch (e) { return { error: e }; }
+    try { return await _supabase.auth.signInWithPassword({ email, password }); } catch (e) { return { error: e }; }
 };
-
 window.userSignOut = async function() {
-    try { return await _supabase.auth.signOut(); } 
-    catch (e) { return { error: e }; }
+    try { return await _supabase.auth.signOut(); } catch (e) { return { error: e }; }
 };
 
 window.getTransactions = async function() {
@@ -101,14 +86,21 @@ window.getTransactions = async function() {
         if (!user) return [];
         const { data, error } = await _supabase.from('crypto_transactions').select('*').eq('user_id', user.id).order('date', { ascending: false });
         if (error) throw error; return data || [];
-    } catch (e) { console.error(e); return []; }
+    } catch (e) { return []; }
 };
 
 window.saveTransaction = async function(txData) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return false;
-        const cleanData = { ...txData, amount: parseFloat(txData.amount), price_per_coin: parseFloat(txData.price_per_coin), total_cost_usd: parseFloat(txData.total_cost_usd), user_id: user.id };
+        // Float protection
+        const cleanData = { 
+            ...txData, 
+            amount: parseFloat(parseFloat(txData.amount).toFixed(8)), 
+            price_per_coin: parseFloat(parseFloat(txData.price_per_coin).toFixed(8)), 
+            total_cost_usd: parseFloat(parseFloat(txData.total_cost_usd).toFixed(2)), 
+            user_id: user.id 
+        };
         const { error } = await _supabase.from('crypto_transactions').insert([cleanData]);
         if (error) throw error; return true;
     } catch (e) { console.error(e); return false; }
@@ -120,7 +112,7 @@ window.deleteTransaction = async function(id) {
         if (!user) return false;
         const { error } = await _supabase.from('crypto_transactions').delete().eq('id', id).eq('user_id', user.id);
         if (error) throw error; return true;
-    } catch (e) { console.error(e); return false; }
+    } catch (e) { return false; }
 };
 
 window.getSupportedCoins = async function() {
