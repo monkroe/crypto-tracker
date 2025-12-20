@@ -2,51 +2,42 @@
 
 Visa projekto pakeitimų istorija.
 
+## [v2.0.3] - 2025-12-19 (Advanced Charting Update)
+Didelis grafinės sąsajos atnaujinimas, orientuotas į profesionalų duomenų atvaizdavimą.
+
+### 📈 Grafikai ir Vizualizacija
+- **Timeframe Selectors:** Pridėta galimybė filtruoti portfelio istoriją pagal laikotarpius: 1 savaitė (1W), 1 mėnuo (1M), 3 mėnesiai (3M), 6 mėnesiai (6M), 1 metai (1Y), 5 metai (5Y) ir Visas laikas (ALL).
+- **Smooth Curves:** Grafiko linija dabar naudoja `tension: 0.4`, kad kreivės būtų glotnios ir estetiškos.
+- **Gradient Fill:** Po grafiko linija pridėtas permatomas spalvos gradientas, suteikiantis modernią išvaizdą (kaip profesionaliose biržose).
+- **Clean Look:** Panaikinti taškai ant linijos (jie atsiranda tik užvedus pelę), paslėptos X ašies etiketės švaresniam vaizdui.
+
+### ⚡ Logika
+- **Dynamic Filtering:** `generateHistoryChart` funkcija perrašyta taip, kad perskaičiuotų pradinį balansą prieš pasirinktą laikotarpį, užtikrinant tikslų "Start Value" atvaizdavimą.
+
+---
+
 ## [v2.0.2] - 2025-12-19 (Quality Assurance Update)
 Klaidų taisymas, saugumo patobulinimai ir kodo švara.
 
-### 🐛 Ištaisytos Klaidos (Bug Fixes)
-- **Toast Icons:** Ištaisyta klaida, kai pranešimuose dubliuodavosi emodžiai (pvz., dvi žalios varnelės). Dabar tekstas išvalomas prieš rodant.
-- **CSV Number Parsing:** Pataisytas skaičių nuskaitymas importuojant CSV. Sistema dabar teisingai supranta `1,234.56` formatą (pašalina tūkstančių skirtukus).
-- **Input Validation:** Pridėta griežta validacija – neleidžiama įvesti neigiamų kainų ar kiekių formose.
+### 🐛 Ištaisytos Klaidos
+- **Toast Icons:** Ištaisyta klaida su dvigubais emodžiais pranešimuose.
+- **CSV Parsing:** Pataisytas skaičių formatavimas importuojant (`1,234.56` vs `1.234,56`).
+- **Validation:** Griežta apsauga nuo neigiamų skaičių įvedimo.
 
 ### ✨ Naujos Funkcijos
-- **Smart CSV Import:** Automatinis skirtuko (`,`) arba (`;`) aptikimas pagal failo antraštę.
-- **Debug Mode:** Pridėtas `DEBUG_MODE` jungiklis. Produkcinėje versijoje konsolė nebus teršiama nereikalingais pranešimais.
-- **Accessibility (A11y):** Pridėti `aria-label` atributai mygtukams be teksto (tik su ikonomis).
-
-### 🔒 Saugumas & UX
-- **Passkey Warning:** Vartotojai informuojami, kad "Local Device" Passkey bus prarastas išvalius naršyklės podėlį (cache).
-- **Chart Colors:** PnL grafikas dabar pilnai adaptuojasi prie Tamsios/Šviesios temos (keičiasi ašių spalvos).
+- **Debug Mode:** `DEBUG_MODE` jungiklis švariai konsolei.
+- **Smart CSV:** Automatinis skirtuko (`,`, `;`) aptikimas.
 
 ---
 
 ## [v2.0.1] - 2025-12-19 (UI & Performance Polish)
-Našumo optimizacija, temos valdymas ir UI patobulinimai.
-
-### ⚡ Optimizacija
-- **Smart Charting:** Perrašytas grafiko generavimo algoritmas (O(N) sudėtingumas). Dideli duomenų kiekiai užsikrauna akimirksniu.
-
-### 🎨 UI/UX
-- **Theme Auto-detect:** Automatinis šviesios/tamsios temos aptikimas.
-- **Goals Sorting:** Tikslai rikiuojami pagal pasiekimo procentą (didžiausi viršuje).
-- **Number Formatting:** Standartizuotas formatas `87,958.07` (US locale).
-
----
+- **Smart Charting:** O(N) algoritmas grafikams.
+- **Auto-Theme:** Automatinis šviesios/tamsios temos parinkimas.
+- **Goals Sorting:** Tikslų rikiavimas pagal progresą.
 
 ## [v2.0.0] - 2025-12-19 (Final Release)
-Didysis atnaujinimas su biometrine autentifikacija.
-
-### 🚀 Funkcijos
-- **WebAuthn / Passkey:** Face ID / Touch ID palaikymas.
-- **Saugumas:** RLS (Row Level Security) duomenų bazėje.
-- **Bulk Operations:** Masinis transakcijų trynimas.
-
----
-
-## [v1.9.11] - 2025-12-18 (Performance Update)
-- **Bulk Delete:** Optimizuotas trynimas su `.in()`.
-- **API Cache:** CoinGecko kainų spartinanti atmintinė (1 min).
+- **WebAuthn:** Biometrinis prisijungimas.
+- **RLS:** Duomenų bazės saugumas.
 
 ## [v1.0.0] - 2025-12-13 (Project Start)
 - Pradinė versija.
