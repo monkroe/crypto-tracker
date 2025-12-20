@@ -2,71 +2,51 @@
 
 Visa projekto pakeitimų istorija.
 
+## [v2.0.2] - 2025-12-19 (Quality Assurance Update)
+Klaidų taisymas, saugumo patobulinimai ir kodo švara.
+
+### 🐛 Ištaisytos Klaidos (Bug Fixes)
+- **Toast Icons:** Ištaisyta klaida, kai pranešimuose dubliuodavosi emodžiai (pvz., dvi žalios varnelės). Dabar tekstas išvalomas prieš rodant.
+- **CSV Number Parsing:** Pataisytas skaičių nuskaitymas importuojant CSV. Sistema dabar teisingai supranta `1,234.56` formatą (pašalina tūkstančių skirtukus).
+- **Input Validation:** Pridėta griežta validacija – neleidžiama įvesti neigiamų kainų ar kiekių formose.
+
+### ✨ Naujos Funkcijos
+- **Smart CSV Import:** Automatinis skirtuko (`,`) arba (`;`) aptikimas pagal failo antraštę.
+- **Debug Mode:** Pridėtas `DEBUG_MODE` jungiklis. Produkcinėje versijoje konsolė nebus teršiama nereikalingais pranešimais.
+- **Accessibility (A11y):** Pridėti `aria-label` atributai mygtukams be teksto (tik su ikonomis).
+
+### 🔒 Saugumas & UX
+- **Passkey Warning:** Vartotojai informuojami, kad "Local Device" Passkey bus prarastas išvalius naršyklės podėlį (cache).
+- **Chart Colors:** PnL grafikas dabar pilnai adaptuojasi prie Tamsios/Šviesios temos (keičiasi ašių spalvos).
+
+---
+
 ## [v2.0.1] - 2025-12-19 (UI & Performance Polish)
 Našumo optimizacija, temos valdymas ir UI patobulinimai.
 
 ### ⚡ Optimizacija
-- **Smart Charting:** Perrašytas grafiko generavimo algoritmas. Dideli duomenų kiekiai (tūkstančiai transakcijų) dabar užsikrauna akimirksniu nestabdant naršyklės.
+- **Smart Charting:** Perrašytas grafiko generavimo algoritmas (O(N) sudėtingumas). Dideli duomenų kiekiai užsikrauna akimirksniu.
 
 ### 🎨 UI/UX
-- **Theme Auto-detect:** Pridėtas automatinis šviesios/tamsios temos aptikimas pagal įrenginio nustatymus.
-- **Theme Toggle:** Galimybė rankiniu būdu perjungti temą nustatymuose.
-- **Goals Sorting:** Tikslai dabar automatiškai rikiuojami pagal pasiekimo procentą (arčiausiai tikslo esantys rodomi viršuje).
-- **Number Formatting:** Pakeistas skaičių formatas į `87,958.07` (kablelis tūkstančiams, taškas centams) geresniam skaitomumui.
-- **Toast Fixes:** Panaikintos pasikartojančios ikonos (dvigubos varnelės) pranešimuose.
+- **Theme Auto-detect:** Automatinis šviesios/tamsios temos aptikimas.
+- **Goals Sorting:** Tikslai rikiuojami pagal pasiekimo procentą (didžiausi viršuje).
+- **Number Formatting:** Standartizuotas formatas `87,958.07` (US locale).
 
 ---
 
 ## [v2.0.0] - 2025-12-19 (Final Release)
-Didysis atnaujinimas su biometrine autentifikacija ir duomenų bazės saugumu.
+Didysis atnaujinimas su biometrine autentifikacija.
 
-### 🚀 Naujos Funkcijos
-- **WebAuthn / Passkey:** Face ID, Touch ID ir Windows Hello integracija prisijungimui (Local Device).
-- **Settings Modal:** Naujas nustatymų langas biometrijos valdymui.
-- **Toast Notifications:** Modernūs pranešimai apie veiksmus.
-- **UI:** Pridėta "Select All" varnelė masiniam žymėjimui.
-
-### 🔒 Saugumas
-- **RLS (Row Level Security):** Duomenų bazė užrakinta. Vartotojai mato tik savo įrašus.
-- **Anon Key:** Perėjimas prie saugaus viešo rakto naudojimo.
+### 🚀 Funkcijos
+- **WebAuthn / Passkey:** Face ID / Touch ID palaikymas.
+- **Saugumas:** RLS (Row Level Security) duomenų bazėje.
+- **Bulk Operations:** Masinis transakcijų trynimas.
 
 ---
 
 ## [v1.9.11] - 2025-12-18 (Performance Update)
-Optimizuotas veikimas dideliems duomenų kiekiams.
-
-### ⚡ Optimizacija
-- **Bulk Delete:** Transakcijų trynimas dabar vyksta viena užklausa (`.in()`), o ne ciklu. Greitis padidėjo ~20 kartų.
-- **Event Delegation:** Pataisytas atminties nutekėjimas ir checkbox'ų veikimas akordeonuose.
-- **API Cache:** Kainų užklausos saugomos 1 min., kad nebūtų viršytas CoinGecko limitas.
-- **Debounce:** Skaičiuoklė nebestabdo naršyklės rašant skaičius.
-
----
-
-## [v1.9.10] - 2025-12-18 (Security Hotfix)
-Kritinis saugumo atnaujinimas.
-
-### 🐛 Ištaisytos Klaidos
-- **XSS Fix:** Panaikintas `innerHTML` naudojimas transakcijų atvaizdavime.
-- **Sanitization:** Pridėta `sanitizeText()` funkcija vartotojo įvesčiai valyti.
-
----
-
-## [v1.9.9] - 2025-12-17 (CSV Logic Fix)
-Duomenų importo taisymas.
-
-### 🐛 Ištaisytos Klaidos
-- **CSV Importas:** Pataisyta logika, kai `Exchange` ir `Method` stulpeliai susimaišydavo.
-- **Smart Parsing:** Sistema dabar atpažįsta "Recurring Buy" iš pastabų laukelio.
-
----
+- **Bulk Delete:** Optimizuotas trynimas su `.in()`.
+- **API Cache:** CoinGecko kainų spartinanti atmintinė (1 min).
 
 ## [v1.0.0] - 2025-12-13 (Project Start)
-Projekto pradžia.
-
-### ✨ Funkcijos
-- Prisijungimas su el. paštu.
-- Rankinis transakcijų pridėjimas.
-- Portfelio vertės skaičiavimas realiu laiku.
-- Pelnas/Nuostolis (PnL) grafikas.
-- Turto pasiskirstymo (Allocation) "donatų" diagrama.
+- Pradinė versija.
