@@ -1,6 +1,6 @@
-// js/app.js - Versija 2.0.0 (Security fixes + WebAuthn + Optimizations)
+// js/app.js - Versija 2.0.1 (UI Polish + Performance + Auto Theme)
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.0.1';
 
 // Global State
 let coinsList = [];
@@ -10,7 +10,7 @@ let prices = {};
 let myChart = null;
 let allocationChart = null;
 let celebratedGoals = new Set();
-let currentFactorId = null; // For passkey management
+let currentFactorId = null; 
 
 // Constants
 const PRIORITY_COINS = ['BTC', 'ETH', 'KAS', 'SOL', 'BNB'];
@@ -126,7 +126,7 @@ function setupAuthHandlers() {
         try {
             const { error } = await userSignUp(emailInput.value, passInput.value);
             if (error) throw error;
-            showToast("✅ Registracija sėkminga!", "success");
+            showToast("Registracija sėkminga!", "success");
         } catch (e) {
             errText.textContent = "Klaida: " + (e.message || 'Registracija nepavyko.');
             errText.classList.remove('hidden');
@@ -220,7 +220,7 @@ function setupAppListeners() {
         btnSettings.addEventListener('click', openSettingsModal);
     }
     
-    // Select all checkbox - Event Delegation (FIXED)
+    // Select all checkbox - Event Delegation
     const journalAccordion = document.getElementById('journal-accordion');
     if (journalAccordion) {
         journalAccordion.addEventListener('change', (e) => {
@@ -272,12 +272,10 @@ async function openSettingsModal() {
             
             document.getElementById('btn-remove-passkey').addEventListener('click', async () => {
                 if (confirm('Ar tikrai norite išjungti Passkey?')) {
-                    if (currentFactorId) {
-                        const success = await removePasskey(currentFactorId);
-                        if (success) {
-                            showToast('✅ Passkey pašalintas.', 'success');
-                            openSettingsModal(); // Refresh
-                        }
+                    const success = await removePasskey();
+                    if (success) {
+                        showToast('Passkey pašalintas.', 'success');
+                        openSettingsModal(); // Refresh
                     }
                 }
             });
@@ -293,7 +291,7 @@ async function openSettingsModal() {
             document.getElementById('btn-setup-passkey').addEventListener('click', async () => {
                 const success = await registerPasskey();
                 if (success) {
-                    showToast('✅ Passkey sėkmingai įjungtas!', 'success');
+                    showToast('Passkey sėkmingai įjungtas!', 'success');
                     openSettingsModal(); // Refresh
                 }
             });
@@ -309,15 +307,16 @@ function showToast(message, type = 'success') {
     if (!container) return;
     
     const toast = document.createElement('div');
-    toast.className = `toast bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 shadow-2xl min-w-[250px]`;
+    toast.className = `toast bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 shadow-2xl min-w-[250px]`;
     
     const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-    const textColor = type === 'success' ? 'text-green-400' : type === 'error' ? 'text-red-400' : 'text-blue-400';
-    
+    const textColor = type === 'success' ? 'text-green-600 dark:text-green-400' : type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400';
+    const msgColor = 'text-gray-800 dark:text-gray-200';
+
     toast.innerHTML = `
         <div class="flex items-center gap-2">
             <span class="text-lg">${icon}</span>
-            <span class="${textColor} text-sm font-medium">${message}</span>
+            <span class="${msgColor} text-sm font-medium">${message}</span>
         </div>
     `;
     
@@ -368,8 +367,9 @@ function clearData() {
 async function loadAllData() {
     console.log('📊 Loading all data...');
     
+    // Show spinner only on initial load if empty
     const container = document.getElementById('journal-accordion');
-    if (container) {
+    if (container && transactions.length === 0) {
         container.innerHTML = '<div class="px-4 py-8 text-center text-xs text-gray-600"><div class="spinner mx-auto mb-2"></div>Loading...</div>';
     }
     
@@ -464,7 +464,7 @@ async function fetchPriceForForm() {
             priceInput.value = price;
             priceInput.dispatchEvent(new Event('input'));
             console.log(`✅ Price: ${symbol} = $${price}`);
-            showToast(`Price updated: $${price}`, 'success');
+            showToast(`Price updated: ${formatPrice(price)}`, 'success');
         } else {
             throw new Error('Price not found');
         }
@@ -542,11 +542,12 @@ function setupCalculator() {
 }
 
 // ============================================
-// FORMATTING
+// FORMATTING (US Format: 1,234.56)
 // ============================================
 function formatMoney(value) {
     const num = Number(value);
     if (isNaN(num)) return '$0.00';
+    // en-US uses comma for thousands, dot for decimals
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -561,8 +562,8 @@ function formatPrice(value) {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
-        minimumFractionDigits: 4,
-        maximumFractionDigits: 4
+        minimumFractionDigits: 2, // At least 2 decimals for prices like 87,000.00
+        maximumFractionDigits: 8  // Up to 8 for small coins
     }).format(num);
 }
 
@@ -638,8 +639,15 @@ function updateDashboard() {
     
     const pnlPercentEl = document.getElementById('total-pnl-percent');
     pnlPercentEl.textContent = (pnl >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%';
-    pnlPercentEl.style.backgroundColor = pnl >= 0 ? '#14532d' : '#7f1d1d';
-    pnlPercentEl.style.color = pnl >= 0 ? '#34d399' : '#fca5a5';
+    
+    // Adjust colors for Light/Dark mode compatibility
+    if (pnl >= 0) {
+        pnlPercentEl.classList.remove('bg-red-100', 'text-red-600', 'dark:bg-red-900', 'dark:text-red-300');
+        pnlPercentEl.classList.add('bg-green-100', 'text-green-600', 'dark:bg-green-900', 'dark:text-green-300');
+    } else {
+        pnlPercentEl.classList.remove('bg-green-100', 'text-green-600', 'dark:bg-green-900', 'dark:text-green-300');
+        pnlPercentEl.classList.add('bg-red-100', 'text-red-600', 'dark:bg-red-900', 'dark:text-red-300');
+    }
     
     return holdings;
 }
@@ -679,9 +687,9 @@ async function deleteSelectedTransactions() {
     const success = await deleteMultipleTransactions(ids);
     
     if (success) {
-        showToast(`✅ Ištrinta: ${ids.length} transakcijos(-ų)`, 'success');
+        showToast(`Ištrinta: ${ids.length} transakcijos(-ų)`, 'success');
     } else {
-        showToast(`❌ Klaida trinant transakcijas`, 'error');
+        showToast(`Klaida trinant transakcijas`, 'error');
     }
     
     btn.disabled = false;
@@ -696,10 +704,7 @@ async function deleteSelectedTransactions() {
 // ============================================
 function renderAllocationChart(holdings) {
     const canvas = document.getElementById('allocationChart');
-    if (!canvas) {
-        console.warn('⚠️ Allocation chart canvas not found');
-        return;
-    }
+    if (!canvas) return;
     
     if (allocationChart) allocationChart.destroy();
     
@@ -715,12 +720,12 @@ function renderAllocationChart(holdings) {
         }
     });
     
-    if (chartData.length === 0) {
-        console.log('⚠️ No data for allocation chart');
-        return;
-    }
+    if (chartData.length === 0) return;
     
     const ctx = canvas.getContext('2d');
+    const isDark = document.documentElement.classList.contains('dark');
+    const borderColor = isDark ? '#111827' : '#ffffff';
+    
     allocationChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -728,7 +733,7 @@ function renderAllocationChart(holdings) {
             datasets: [{
                 data: chartData,
                 backgroundColor: colors,
-                borderColor: '#111827',
+                borderColor: borderColor,
                 borderWidth: 2
             }]
         },
@@ -761,37 +766,48 @@ function renderAllocationChart(holdings) {
     });
 }
 
+// OPTIMIZED CHART GENERATION (O(N) Complexity)
 async function generateHistoryChart() {
     if (transactions.length === 0) {
         renderChart(['No data'], [0]);
         return;
     }
     
+    // 1. Group transactions by date (O(N))
+    const dailyChanges = {};
     const dates = transactions.map(t => new Date(t.date).getTime());
     const minDate = new Date(Math.min(...dates));
-    const maxDate = new Date();
+    const maxDate = new Date(); // Today
     
-    const dayLabels = [];
-    const dayValues = [];
+    transactions.forEach(tx => {
+        const dateStr = new Date(tx.date).toISOString().split('T')[0];
+        if (!dailyChanges[dateStr]) dailyChanges[dateStr] = [];
+        dailyChanges[dateStr].push(tx);
+    });
     
+    const labels = [];
+    const data = [];
+    const balances = {}; // Running balances
+    
+    // 2. Iterate days once (O(D))
     for (let d = new Date(minDate); d <= maxDate; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
-        dayLabels.push(dateStr);
+        labels.push(dateStr);
         
-        let dailyValue = 0;
-        const balances = {};
-        
-        transactions.forEach(tx => {
-            const txDate = new Date(tx.date).toISOString().split('T')[0];
-            if (txDate <= dateStr) {
+        // Apply daily changes
+        if (dailyChanges[dateStr]) {
+            dailyChanges[dateStr].forEach(tx => {
+                const amount = Number(tx.amount);
                 if (['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy', 'Staking Reward', 'Bonus', 'Gift/Airdrop'].includes(tx.type)) {
-                    balances[tx.coin_symbol] = (balances[tx.coin_symbol] || 0) + Number(tx.amount);
-                } else if (tx.type === 'Sell' || tx.type === 'Withdraw') {
-                    balances[tx.coin_symbol] = (balances[tx.coin_symbol] || 0) - Number(tx.amount);
+                    balances[tx.coin_symbol] = (balances[tx.coin_symbol] || 0) + amount;
+                } else if (['Sell', 'Withdraw'].includes(tx.type)) {
+                    balances[tx.coin_symbol] = (balances[tx.coin_symbol] || 0) - amount;
                 }
-            }
-        });
+            });
+        }
         
+        // Calculate daily value using CURRENT prices (Approximation)
+        let dailyValue = 0;
         for (const [sym, qty] of Object.entries(balances)) {
             if (qty > 0) {
                 const coin = coinsList.find(c => c.symbol === sym);
@@ -800,11 +816,10 @@ async function generateHistoryChart() {
                 }
             }
         }
-        
-        dayValues.push(dailyValue);
+        data.push(dailyValue);
     }
     
-    renderChart(dayLabels, dayValues);
+    renderChart(labels, data);
 }
 
 function renderChart(labels, data) {
@@ -820,7 +835,7 @@ function renderChart(labels, data) {
     
     let borderColor = '#2dd4bf';
     if (data.length > 1 && data[data.length - 1] < data[0]) {
-        borderColor = '#f87171';
+        borderColor = '#f87171'; // Red if down
     }
     
     myChart = new Chart(ctx, {
@@ -889,40 +904,40 @@ function renderCoinCards(holdings) {
             pnlAmount = data.currentValue - data.invested;
             
             if (pnlPercent > 0) {
-                pnlClass = 'text-green-500';
+                pnlClass = 'text-green-600 dark:text-green-500';
                 pnlSign = '+';
             } else if (pnlPercent < 0) {
-                pnlClass = 'text-red-500';
+                pnlClass = 'text-red-600 dark:text-red-500';
                 pnlSign = '';
             }
         }
         
         const card = document.createElement('div');
-        card.className = 'bg-gray-900 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition-colors';
+        card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 hover:border-gray-300 dark:hover:border-gray-700 transition-colors shadow-sm';
         
         card.innerHTML = `
             <div class="space-y-4">
                 <div>
                     <p class="text-xs text-gray-500 uppercase font-semibold tracking-wide mb-1">Balance</p>
-                    <h2 class="text-3xl font-bold text-white tracking-tight">${formatMoney(data.currentValue || 0)}</h2>
-                    <p class="text-sm text-gray-400 mt-1">${data.qty.toFixed(6)} ${sanitizeText(sym)}</p>
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">${formatMoney(data.currentValue || 0)}</h2>
+                    <p class="text-sm text-gray-500 mt-1">${data.qty.toFixed(6)} ${sanitizeText(sym)}</p>
                 </div>
-                <div class="flex justify-between items-center py-3 border-b border-gray-800">
+                <div class="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
                     <div class="flex items-center gap-2">
-                        <span class="text-sm text-gray-400">Unrealized Return</span>
-                        <i class="fa-solid fa-arrow-up-right-from-square text-gray-600 text-xs"></i>
+                        <span class="text-sm text-gray-500">Unrealized Return</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-gray-400 text-xs"></i>
                     </div>
                     <div class="text-right">
                         <p class="${pnlClass} text-base font-bold">${pnlSign}${formatMoney(pnlAmount)} (${pnlSign}${pnlPercent.toFixed(2)}%)</p>
                     </div>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-400">Average buy price</span>
-                    <span class="text-base font-semibold text-white">${formatPrice(data.averageBuyPrice || 0)}</span>
+                    <span class="text-sm text-gray-500">Average buy price</span>
+                    <span class="text-base font-semibold text-gray-700 dark:text-gray-200">${formatPrice(data.averageBuyPrice || 0)}</span>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-400">Cost basis</span>
-                    <span class="text-base font-semibold text-white">${formatMoney(data.invested || 0)}</span>
+                    <span class="text-sm text-gray-500">Cost basis</span>
+                    <span class="text-base font-semibold text-gray-700 dark:text-gray-200">${formatMoney(data.invested || 0)}</span>
                 </div>
             </div>
         `;
@@ -932,7 +947,7 @@ function renderCoinCards(holdings) {
 }
 
 // ============================================
-// TRANSACTION HISTORY (FIXED XSS)
+// TRANSACTION HISTORY (Auto Theme)
 // ============================================
 function renderAccordionJournal() {
     const container = document.getElementById('journal-accordion');
@@ -962,22 +977,22 @@ function renderAccordionJournal() {
     
     years.forEach((year, yearIndex) => {
         const yearDiv = document.createElement('div');
-        yearDiv.className = 'border border-gray-800 rounded-xl overflow-hidden mb-3';
+        yearDiv.className = 'border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden mb-3 bg-white dark:bg-gray-900 shadow-sm';
         
         const yearHeader = document.createElement('div');
-        yearHeader.className = 'bg-gray-900 px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-gray-850 transition-colors';
+        yearHeader.className = 'px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors';
         
         const totalTxs = Object.values(grouped[year]).flat().length;
         const yearTitle = document.createElement('div');
         yearTitle.className = 'flex items-center gap-2';
         yearTitle.innerHTML = `
-            <i class="fa-solid fa-calendar text-primary-400"></i>
-            <span class="font-bold text-white">${sanitizeText(year.toString())}</span>
+            <i class="fa-solid fa-calendar text-primary-500"></i>
+            <span class="font-bold text-gray-800 dark:text-white">${sanitizeText(year.toString())}</span>
             <span class="text-xs text-gray-500">(${totalTxs} transactions)</span>
         `;
         
         const chevron = document.createElement('i');
-        chevron.className = `fa-solid fa-chevron-down text-gray-500 transition-transform year-chevron-${year}`;
+        chevron.className = `fa-solid fa-chevron-down text-gray-400 transition-transform year-chevron-${year}`;
         
         yearHeader.appendChild(yearTitle);
         yearHeader.appendChild(chevron);
@@ -992,27 +1007,27 @@ function renderAccordionJournal() {
             const txs = grouped[year][month].sort((a, b) => new Date(b.date) - new Date(a.date));
             
             const monthDiv = document.createElement('div');
-            monthDiv.className = 'border-t border-gray-800/50';
+            monthDiv.className = 'border-t border-gray-200 dark:border-gray-800';
             
             const monthHeader = document.createElement('div');
-            monthHeader.className = 'bg-gray-900/50 px-6 py-2.5 flex justify-between items-center cursor-pointer hover:bg-gray-800/50 transition-colors';
+            monthHeader.className = 'bg-gray-50 dark:bg-gray-800/50 px-6 py-2.5 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors';
             
             const monthTitle = document.createElement('div');
             monthTitle.className = 'flex items-center gap-2';
             
             const monthName = document.createElement('span');
-            monthName.className = 'text-sm font-semibold text-gray-300';
+            monthName.className = 'text-sm font-semibold text-gray-700 dark:text-gray-300';
             monthName.textContent = MONTH_NAMES_LT[month];
             
             const monthCount = document.createElement('span');
-            monthCount.className = 'text-xs text-gray-600';
+            monthCount.className = 'text-xs text-gray-500';
             monthCount.textContent = `(${txs.length})`;
             
             monthTitle.appendChild(monthName);
             monthTitle.appendChild(monthCount);
             
             const monthChevron = document.createElement('i');
-            monthChevron.className = `fa-solid fa-chevron-down text-gray-600 text-xs transition-transform month-chevron-${year}-${month}`;
+            monthChevron.className = `fa-solid fa-chevron-down text-gray-500 text-xs transition-transform month-chevron-${year}-${month}`;
             
             monthHeader.appendChild(monthTitle);
             monthHeader.appendChild(monthChevron);
@@ -1023,7 +1038,7 @@ function renderAccordionJournal() {
             
             txs.forEach(tx => {
                 const txDiv = document.createElement('div');
-                txDiv.className = 'px-6 py-3 border-t border-gray-800/30 hover:bg-gray-900/30 transition-colors';
+                txDiv.className = 'px-6 py-3 border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors';
                 
                 const dateObj = new Date(tx.date);
                 const dateStr = dateObj.toLocaleDateString('lt-LT', { day: '2-digit', month: '2-digit' }) + 
@@ -1035,7 +1050,7 @@ function renderAccordionJournal() {
                 // Create elements safely
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.className = 'tx-checkbox form-checkbox h-4 w-4 text-primary-500 rounded border-gray-600 bg-gray-800 cursor-pointer transition';
+                checkbox.className = 'tx-checkbox form-checkbox h-4 w-4 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-pointer transition';
                 checkbox.value = tx.id;
                 
                 const contentDiv = document.createElement('div');
@@ -1048,15 +1063,15 @@ function renderAccordionJournal() {
                 leftCol.className = 'flex-1';
                 
                 const symbolSpan = document.createElement('span');
-                symbolSpan.className = `font-bold text-sm ${isBuy ? 'text-green-500' : isSell ? 'text-red-500' : 'text-yellow-500'}`;
+                symbolSpan.className = `font-bold text-sm ${isBuy ? 'text-green-600 dark:text-green-500' : isSell ? 'text-red-600 dark:text-red-500' : 'text-yellow-600 dark:text-yellow-500'}`;
                 symbolSpan.textContent = tx.coin_symbol;
                 
                 const typeSpan = document.createElement('span');
-                typeSpan.className = 'text-xs text-gray-600 ml-2';
+                typeSpan.className = 'text-xs text-gray-500 ml-2';
                 typeSpan.textContent = tx.type;
                 
                 const dateDiv = document.createElement('div');
-                dateDiv.className = 'text-[10px] text-gray-600 mt-0.5';
+                dateDiv.className = 'text-[10px] text-gray-500 mt-0.5';
                 dateDiv.textContent = dateStr;
                 
                 leftCol.appendChild(symbolSpan);
@@ -1064,7 +1079,7 @@ function renderAccordionJournal() {
                 
                 if (tx.method) {
                     const methodSpan = document.createElement('span');
-                    methodSpan.className = 'text-[9px] text-gray-500 border border-gray-700 rounded px-1 ml-1';
+                    methodSpan.className = 'text-[9px] text-gray-500 border border-gray-200 dark:border-gray-700 rounded px-1 ml-1';
                     methodSpan.textContent = tx.method;
                     leftCol.appendChild(methodSpan);
                 }
@@ -1083,7 +1098,7 @@ function renderAccordionJournal() {
                 if (currentPrice && tx.price_per_coin > 0 && isBuy) {
                     const pnlValue = (currentPrice - tx.price_per_coin) * tx.amount;
                     const pnlPercent = ((currentPrice - tx.price_per_coin) / tx.price_per_coin) * 100;
-                    const pnlClass = pnlValue >= 0 ? 'text-green-500' : 'text-red-500';
+                    const pnlClass = pnlValue >= 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500';
                     const sign = pnlValue >= 0 ? '+' : '';
                     
                     const pnlDiv = document.createElement('div');
@@ -1094,7 +1109,7 @@ function renderAccordionJournal() {
                 
                 if (tx.notes) {
                     const notesDiv = document.createElement('div');
-                    notesDiv.className = 'text-[10px] text-primary-400/80 italic mt-1';
+                    notesDiv.className = 'text-[10px] text-primary-600 dark:text-primary-400 italic mt-1';
                     notesDiv.innerHTML = '<i class="fa-regular fa-note-sticky mr-1"></i>';
                     const notesText = document.createElement('span');
                     notesText.textContent = tx.notes;
@@ -1106,7 +1121,7 @@ function renderAccordionJournal() {
                 rightCol.className = 'text-right ml-4';
                 
                 const amountDiv = document.createElement('div');
-                amountDiv.className = 'text-xs text-gray-300 font-mono';
+                amountDiv.className = 'text-xs text-gray-600 dark:text-gray-300 font-mono';
                 amountDiv.textContent = `${isBuy ? '+' : isSell ? '-' : '+'}${Number(tx.amount).toFixed(4)}`;
                 
                 const priceDiv = document.createElement('div');
@@ -1114,7 +1129,7 @@ function renderAccordionJournal() {
                 priceDiv.textContent = `@ ${formatPrice(tx.price_per_coin)}`;
                 
                 const totalDiv = document.createElement('div');
-                totalDiv.className = 'font-bold text-sm text-white mt-1';
+                totalDiv.className = 'font-bold text-sm text-gray-800 dark:text-white mt-1';
                 totalDiv.textContent = formatMoney(tx.total_cost_usd);
                 
                 rightCol.appendChild(amountDiv);
@@ -1125,12 +1140,12 @@ function renderAccordionJournal() {
                 actionsCol.className = 'flex flex-col gap-2 ml-3';
                 
                 const editBtn = document.createElement('button');
-                editBtn.className = 'text-gray-500 hover:text-yellow-500 transition-colors text-xs p-1';
+                editBtn.className = 'text-gray-400 hover:text-yellow-500 transition-colors text-xs p-1';
                 editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
                 editBtn.onclick = () => onEditTx(tx.id);
                 
                 const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'text-gray-500 hover:text-red-500 transition-colors text-xs p-1';
+                deleteBtn.className = 'text-gray-400 hover:text-red-500 transition-colors text-xs p-1';
                 deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
                 deleteBtn.onclick = () => onDeleteTx(tx.id);
                 
@@ -1191,7 +1206,7 @@ function renderAccordionJournal() {
 }
 
 // ============================================
-// GOALS
+// GOALS (Sorted by % Descending)
 // ============================================
 function renderGoals(holdings) {
     const container = document.getElementById('goals-container');
@@ -1208,7 +1223,20 @@ function renderGoals(holdings) {
     
     section.classList.remove('hidden');
     
-    goals.forEach(goal => {
+    // Sort goals: Highest percentage first
+    const sortedGoals = [...goals].sort((a, b) => {
+        const qtyA = holdings[a.coin_symbol]?.qty || 0;
+        const targetA = Number(a.target_amount) || 1;
+        const pctA = (qtyA / targetA);
+        
+        const qtyB = holdings[b.coin_symbol]?.qty || 0;
+        const targetB = Number(b.target_amount) || 1;
+        const pctB = (qtyB / targetB);
+        
+        return pctB - pctA;
+    });
+    
+    sortedGoals.forEach(goal => {
         const current = holdings[goal.coin_symbol]?.qty || 0;
         const target = Number(goal.target_amount);
         
@@ -1222,24 +1250,24 @@ function renderGoals(holdings) {
         }
         
         const div = document.createElement('div');
-        div.className = 'bg-gray-900 border border-gray-800 p-3 rounded-xl';
+        div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm';
         
         const header = document.createElement('div');
         header.className = 'flex justify-between text-xs mb-1';
         
         const symbol = document.createElement('span');
-        symbol.className = 'font-bold text-gray-300';
+        symbol.className = 'font-bold text-gray-800 dark:text-gray-300';
         symbol.textContent = goal.coin_symbol;
         
         const rightSide = document.createElement('div');
         rightSide.className = 'flex items-center gap-2';
         
         const percentage = document.createElement('span');
-        percentage.className = 'text-primary-400 font-bold';
+        percentage.className = 'text-primary-600 dark:text-primary-400 font-bold';
         percentage.textContent = `${pct.toFixed(1)}%`;
         
         const editBtn = document.createElement('button');
-        editBtn.className = 'text-gray-500 hover:text-yellow-500 transition-colors';
+        editBtn.className = 'text-gray-400 hover:text-yellow-500 transition-colors';
         editBtn.innerHTML = '<i class="fa-solid fa-pen text-[10px]"></i>';
         editBtn.onclick = () => onEditGoal(goal.coin_symbol, target);
         
@@ -1250,7 +1278,7 @@ function renderGoals(holdings) {
         header.appendChild(rightSide);
         
         const progressBar = document.createElement('div');
-        progressBar.className = 'w-full bg-gray-800 rounded-full h-1.5 overflow-hidden';
+        progressBar.className = 'w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden';
         
         const progressFill = document.createElement('div');
         progressFill.className = 'bg-primary-500 h-1.5 rounded-full transition-all duration-500';
@@ -1419,7 +1447,7 @@ async function handleTxSubmit(e) {
     
     if (success) {
         closeModal('add-modal');
-        showToast(txId ? '✅ Transaction updated!' : '✅ Transaction saved!', 'success');
+        showToast(txId ? 'Transaction updated!' : 'Transaction saved!', 'success');
         await loadAllData();
     }
     
@@ -1476,7 +1504,7 @@ window.onDeleteTx = async function(id) {
     
     const success = await deleteTransaction(id);
     if (success) {
-        showToast('✅ Transaction deleted', 'success');
+        showToast('Transaction deleted', 'success');
         await loadAllData();
     }
 };
@@ -1515,7 +1543,7 @@ async function handleNewCoinSubmit() {
             document.getElementById('new-coin-id').value = '';
             document.getElementById('new-coin-target').value = '';
             closeModal('new-coin-modal');
-            showToast('✅ Coin added!', 'success');
+            showToast('Coin added!', 'success');
             await loadAllData();
         }
     } catch (e) {
@@ -1558,7 +1586,7 @@ async function handleDeleteCoinSubmit() {
             }
             
             closeModal('delete-coin-modal');
-            showToast('✅ Coin deleted', 'success');
+            showToast('Coin deleted', 'success');
             await loadAllData();
         }
     } catch (e) {
@@ -1615,16 +1643,18 @@ async function handleImportCSV(event) {
                 });
             });
         } else {
-            // UNIVERSAL FORMAT (FIXED)
+            // UNIVERSAL FORMAT (Robust for comma and semicolon)
             rows.slice(1).forEach(row => {
-                const cols = row.split(',');
+                const separator = row.includes(';') ? ';' : ',';
+                const cols = row.split(separator);
+                
                 if (cols.length < 6) return;
                 
                 let exchange = cols[6] || '';
                 let method = cols[7] || '';
                 let note = cols[8] || '';
                 
-                // SMART FIX: Check notes for method keywords
+                // Smart Fix: Recurring Buy
                 if (note.includes('Recurring Buy')) {
                     method = 'Recurring Buy';
                     note = note.replace('Recurring Buy', '').trim();
@@ -1632,14 +1662,17 @@ async function handleImportCSV(event) {
                     method = 'Instant Buy';
                     note = note.replace('Instant Buy', '').trim();
                 }
+
+                // Helper to clean numbers (replace comma with dot if needed for EU format)
+                const cleanNum = (val) => parseFloat(val.replace(',', '.'));
                 
                 parsedTransactions.push({
                     date: new Date(cols[0]).toISOString(),
                     type: cols[1],
                     coin_symbol: cols[2],
-                    amount: parseFloat(cols[3]),
-                    price_per_coin: parseFloat(cols[4]),
-                    total_cost_usd: parseFloat(cols[5]),
+                    amount: cleanNum(cols[3]),
+                    price_per_coin: cleanNum(cols[4]),
+                    total_cost_usd: cleanNum(cols[5]),
                     exchange: exchange,
                     method: method,
                     notes: note
@@ -1656,10 +1689,10 @@ async function handleImportCSV(event) {
             const success = await saveMultipleTransactions(parsedTransactions);
             
             if (success) {
-                showToast('✅ Importas sėkmingas!', 'success');
+                showToast('Importas sėkmingas!', 'success');
                 await loadAllData();
             } else {
-                showToast('❌ Importas nepavyko', 'error');
+                showToast('Importas nepavyko', 'error');
             }
         }
     };
@@ -1706,7 +1739,7 @@ function exportToCSV() {
     link.click();
     document.body.removeChild(link);
     
-    showToast('✅ CSV exported!', 'success');
+    showToast('CSV exported!', 'success');
 }
 
 // ============================================
