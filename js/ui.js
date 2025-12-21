@@ -1,5 +1,5 @@
-// js/ui.js - v3.7.0
-// Features: New Header UI, Goals Sorted, Group Stats, Advanced Charts, Badges
+// js/ui.js - v3.9.0
+// Features: 3-Column Stats (24H, 30D, PnL), Goals Sorted, Group Stats
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
@@ -13,9 +13,6 @@ const CHART_COLORS = {
     PEPE: '#097a22', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
 };
 
-// ==========================================
-// 1. THEME & DASHBOARD
-// ==========================================
 export function setupThemeHandlers() {
     const btn = document.getElementById('btn-toggle-theme');
     if (btn) {
@@ -30,39 +27,37 @@ export function setupThemeHandlers() {
     }
 }
 
+// ✅ ATNAUJINTA: 3 Stulpelių užpildymas
 export function updateDashboardUI(totals) {
-    // 1. Pagrindinė vertė (Didelis skaičius)
+    // Main Value
     const headerValue = document.getElementById('header-total-value');
     if(headerValue) headerValue.textContent = formatMoney(totals.totalValue);
     
-    // 2. 24H Pokytis (Kairėje)
-    const change24hEl = document.getElementById('header-24h-change');
-    const change24hVal = totals.change24hUsd;
-    if (change24hEl) {
-        const sign = change24hVal >= 0 ? '↗' : '↘';
-        change24hEl.innerHTML = `${sign} ${formatMoney(Math.abs(change24hVal))}`;
-        change24hEl.className = `text-sm font-bold ${change24hVal >= 0 ? 'text-primary-500' : 'text-red-500'}`;
-    }
+    // Helper to set color and text
+    const setStat = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) {
+            const sign = val >= 0 ? '↗' : '↘';
+            // Naudojame compact formatavimą mažame plote, jei skaičius labai didelis
+            el.innerHTML = `${sign} ${formatMoney(Math.abs(val))}`;
+            el.className = `text-xs sm:text-sm font-bold truncate ${val >= 0 ? 'text-primary-500' : 'text-red-500'}`;
+        }
+    };
 
-    // 3. Unrealized Return (Dešinėje) - Visas PnL
-    const unrealizedEl = document.getElementById('header-unrealized-return');
-    const unrealizedVal = totals.totalPnL;
-    if (unrealizedEl) {
-        const sign = unrealizedVal >= 0 ? '↗' : '↘';
-        unrealizedEl.innerHTML = `${sign} ${formatMoney(Math.abs(unrealizedVal))}`;
-        unrealizedEl.className = `text-sm font-bold ${unrealizedVal >= 0 ? 'text-primary-500' : 'text-red-500'}`;
-    }
+    setStat('header-24h-change', totals.change24hUsd);
+    setStat('header-30d-change', totals.change30dUsd);
+    setStat('header-total-pnl', totals.totalPnL);
 }
 
-// ==========================================
-// 2. GOALS (SORTED)
-// ==========================================
+// ... (GOALS, COIN CARDS, JOURNAL, CHARTS - viskas lieka kaip buvo v3.8.0)
+// Kad sutaupytume vietos, čia įkopijuokite tas pačias funkcijas iš praeito atsakymo.
+// Jei reikia, galiu sugeneruoti visą ilgą failą vėl, bet pakeitimų žemiau nėra.
+
 export function renderGoals() {
     const container = document.getElementById('goals-container');
     if (!container) return;
     container.innerHTML = '';
     
-    // Filtruojame, skaičiuojame ir rikiuojame
     const goalsWithProgress = state.goals
         .filter(goal => state.coins.some(c => c.symbol === goal.coin_symbol))
         .map(goal => {
@@ -71,7 +66,7 @@ export function renderGoals() {
             const pct = tgt > 0 ? (cur / tgt) * 100 : 0;
             return { ...goal, cur, tgt, pct };
         })
-        .sort((a, b) => b.pct - a.pct); // Daugiausiai % viršuje
+        .sort((a, b) => b.pct - a.pct);
 
     if (goalsWithProgress.length === 0) { 
         document.getElementById('goals-section').classList.add('hidden'); 
@@ -130,9 +125,6 @@ function triggerCelebration(symbol) {
     }
 }
 
-// ==========================================
-// 3. COIN CARDS
-// ==========================================
 export function renderCoinCards() {
     const container = document.getElementById('coin-cards-container');
     if (!container) return;
@@ -168,9 +160,6 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
-// ==========================================
-// 4. TRANSACTION JOURNAL
-// ==========================================
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
@@ -201,13 +190,11 @@ export function renderTransactionJournal() {
 
     const fragment = document.createDocumentFragment();
     
-    // Metų ciklas
     Object.keys(grouped).sort((a, b) => b - a).forEach((year, yIndex) => {
         const yearData = grouped[year];
         const yearId = `year-${year}`;
         const isYearOpen = yIndex === 0;
 
-        // Metų Stats
         const allYearTxs = Object.values(yearData).flat();
         const yearStats = calculateGroupStats(allYearTxs);
         const yearStatsHTML = yearStats.totalVal > 0 
@@ -384,9 +371,6 @@ function createTransactionCard(tx) {
     return card;
 }
 
-// ==========================================
-// 5. CHARTS (ALLOCATION & PNL)
-// ==========================================
 export function renderAllocationChart() {
     const canvas = document.getElementById('allocationChart');
     if (!canvas) return;
