@@ -1,5 +1,5 @@
-// js/ui.js - v3.0.2
-// Features: 5Y Support, Nested Accordion, PnL Chart Axes
+// js/ui.js - v3.5.0
+// Features: Group PnL Stats in Accordion, Advanced Charts, Goals
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
@@ -13,6 +13,9 @@ const CHART_COLORS = {
     PEPE: '#22c55e', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
 };
 
+// ==========================================
+// 1. THEME & DASHBOARD
+// ==========================================
 export function setupThemeHandlers() {
     const btn = document.getElementById('btn-toggle-theme');
     if (btn) {
@@ -40,6 +43,9 @@ export function updateDashboardUI(totals) {
     pctEl.className = `text-xs font-bold px-2 py-0.5 rounded ${totals.totalPnL >= 0 ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`;
 }
 
+// ==========================================
+// 2. GOALS
+// ==========================================
 export function renderGoals() {
     const container = document.getElementById('goals-container');
     if (!container) return;
@@ -108,6 +114,9 @@ function triggerCelebration(symbol) {
     }
 }
 
+// ==========================================
+// 3. COIN CARDS
+// ==========================================
 export function renderCoinCards() {
     const container = document.getElementById('coin-cards-container');
     if (!container) return;
@@ -143,6 +152,9 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
+// ==========================================
+// 4. TRANSACTION JOURNAL (ACCORDION WITH STATS)
+// ==========================================
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
@@ -155,6 +167,7 @@ export function renderTransactionJournal() {
         return; 
     }
 
+    // 1. Grupuojame
     const grouped = {};
     sortedTxs.forEach(tx => { 
         const d = new Date(tx.date); 
@@ -173,11 +186,22 @@ export function renderTransactionJournal() {
 
     const fragment = document.createDocumentFragment();
     
+    // Metų ciklas
     Object.keys(grouped).sort((a, b) => b - a).forEach((year, yIndex) => {
         const yearData = grouped[year];
         const yearId = `year-${year}`;
         const isYearOpen = yIndex === 0;
 
+        // Skaičiuojame Metų Stats (visų to metų mėnesių bendra suma)
+        const allYearTxs = Object.values(yearData).flat();
+        const yearStats = calculateGroupStats(allYearTxs);
+        const yearStatsHTML = yearStats.totalVal > 0 
+            ? `<span class="${yearStats.pnl >= 0 ? 'text-primary-500' : 'text-red-500'} font-bold text-xs ml-2">
+                ${yearStats.pnl >= 0 ? '+' : ''}${formatMoney(yearStats.pnl)} (${yearStats.pct.toFixed(1)}%)
+               </span>` 
+            : '';
+
+        // A. METŲ HEADER
         const yearWrapper = document.createElement('div');
         yearWrapper.className = 'mb-4 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden';
 
@@ -186,11 +210,15 @@ export function renderTransactionJournal() {
         yearHeader.innerHTML = `
             <div class="flex items-center gap-3">
                 <i class="fa-solid fa-calendar-days text-primary-500"></i>
-                <span class="font-bold text-gray-800 dark:text-gray-200 text-sm">${year}</span>
+                <div class="flex items-baseline">
+                    <span class="font-bold text-gray-800 dark:text-gray-200 text-sm">${year}</span>
+                    ${yearStatsHTML}
+                </div>
             </div>
             <i class="fa-solid fa-chevron-down transition-transform duration-300 text-gray-500 ${isYearOpen ? '' : '-rotate-90'}" id="icon-${yearId}"></i>
         `;
 
+        // B. METŲ TURINYS
         const yearContent = document.createElement('div');
         yearContent.id = yearId;
         yearContent.className = `bg-white dark:bg-gray-900/50 p-2 space-y-2 ${isYearOpen ? '' : 'hidden'}`;
@@ -203,6 +231,7 @@ export function renderTransactionJournal() {
 
         yearWrapper.appendChild(yearHeader);
 
+        // C. MĖNESIŲ CIKLAS
         const sortedMonths = Object.keys(yearData).sort((a, b) => parseInt(b) - parseInt(a));
         
         sortedMonths.forEach((monthIndex, mIndex) => {
@@ -210,16 +239,29 @@ export function renderTransactionJournal() {
             const monthId = `month-${year}-${monthIndex}`;
             const isMonthOpen = mIndex === 0;
 
+            // Skaičiuojame Mėnesio Stats
+            const stats = calculateGroupStats(txs);
+            const statsHTML = stats.totalVal > 0 
+                ? `<span class="${stats.pnl >= 0 ? 'text-primary-500' : 'text-red-500'} font-mono ml-2">
+                    ${stats.pnl >= 0 ? '+' : ''}${formatMoney(stats.pnl)} (${stats.pct.toFixed(1)}%)
+                   </span>` 
+                : '';
+
             const monthWrapper = document.createElement('div');
             
             const monthHeader = document.createElement('div');
-            monthHeader.className = 'flex justify-between items-center px-2 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded mb-1 select-none group';
+            monthHeader.className = 'flex justify-between items-center px-2 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded mb-1 select-none group';
             monthHeader.innerHTML = `
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 w-full">
                     <div class="w-1 h-3 bg-primary-500 rounded-full"></div>
-                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider group-hover:text-primary-500 transition-colors">${monthsLT[parseInt(monthIndex)]} (${txs.length})</span>
+                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider group-hover:text-primary-500 transition-colors">
+                        ${monthsLT[parseInt(monthIndex)]} (${txs.length})
+                    </span>
+                    <div class="ml-auto text-[10px] font-bold flex items-center gap-2">
+                        ${statsHTML}
+                        <i class="fa-solid fa-chevron-down text-gray-400 transition-transform duration-300 ${isMonthOpen ? '' : '-rotate-90'}" id="icon-${monthId}"></i>
+                    </div>
                 </div>
-                <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 transition-transform duration-300 ${isMonthOpen ? '' : '-rotate-90'}" id="icon-${monthId}"></i>
             `;
 
             const monthContent = document.createElement('div');
@@ -245,6 +287,31 @@ export function renderTransactionJournal() {
         yearWrapper.appendChild(yearContent);
         container.appendChild(yearWrapper);
     });
+}
+
+// ✅ PATAISYTA: Pagalbinė funkcija grupės PnL skaičiavimui
+function calculateGroupStats(txs) {
+    let totalCost = 0;
+    let totalVal = 0;
+
+    txs.forEach(tx => {
+        const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
+        if (isBuy) {
+            const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
+            if (coin && state.prices[coin.coingecko_id]) {
+                const price = state.prices[coin.coingecko_id].usd;
+                totalCost += Number(tx.total_cost_usd);
+                totalVal += Number(tx.amount) * price;
+            }
+        }
+        // Pastaba: Pardavimai čia neįtraukiami į "Performance" skaičiavimą, 
+        // nes tai rodytų realizuotą pelną, o mes norime matyti, kaip sekasi investicijoms, pirktoms tą mėnesį.
+    });
+
+    const pnl = totalVal - totalCost;
+    const pct = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+    
+    return { pnl, pct, totalVal };
 }
 
 function createTransactionCard(tx) {
@@ -295,6 +362,9 @@ function createTransactionCard(tx) {
     return card;
 }
 
+// ==========================================
+// 5. CHARTS (ALLOCATION & PNL)
+// ==========================================
 export function renderAllocationChart() {
     const canvas = document.getElementById('allocationChart');
     if (!canvas) return;
@@ -358,7 +428,6 @@ export function renderAllocationChart() {
     });
 }
 
-// ✅ PATAISYTA: PnL Grafikas su 5Y logika
 export function renderPnLChart(timeframe = 'ALL') {
     const canvas = document.getElementById('pnlChart');
     if (!canvas) return;
@@ -377,44 +446,40 @@ export function renderPnLChart(timeframe = 'ALL') {
     else if (timeframe === '3M') cutoff.setMonth(now.getMonth() - 3);
     else if (timeframe === '6M') cutoff.setMonth(now.getMonth() - 6);
     else if (timeframe === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
-    else if (timeframe === '5Y') cutoff.setFullYear(now.getFullYear() - 5); // ✅ 5Y Logika
-    else if (timeframe === 'ALL') cutoff.setFullYear(1900);
+    else if (timeframe === '5Y') cutoff.setFullYear(now.getFullYear() - 5);
+    else if (timeframe === 'ALL') cutoff.setFullYear(2000);
 
-    const sortedTxs = state.transactions
-        .filter(tx => new Date(tx.date) >= cutoff)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    if (sortedTxs.length === 0) return;
-
-    const dataPoints = [];
-    const labels = [];
     let cumulativeInvested = 0;
+    const allTxs = state.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    if (timeframe !== 'ALL') {
-        const previousTxs = state.transactions.filter(tx => new Date(tx.date) < cutoff);
-        previousTxs.forEach(tx => {
-            const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
-            if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
-            else cumulativeInvested -= Number(tx.total_cost_usd);
-        });
-        dataPoints.push(cumulativeInvested);
-        labels.push('');
-    }
+    const pastTxs = allTxs.filter(tx => new Date(tx.date) < cutoff);
+    pastTxs.forEach(tx => {
+        const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
+        if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
+        else cumulativeInvested -= Number(tx.total_cost_usd);
+    });
 
-    sortedTxs.forEach(tx => {
+    const points = [{ date: cutoff, val: cumulativeInvested }];
+
+    const relevantTxs = allTxs.filter(tx => new Date(tx.date) >= cutoff);
+    relevantTxs.forEach(tx => {
         const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
         if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
         else cumulativeInvested -= Number(tx.total_cost_usd);
         
-        dataPoints.push(cumulativeInvested);
-        
-        const d = new Date(tx.date);
-        let dateLabel = d.toLocaleDateString();
-        if (timeframe === '24H') dateLabel = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        labels.push(dateLabel);
+        points.push({ date: new Date(tx.date), val: cumulativeInvested });
+    });
+
+    points.push({ date: now, val: cumulativeInvested });
+
+    const labels = points.map(p => {
+        if (timeframe === '24H') return p.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        if (timeframe === '1W') return p.date.toLocaleDateString('lt-LT', {weekday: 'short'}); 
+        return p.date.toLocaleDateString('lt-LT', {month: 'numeric', day: 'numeric'});
     });
     
+    const dataPoints = points.map(p => p.val);
+
     const ctx = canvas.getContext('2d');
     const isDark = document.documentElement.classList.contains('dark');
     const isPositive = dataPoints[dataPoints.length - 1] >= 0;
@@ -425,14 +490,16 @@ export function renderPnLChart(timeframe = 'ALL') {
         data: {
             labels: labels,
             datasets: [{
-                label: 'Invested Capital',
+                label: 'Investuota',
                 data: dataPoints,
                 borderColor: color,
                 backgroundColor: isPositive ? 'rgba(45, 212, 191, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                 borderWidth: 2,
-                tension: 0.2,
+                tension: 0.1,
                 fill: true,
-                pointRadius: timeframe === '24H' ? 3 : 0,
+                pointRadius: (ctx) => {
+                    return points.length < 30 ? 3 : 0; 
+                },
                 pointHoverRadius: 5
             }]
         },
@@ -451,7 +518,7 @@ export function renderPnLChart(timeframe = 'ALL') {
                     borderWidth: 1,
                     callbacks: {
                         label: function(context) {
-                            return 'Invested: ' + formatMoney(context.raw);
+                            return 'Investuota: ' + formatMoney(context.raw);
                         }
                     }
                 }
@@ -463,8 +530,9 @@ export function renderPnLChart(timeframe = 'ALL') {
                     ticks: {
                         color: isDark ? '#6b7280' : '#9ca3af',
                         font: { size: 9 },
-                        maxTicksLimit: 6,
-                        maxRotation: 0
+                        maxTicksLimit: timeframe === '24H' ? 6 : 7,
+                        maxRotation: 0,
+                        autoSkip: true
                     }
                 },
                 y: { 
