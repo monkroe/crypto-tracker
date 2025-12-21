@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Crypto Tracker v3.0.2</title>
+    <title>Crypto Tracker v3.7.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -33,13 +33,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Base Styles */
         body { -webkit-tap-highlight-color: transparent; }
         input, select, textarea { -webkit-appearance: none; -moz-appearance: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; } 
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Animations */
         .fade-in { animation: fadeIn 0.5s ease-in-out; } 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
@@ -49,17 +47,14 @@
         .pop-in { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         
-        /* Components */
         .spinner { border: 2px solid rgba(156, 163, 175, 0.3); border-top-color: #2dd4bf; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; } 
         @keyframes spin { to { transform: rotate(360deg); } }
         
         .form-checkbox { appearance: none; background-color: #f3f4f6; border: 1px solid #d1d5db; display: inline-block; position: relative; }
         .dark .form-checkbox { background-color: #1f2937; border-color: #374151; }
-        
         .form-checkbox:checked { background-color: #2dd4bf; border-color: #2dd4bf; }
         .form-checkbox:checked:after { content: '✔'; position: absolute; top: -2px; left: 1px; font-size: 10px; color: #000; }
         
-        /* Toast Notification */
         .toast { position: fixed; bottom: 20px; right: 20px; z-index: 9999; transform: translateX(400px); transition: transform 0.3s ease-out; }
         .toast.show { transform: translateX(0); }
     </style>
@@ -67,7 +62,6 @@
 <body class="bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-200 font-sans pb-20 transition-colors duration-300">
 
     <input type="file" id="csv-file-input" accept=".csv" class="hidden">
-
     <div id="toast-container"></div>
 
     <div id="auth-screen" class="fixed inset-0 z-50 bg-white dark:bg-gray-950 flex flex-col items-center justify-center p-6 fade-in transition-colors duration-300">
@@ -83,7 +77,6 @@
                     <i class="fa-solid fa-fingerprint text-2xl"></i>
                     <span>Prisijungti su Face ID / Passkey</span>
                 </button>
-                
                 <div class="relative my-6">
                     <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-300 dark:border-gray-800"></div></div>
                     <div class="relative flex justify-center text-xs"><span class="bg-white dark:bg-gray-950 px-2 text-gray-500">arba</span></div>
@@ -104,44 +97,50 @@
 
     <div id="app-content" class="hidden">
         
-        <header class="fixed top-0 w-full bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 z-40 transition-colors duration-300">
-            <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-chart-pie text-primary-500 dark:text-primary-400 text-lg"></i>
-                    <h1 class="font-bold text-base tracking-wide text-gray-900 dark:text-gray-100">Portfelis</h1>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="text-right">
-                        <p class="text-[10px] text-gray-500 uppercase font-semibold">Bendra vertė</p>
-                        <p id="header-total-value" class="text-lg font-bold text-gray-900 dark:text-white tracking-tight">$0.00</p>
-                        <p class="text-[9px] text-gray-600 mt-0.5">Investuota: <span id="total-invested" class="text-primary-600 dark:text-primary-400 font-bold">$0.00</span></p>
+        <header class="fixed top-0 w-full bg-white/95 dark:bg-gray-900/95 backdrop-blur z-40 transition-colors duration-300 pb-2">
+            <div class="max-w-md mx-auto px-4 pt-4">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-primary-500/10 rounded-full flex items-center justify-center">
+                            <i class="fa-solid fa-wallet text-primary-500"></i>
+                        </div>
+                        <h1 class="font-bold text-lg text-gray-900 dark:text-white">Portfelis</h1>
                     </div>
-                    <button type="button" id="btn-settings" class="text-gray-500 hover:text-primary-500 transition-colors" title="Nustatymai" aria-label="Open settings">
-                        <i class="fa-solid fa-gear text-lg" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" id="btn-logout" class="text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors" title="Atsijungti" aria-label="Log out">
-                        <i class="fa-solid fa-right-from-bracket text-lg" aria-hidden="true"></i>
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button type="button" id="btn-settings" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                        <button type="button" id="btn-logout" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-red-500 transition-colors">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="text-center mb-6">
+                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Portfolio value</p>
+                    <h1 id="header-total-value" class="text-5xl font-bold text-gray-900 dark:text-white tracking-tight">$0.00</h1>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-2">
+                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 text-center border border-gray-100 dark:border-gray-800">
+                        <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Balance change 24H</p>
+                        <p id="header-24h-change" class="text-sm font-bold text-gray-400">Loading...</p>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 text-center border border-gray-100 dark:border-gray-800">
+                        <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Unrealized return</p>
+                        <p id="header-unrealized-return" class="text-sm font-bold text-gray-400">Loading...</p>
+                    </div>
                 </div>
             </div>
         </header>
 
-        <main class="max-w-md mx-auto px-4 pt-20 space-y-5 min-h-screen">
+        <main class="max-w-md mx-auto px-4 pt-[280px] space-y-5 min-h-screen pb-20">
             
             <section class="grid grid-cols-1 gap-4">
                 <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-lg relative overflow-hidden transition-colors duration-300">
-                    <div class="flex justify-between items-start mb-2">
-                        <div>
-                            <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Visas Pelnas/Nuostolis</p>
-                            <div class="flex items-baseline gap-2 mt-1">
-                                <h2 id="total-pnl" class="text-2xl font-bold text-gray-900 dark:text-white">$0.00</h2>
-                                <span id="total-pnl-percent" class="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">0.00%</span>
-                            </div>
-                            <div id="pnl-24h-change" class="text-[10px] text-gray-500 mt-1 hidden">
-                                24h: <span id="pnl-24h-value" class="font-bold">+$0.00</span>
-                            </div>
-                        </div>
-                        <div id="tf-indicator" class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-[10px] font-bold text-gray-500 transition-colors">ALL</div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-bold text-gray-500 uppercase">Istorija</span>
+                        <div id="tf-indicator" class="bg-primary-500/10 text-primary-600 dark:text-primary-400 px-2 py-0.5 rounded text-[10px] font-bold">ALL</div>
                     </div>
                     
                     <div class="h-48 w-full mb-4"><canvas id="pnlChart"></canvas></div>
@@ -219,7 +218,7 @@
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">Sukurta su <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> ir DI pagalba</p>
                 <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">Kraunama...</span></p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v3.7.0</span></p>
             </footer>
         </main>
     </div>
