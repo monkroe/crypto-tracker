@@ -1,7 +1,6 @@
-// js/logic.js - v3.7.0
-// Features: 24h Change Calculation, Error Handling
+// js/logic.js - v3.9.0 (Dual Stats: 24H & 30D)
 
-const CACHE_DURATION = 60000; // 1 minutė (dažniau, nes reikia 24h pokyčio)
+const CACHE_DURATION = 60000; 
 const safeFloat = (num) => parseFloat(Number(num).toFixed(8));
 
 export let state = {
@@ -38,7 +37,7 @@ export async function loadInitialData() {
     }
 }
 
-// ✅ ATNAUJINTA: Prašome 'include_24hr_change=true'
+// ✅ ATNAUJINTA: Imame ir 24h, ir 30d
 export async function fetchPrices() {
     if (state.coins.length === 0) return;
     
@@ -50,31 +49,36 @@ export async function fetchPrices() {
     const ids = state.coins.map(c => c.coingecko_id).join(',');
     
     try {
-        // Pridėta: &include_24hr_change=true
-        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
+        // Prašome 30d. 24h CoinGecko 'markets' endpointas duoda pagal nutylėjimą.
+        const res = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=30d`);
         
         if (!res.ok) {
-            if (res.status === 429) console.warn('API limitas. Naudojamos senos kainos.');
+            if (res.status === 429) console.warn('API limitas.');
             return;
         }
         
-        const data = await res.json();
-        const validPrices = Object.keys(data).filter(key => data[key]?.usd);
+        const dataArray = await res.json();
+        const priceMap = {};
         
-        if (validPrices.length > 0) {
-            state.prices = data;
+        dataArray.forEach(coin => {
+            priceMap[coin.id] = {
+                usd: coin.current_price,
+                change_24h: coin.price_change_percentage_24h,
+                change_30d: coin.price_change_percentage_30d_in_currency
+            };
+        });
+        
+        if (Object.keys(priceMap).length > 0) {
+            state.prices = priceMap;
             state.lastFetchTime = now;
         }
-    } catch (e) { 
-        console.error("Fetch error:", e); 
-    }
+    } catch (e) { console.error("Fetch error:", e); }
 }
 
 export function calculateHoldings() {
     state.holdings = {};
-    let totalInvestedPortfolio = 0;
     
-    // 1. Skaičiuojame kiekius ir investicijas
+    // 1. Transaction processing
     state.transactions.forEach(tx => {
         const sym = tx.coin_symbol;
         if (!state.holdings[sym]) state.holdings[sym] = { qty: 0, invested: 0 };
@@ -92,46 +96,49 @@ export function calculateHoldings() {
         }
     });
 
-    let totalValuePortfolio = 0;
-    let total24hChangeUsd = 0; // ✅ NAUJA: Kaupiame 24h pokytį doleriais
+    let totalValue = 0;
+    let totalInvested = 0;
+    let total24hChangeUsd = 0;
+    let total30dChangeUsd = 0;
 
-    // 2. Skaičiuojame vertes
+    // 2. Value & Change Calculation
     Object.keys(state.holdings).forEach(sym => {
         const h = state.holdings[sym];
         const coin = state.coins.find(c => c.symbol === sym);
         
-        // Gauname kainą ir 24h pokytį
-        const priceData = (coin && state.prices[coin.coingecko_id]) || { usd: 0, usd_24h_change: 0 };
-        const currentPrice = priceData.usd;
-        const changePct24h = priceData.usd_24h_change || 0;
-
-        h.currentPrice = currentPrice;
-        h.currentValue = safeFloat(h.qty * currentPrice);
+        const priceData = (coin && state.prices[coin.coingecko_id]) || { usd: 0, change_24h: 0, change_30d: 0 };
+        const price = priceData.usd;
+        
+        h.currentValue = safeFloat(h.qty * price);
+        h.currentPrice = price;
         h.pnl = safeFloat(h.currentValue - h.invested);
         h.pnlPercent = h.invested > 0 ? (h.pnl / h.invested) * 100 : 0;
 
-        // ✅ 24H Pokyčio skaičiavimas doleriais
-        // Formulė: Dabartinė vertė - (Dabartinė vertė / (1 + pokytis/100))
-        if (currentPrice > 0 && h.qty > 0) {
-            const oldValue = h.currentValue / (1 + (changePct24h / 100));
-            const changeUsd = h.currentValue - oldValue;
-            total24hChangeUsd += changeUsd;
+        // 24H Change USD
+        if (price > 0 && h.qty > 0) {
+            const pct24 = priceData.change_24h || 0;
+            const val24 = h.currentValue / (1 + (pct24 / 100));
+            total24hChangeUsd += (h.currentValue - val24);
+
+            // 30D Change USD
+            const pct30 = priceData.change_30d || 0;
+            const val30 = h.currentValue / (1 + (pct30 / 100));
+            total30dChangeUsd += (h.currentValue - val30);
         }
 
-        totalValuePortfolio += h.currentValue;
-        totalInvestedPortfolio += h.invested;
+        totalValue += h.currentValue;
+        totalInvested += h.invested;
     });
 
     return {
-        totalValue: totalValuePortfolio,
-        totalInvested: totalInvestedPortfolio,
-        totalPnL: totalValuePortfolio - totalInvestedPortfolio,
-        totalPnLPercent: totalInvestedPortfolio > 0 ? ((totalValuePortfolio - totalInvestedPortfolio) / totalInvestedPortfolio) * 100 : 0,
-        change24hUsd: total24hChangeUsd // ✅ Grąžiname 24h pokytį
+        totalValue,
+        totalInvested,
+        totalPnL: totalValue - totalInvested,
+        totalPnLPercent: totalInvested > 0 ? ((totalValue - totalInvested) / totalInvested) * 100 : 0,
+        change24hUsd: total24hChangeUsd,
+        change30dUsd: total30dChangeUsd
     };
 }
 
-export function resetPriceCache() {
-    state.lastFetchTime = 0;
-}
+export function resetPriceCache() { state.lastFetchTime = 0; }
 window.resetPriceCache = resetPriceCache;
