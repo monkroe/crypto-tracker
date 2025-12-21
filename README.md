@@ -1,4 +1,4 @@
-# 🚀 Crypto Tracker v3.0.3
+# 🚀 Crypto Tracker v3.0.0
 
 Profesionalus kriptovaliutų portfelio valdymo įrankis su **Modular JS** architektūra, tikslia PnL matematika ir Supabase integracija.
 
