@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Crypto Tracker - Portfolio Manager v3.0.0</title>
+    <title>Crypto Tracker v3.0.2</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -146,14 +146,15 @@
                     
                     <div class="h-48 w-full mb-4"><canvas id="pnlChart"></canvas></div>
 
-                    <div class="flex justify-between items-center px-1 bg-gray-50 dark:bg-gray-800/50 p-1 rounded-xl">
-                        <button onclick="window.changePnLTimeframe('1W')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors" data-tf="1W">1W</button>
-                        <button onclick="window.changePnLTimeframe('1M')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors" data-tf="1M">1M</button>
-                        <button onclick="window.changePnLTimeframe('3M')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors" data-tf="3M">3M</button>
-                        <button onclick="window.changePnLTimeframe('6M')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors" data-tf="6M">6M</button>
-                        <button onclick="window.changePnLTimeframe('1Y')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors" data-tf="1Y">1Y</button>
-                        <button onclick="window.changePnLTimeframe('5Y')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors" data-tf="5Y">5Y</button>
-                        <button onclick="window.changePnLTimeframe('ALL')" class="tf-btn flex-1 text-[10px] font-bold text-white bg-gray-800 dark:bg-gray-600 py-1 transition-colors shadow-sm rounded" data-tf="ALL">ALL</button>
+                    <div class="flex justify-between items-center px-1 bg-gray-100 dark:bg-gray-800/50 p-1 rounded-xl gap-0.5">
+                        <button type="button" onclick="window.changePnLTimeframe('24H')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="24H">24H</button>
+                        <button type="button" onclick="window.changePnLTimeframe('1W')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="1W">1W</button>
+                        <button type="button" onclick="window.changePnLTimeframe('1M')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="1M">1M</button>
+                        <button type="button" onclick="window.changePnLTimeframe('3M')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="3M">3M</button>
+                        <button type="button" onclick="window.changePnLTimeframe('6M')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="6M">6M</button>
+                        <button type="button" onclick="window.changePnLTimeframe('1Y')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="1Y">1Y</button>
+                        <button type="button" onclick="window.changePnLTimeframe('5Y')" class="tf-btn flex-1 text-[10px] font-bold text-gray-400 hover:text-gray-900 dark:hover:text-white py-1 transition-colors rounded" data-tf="5Y">5Y</button>
+                        <button type="button" onclick="window.changePnLTimeframe('ALL')" class="tf-btn flex-1 text-[10px] font-bold text-white bg-gray-800 dark:bg-gray-600 shadow-sm py-1 transition-colors rounded" data-tf="ALL">ALL</button>
                     </div>
                 </div>
             </section>
