@@ -6,7 +6,7 @@ import { showToast, parseCSV, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state, resetPriceCache } from './logic.js';
 import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, renderPnLChart, setupThemeHandlers } from './ui.js';
 
-const APP_VERSION = 'v3.9.0';
+const APP_VERSION = 'v3.9.7';
 
 // ==========================================
 // 1. INITIALIZATION
