@@ -1,11 +1,14 @@
 // js/ui.js - v3.0.0
-// Features: PnL Chart, Goals Edit, Theme Handlers, UI Rendering
+// Features: PnL Chart, Goals Edit, Theme Handlers, UI Rendering, Celebration Logic
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
-let pnlChart = null; // ✅ NEW: PnL Chart Instance
+let pnlChart = null; 
+
+// ✅ NAUJA: Saugome, kurie tikslai jau atšvęsti šioje sesijoje, kad nekartotume animacijos
+const celebratedGoals = new Set();
 
 const CHART_COLORS = { 
     KAS: '#2dd4bf', BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308', 
@@ -20,7 +23,6 @@ export function setupThemeHandlers() {
             html.classList.toggle('dark');
             localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
             
-            // Re-render charts to update colors
             if(allocationChart) renderAllocationChart();
             if(pnlChart) renderPnLChart();
         };
@@ -40,13 +42,11 @@ export function updateDashboardUI(totals) {
     pctEl.className = `text-xs font-bold px-2 py-0.5 rounded ${totals.totalPnL >= 0 ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`;
 }
 
-// ✅ FIX #13: Goals Rendering with Validation & Edit Button
 export function renderGoals() {
     const container = document.getElementById('goals-container');
     if (!container) return;
     container.innerHTML = '';
     
-    // Filter out goals for coins that no longer exist in supported coins
     const validGoals = state.goals.filter(goal => 
         state.coins.some(c => c.symbol === goal.coin_symbol)
     );
@@ -62,6 +62,12 @@ export function renderGoals() {
         const cur = state.holdings[goal.coin_symbol]?.qty || 0;
         const tgt = Number(goal.target_amount);
         const pct = tgt > 0 ? Math.min(100, (cur/tgt)*100) : 0;
+        
+        // ✅ NAUJA: Patikriname ar pasiektas tikslas ir paleidžiame animaciją
+        if (pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) {
+            triggerCelebration(goal.coin_symbol);
+            celebratedGoals.add(goal.coin_symbol);
+        }
         
         const div = document.createElement('div');
         div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm mb-2';
@@ -84,6 +90,44 @@ export function renderGoals() {
         fragment.appendChild(div);
     });
     container.appendChild(fragment);
+}
+
+// ✅ NAUJA FUNKCIJA: Paleidžia konfeti ir parodo modalą
+function triggerCelebration(symbol) {
+    const modal = document.getElementById('celebration-modal');
+    const coinSpan = document.getElementById('celebration-coin');
+    
+    if (modal && coinSpan) {
+        coinSpan.textContent = symbol;
+        modal.classList.remove('hidden');
+        
+        // Paleidžiame konfeti (jei biblioteka užkrauta iš index.html)
+        if (typeof window.confetti === 'function') {
+            const duration = 3000;
+            const end = Date.now() + duration;
+
+            (function frame() {
+                window.confetti({
+                    particleCount: 5,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                    colors: ['#2dd4bf', '#fbbf24', '#f87171']
+                });
+                window.confetti({
+                    particleCount: 5,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                    colors: ['#2dd4bf', '#fbbf24', '#f87171']
+                });
+
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            }());
+        }
+    }
 }
 
 export function renderCoinCards() {
@@ -146,7 +190,6 @@ export function renderTransactionJournal() {
 
     const fragment = document.createDocumentFragment();
     
-    // Sort keys descending (newest month first)
     Object.keys(grouped).sort((a,b) => b.localeCompare(a)).forEach(key => {
         const [yr, mo] = key.split('-');
         const txs = grouped[key];
@@ -161,10 +204,6 @@ export function renderTransactionJournal() {
             const color = isBuy ? 'text-primary-500' : 'text-red-500';
             
             let pnlHTML = '';
-            // Only calculate PnL for individual buys if we have current price
-            /* Note: Individual Tx PnL is tricky without FIFO matching. 
-               This simple version just compares buy price vs current price.
-            */
             if (isBuy) {
                  const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
                  if (coin && state.prices[coin.coingecko_id]) {
@@ -274,7 +313,6 @@ export function renderAllocationChart() {
     });
 }
 
-// ✅ FIX #12: Added PnL Chart Function
 export function renderPnLChart(timeframe = 'ALL') {
     const canvas = document.getElementById('pnlChart');
     if (!canvas) return;
@@ -284,7 +322,6 @@ export function renderPnLChart(timeframe = 'ALL') {
         pnlChart = null;
     }
     
-    // Calculate cumulative PnL over time
     const sortedTxs = state.transactions.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
     if (sortedTxs.length === 0) return;
 
@@ -292,17 +329,10 @@ export function renderPnLChart(timeframe = 'ALL') {
     const labels = [];
     let cumulativeInvested = 0;
     
-    /* NOTE: Accurate historical PnL requires historical price data which we don't have.
-       This is a simplified approximation based on realized gains + current holdings value.
-       Ideally, you'd fetch historical portfolio value snapshots.
-    */
-
-    // Simplified Visualization: Cumulative Invested vs Time (as a placeholder for real PnL history)
-    // Or we can show just the Cost Basis evolution
     sortedTxs.forEach(tx => {
         const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
         if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
-        else cumulativeInvested -= Number(tx.total_cost_usd); // Simplified sell logic
+        else cumulativeInvested -= Number(tx.total_cost_usd);
         
         dataPoints.push(cumulativeInvested);
         labels.push(new Date(tx.date).toLocaleDateString());
@@ -311,7 +341,7 @@ export function renderPnLChart(timeframe = 'ALL') {
     const ctx = canvas.getContext('2d');
     const isDark = document.documentElement.classList.contains('dark');
     const isPositive = dataPoints[dataPoints.length - 1] >= 0;
-    const color = isPositive ? '#2dd4bf' : '#ef4444'; // Primary vs Red
+    const color = isPositive ? '#2dd4bf' : '#ef4444';
 
     pnlChart = new Chart(ctx, {
         type: 'line',
