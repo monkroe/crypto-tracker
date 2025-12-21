@@ -1,5 +1,5 @@
-// js/ui.js - v3.5.0
-// Features: Group PnL Stats in Accordion, Advanced Charts, Goals
+// js/ui.js - v3.5.1
+// Features: Notes display, Method/Exchange Badges, Group Stats, Advanced Charts
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
@@ -153,7 +153,7 @@ export function renderCoinCards() {
 }
 
 // ==========================================
-// 4. TRANSACTION JOURNAL (ACCORDION WITH STATS)
+// 4. TRANSACTION JOURNAL (ACCORDION + NOTES + BADGES)
 // ==========================================
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
@@ -192,7 +192,7 @@ export function renderTransactionJournal() {
         const yearId = `year-${year}`;
         const isYearOpen = yIndex === 0;
 
-        // Skaičiuojame Metų Stats (visų to metų mėnesių bendra suma)
+        // Metų Stats
         const allYearTxs = Object.values(yearData).flat();
         const yearStats = calculateGroupStats(allYearTxs);
         const yearStatsHTML = yearStats.totalVal > 0 
@@ -239,7 +239,6 @@ export function renderTransactionJournal() {
             const monthId = `month-${year}-${monthIndex}`;
             const isMonthOpen = mIndex === 0;
 
-            // Skaičiuojame Mėnesio Stats
             const stats = calculateGroupStats(txs);
             const statsHTML = stats.totalVal > 0 
                 ? `<span class="${stats.pnl >= 0 ? 'text-primary-500' : 'text-red-500'} font-mono ml-2">
@@ -289,7 +288,6 @@ export function renderTransactionJournal() {
     });
 }
 
-// ✅ PATAISYTA: Pagalbinė funkcija grupės PnL skaičiavimui
 function calculateGroupStats(txs) {
     let totalCost = 0;
     let totalVal = 0;
@@ -304,8 +302,6 @@ function calculateGroupStats(txs) {
                 totalVal += Number(tx.amount) * price;
             }
         }
-        // Pastaba: Pardavimai čia neįtraukiami į "Performance" skaičiavimą, 
-        // nes tai rodytų realizuotą pelną, o mes norime matyti, kaip sekasi investicijoms, pirktoms tą mėnesį.
     });
 
     const pnl = totalVal - totalCost;
@@ -314,10 +310,12 @@ function calculateGroupStats(txs) {
     return { pnl, pct, totalVal };
 }
 
+// ✅ PATAISYTA: Transakcijos kortelė su Pastabomis ir Metodais
 function createTransactionCard(tx) {
     const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
     const color = isBuy ? 'text-primary-500' : 'text-red-500';
     
+    // PnL (jei pirkimas)
     let pnlHTML = '';
     if (isBuy) {
             const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
@@ -330,33 +328,51 @@ function createTransactionCard(tx) {
             }
     }
 
-    let badges = '';
-    if (tx.exchange) badges += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
+    // Ženkliukai (Exchange + Method)
+    let badgesHTML = '';
+    if (tx.exchange) {
+        badgesHTML += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
+    }
+    if (tx.method && tx.method !== 'Market Buy') {
+        // Jei metodas nėra default, rodom jį
+        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
+    } else if (tx.method) {
+        // Arba rodom visada
+        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
+    }
+
+    // Pastabos
+    let notesHTML = '';
+    if (tx.notes && tx.notes.trim() !== '') {
+        notesHTML = `<div class="text-[9px] text-gray-400 italic mt-1.5 pl-2 border-l-2 border-gray-200 dark:border-gray-700 line-clamp-2">${tx.notes}</div>`;
+    }
 
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/30';
     
     card.innerHTML = `
-        <div class="flex items-start gap-3">
+        <div class="flex items-start gap-3 w-full">
             <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 mt-1 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-0 cursor-pointer" 
                     data-tx-id="${tx.id}" 
                     onchange="window.updateDeleteSelectedButton()">
-            <div class="flex-1">
+            <div class="flex-1 min-w-0">
                 <div class="flex items-center flex-wrap">
                     <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
                     <span class="text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded ml-2">${tx.type}</span>
-                    ${badges}
+                    ${badgesHTML}
                 </div>
                 <div class="text-[10px] text-gray-400 mt-1">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                 ${pnlHTML}
+                ${notesHTML}
             </div>
-        </div>
-        <div class="text-right flex flex-col items-end">
-            <div class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
-            <div class="font-bold text-sm text-gray-900 dark:text-white mt-0.5">${formatMoney(tx.total_cost_usd)}</div>
-            <div class="flex gap-2 mt-2 opacity-50 hover:opacity-100 transition-opacity">
-                <button onclick="window.onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-xs"></i></button>
-                <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+            
+            <div class="text-right flex flex-col items-end shrink-0 ml-2">
+                <div class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
+                <div class="font-bold text-sm text-gray-900 dark:text-white mt-0.5">${formatMoney(tx.total_cost_usd)}</div>
+                <div class="flex gap-2 mt-2 opacity-50 hover:opacity-100 transition-opacity">
+                    <button onclick="window.onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>
             </div>
         </div>`;
     return card;
@@ -523,39 +539,3 @@ export function renderPnLChart(timeframe = 'ALL') {
                     }
                 }
             },
-            scales: {
-                x: { 
-                    display: true,
-                    grid: { display: false },
-                    ticks: {
-                        color: isDark ? '#6b7280' : '#9ca3af',
-                        font: { size: 9 },
-                        maxTicksLimit: timeframe === '24H' ? 6 : 7,
-                        maxRotation: 0,
-                        autoSkip: true
-                    }
-                },
-                y: { 
-                    display: true,
-                    position: 'right',
-                    grid: { 
-                        color: isDark ? '#374151' : '#f3f4f6',
-                        drawBorder: false 
-                    },
-                    ticks: {
-                        color: isDark ? '#6b7280' : '#9ca3af',
-                        font: { size: 9 },
-                        callback: function(value) {
-                            return '$' + value.toLocaleString(undefined, {notation: "compact"});
-                        }
-                    }
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
-        }
-    });
-}
