@@ -539,3 +539,39 @@ export function renderPnLChart(timeframe = 'ALL') {
                     }
                 }
             },
+            scales: {
+                x: { 
+                    display: true,
+                    grid: { display: false },
+                    ticks: {
+                        color: isDark ? '#6b7280' : '#9ca3af',
+                        font: { size: 9 },
+                        maxTicksLimit: timeframe === '24H' ? 6 : 7,
+                        maxRotation: 0,
+                        autoSkip: true
+                    }
+                },
+                y: { 
+                    display: true,
+                    position: 'right',
+                    grid: { 
+                        color: isDark ? '#374151' : '#f3f4f6',
+                        drawBorder: false 
+                    },
+                    ticks: {
+                        color: isDark ? '#6b7280' : '#9ca3af',
+                        font: { size: 9 },
+                        callback: function(value) {
+                            return '$' + value.toLocaleString(undefined, {notation: "compact"});
+                        }
+                    }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+}
