@@ -9,8 +9,8 @@ let pnlChart = null;
 const celebratedGoals = new Set();
 
 const CHART_COLORS = { 
-    KAS: '#2dd4bf', BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308', 
-    PEPE: '#22c55e', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
+    KAS: '#2dd4bf', ASTER: '#fbc527',  BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308', 
+    PEPE: '#097a22', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
 };
 
 // ==========================================
