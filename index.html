@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Crypto Tracker v3.7.0</title>
+    <title>Crypto Tracker v3.9.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -117,18 +117,22 @@
                 </div>
 
                 <div class="text-center mb-6">
-                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Portfolio value</p>
+                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Bendra vertė</p>
                     <h1 id="header-total-value" class="text-5xl font-bold text-gray-900 dark:text-white tracking-tight">$0.00</h1>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 mb-2">
-                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 text-center border border-gray-100 dark:border-gray-800">
-                        <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Balance change 24H</p>
-                        <p id="header-24h-change" class="text-sm font-bold text-gray-400">Loading...</p>
+                <div class="grid grid-cols-3 gap-2 mb-2">
+                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2 text-center border border-gray-100 dark:border-gray-800">
+                        <p class="text-[9px] text-gray-500 uppercase font-bold mb-1">24H</p>
+                        <p id="header-24h-change" class="text-xs font-bold text-gray-400">...</p>
                     </div>
-                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 text-center border border-gray-100 dark:border-gray-800">
-                        <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Unrealized return</p>
-                        <p id="header-unrealized-return" class="text-sm font-bold text-gray-400">Loading...</p>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2 text-center border border-gray-100 dark:border-gray-800">
+                        <p class="text-[9px] text-gray-500 uppercase font-bold mb-1">30D</p>
+                        <p id="header-30d-change" class="text-xs font-bold text-gray-400">...</p>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2 text-center border border-gray-100 dark:border-gray-800">
+                        <p class="text-[9px] text-gray-500 uppercase font-bold mb-1">Total PnL</p>
+                        <p id="header-total-pnl" class="text-xs font-bold text-gray-400">...</p>
                     </div>
                 </div>
             </div>
@@ -218,7 +222,7 @@
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">Sukurta su <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> ir DI pagalba</p>
                 <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v3.7.0</span></p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v3.9.0</span></p>
             </footer>
         </main>
     </div>
