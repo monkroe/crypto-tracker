@@ -28,7 +28,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         
     } catch (e) {
         console.error("❌ Init Error:", e);
-        // Jei utils.js dar neužsikrovė, naudojame alert
         if (typeof showToast === 'function') showToast('Klaida kraunant programą', 'error');
     }
 });
@@ -59,8 +58,8 @@ function updateCoinSelects() {
         select.innerHTML = '';
         state.coins.forEach(coin => {
             const option = document.createElement('option');
-            option.value = coin.coingecko_id; // Saugome ID
-            option.textContent = coin.symbol; // Rodome Simbolį
+            option.value = coin.coingecko_id; 
+            option.textContent = coin.symbol; 
             select.appendChild(option);
         });
         if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
@@ -95,7 +94,6 @@ function setupModalCalculations() {
                 el.disabled = true;
                 el.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-200', 'dark:bg-gray-800');
                 el.classList.remove('bg-white', 'dark:bg-gray-900');
-                el.removeAttribute('required'); // Užtikriname, kad nereikalauja
             });
         } else {
             [priceEl, totalEl, feesEl].forEach(el => {
@@ -309,8 +307,8 @@ function setupEventListeners() {
             
             if (!sym || !id) return showToast('Būtina užpildyti', 'error');
             
-            // Tiesioginis įrašymas per supabase.js (darysime prielaidą, kad ID geras)
             try {
+                // Tiesioginis įrašymas
                 const { error } = await window.supabase.from('supported_coins').insert([{ symbol: sym, coingecko_id: id }]);
                 if (error) throw error;
                 
@@ -327,6 +325,51 @@ function setupEventListeners() {
         };
     }
     
+    const btnDeleteCoin = document.getElementById('btn-delete-coin');
+    if (btnDeleteCoin) {
+        btnDeleteCoin.onclick = async () => {
+            const sym = document.getElementById('delete-coin-select').value;
+            if(!sym) return;
+            if(!confirm('Trinti monetą ir visus jos duomenis?')) return;
+            
+            if (await window.deleteSupportedCoin(sym)) {
+                showToast('Ištrinta', 'success');
+                document.getElementById('delete-coin-modal').classList.add('hidden');
+                await loadInitialData();
+                refreshUI();
+            }
+        };
+    }
+
+    // --- GOAL MANAGEMENT ---
+    const btnUpdateGoal = document.getElementById('btn-update-goal');
+    if (btnUpdateGoal) {
+        btnUpdateGoal.onclick = async () => {
+            const id = document.getElementById('edit-goal-id').value;
+            const val = parseFloat(document.getElementById('edit-goal-target').value);
+            if(await window.updateGoal(id, val)) {
+                showToast('Atnaujinta', 'success');
+                document.getElementById('edit-goal-modal').classList.add('hidden');
+                await loadInitialData();
+                refreshUI();
+            }
+        };
+    }
+    
+    const btnDeleteGoal = document.getElementById('btn-delete-goal');
+    if (btnDeleteGoal) {
+        btnDeleteGoal.onclick = async () => {
+            const id = document.getElementById('edit-goal-id').value;
+            if(!confirm('Trinti tikslą?')) return;
+            if(await window.deleteGoal(id)) {
+                showToast('Ištrinta', 'success');
+                document.getElementById('edit-goal-modal').classList.add('hidden');
+                await loadInitialData();
+                refreshUI();
+            }
+        };
+    }
+
     // --- MODAL RESET HELPER ---
     const btnAdd = document.querySelector('button[onclick*="add-modal"]');
     if (btnAdd) {
@@ -450,7 +493,15 @@ window.updateDeleteSelectedButton = () => {
 };
 
 // Goals handlers
-window.editGoal = (id) => { /* goal edit logic */ }; 
+window.editGoal = (id) => { 
+    const goal = state.goals.find(g => g.id == id);
+    if (!goal) return;
+    document.getElementById('edit-goal-id').value = goal.id;
+    document.getElementById('edit-goal-coin').textContent = goal.coin_symbol;
+    document.getElementById('edit-goal-target').value = goal.target_amount;
+    document.getElementById('edit-goal-modal').classList.remove('hidden');
+}; 
+
 window.changePnLTimeframe = (tf) => { 
     document.getElementById('tf-indicator').textContent = tf;
     renderPnLChart(tf);
