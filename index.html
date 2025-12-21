@@ -22,7 +22,25 @@
     <input type="file" id="csv-file-input" accept=".csv" class="hidden">
     <div id="toast-container"></div>
 
-    <div id="app-content"> 
+    <div id="auth-screen" class="fixed inset-0 z-50 bg-white dark:bg-gray-950 flex flex-col items-center justify-center p-6 fade-in">
+        <div class="w-full max-w-sm space-y-8">
+            <div class="text-center space-y-2">
+                <i class="fa-solid fa-wallet text-primary-500 text-5xl mb-4"></i>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Crypto Tracker</h1>
+                <p class="text-gray-500 text-sm">Prisijunkite, kad matytumėte savo portfelį</p>
+            </div>
+            <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-2xl shadow-xl space-y-4">
+                <input type="email" id="auth-email" placeholder="El. paštas" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl p-3 outline-none focus:border-primary-500">
+                <input type="password" id="auth-pass" placeholder="Slaptažodis" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl p-3 outline-none focus:border-primary-500">
+                <div class="pt-2 space-y-3">
+                    <button id="btn-login" class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 rounded-xl shadow-lg transition-transform active:scale-95">Prisijungti</button>
+                    <button id="btn-signup" class="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold py-3 rounded-xl border border-gray-200 dark:border-gray-700">Registruotis</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-content" class="hidden">
         <header class="fixed top-0 w-full bg-white/95 dark:bg-gray-900/95 backdrop-blur z-40 transition-colors duration-300 pb-2">
             <div class="max-w-md mx-auto px-4 pt-4">
                 <div class="flex justify-between items-center mb-6">
