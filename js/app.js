@@ -1,15 +1,20 @@
-// js/app.js - v3.3.0 (Fixed Scope & Events)
+// js/app.js - v3.0.0
+// Features: Goals CRUD, Transaction Updates, CSV Validation, PnL Chart, Passkeys
+
 import { showToast, parseCSV, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state, resetPriceCache } from './logic.js';
-import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, setupThemeHandlers } from './ui.js';
+import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, renderPnLChart, setupThemeHandlers } from './ui.js';
 
-const APP_VERSION = '3.3.0';
+const APP_VERSION = '3.0.0';
 
+// ==========================================
+// 1. INITIALIZATION
+// ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('app-version').textContent = APP_VERSION;
     setupThemeHandlers();
     
-    // Paprastas listener priskyrimas (be cloneNode)
+    // Settings Button Handler
     const btnSettings = document.getElementById('btn-settings');
     if (btnSettings) {
         btnSettings.onclick = async () => {
@@ -18,9 +23,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
+    // Check Auth Session
     const { data: { session } } = await window._supabase.auth.getSession();
-    if (session) { showAppScreen(); await initData(); } 
-    else { showAuthScreen(); }
+    if (session) { 
+        showAppScreen(); 
+        await initData(); 
+    } else { 
+        showAuthScreen(); 
+    }
     
     setupEventListeners();
 });
@@ -29,7 +39,10 @@ async function initData() {
     try {
         await loadInitialData();
         refreshUI();
-    } catch (e) { console.error(e); showToast("Data Load Error", "error"); }
+    } catch (e) { 
+        console.error(e); 
+        showToast("Klaida kraunant duomenis", "error"); 
+    }
 }
 
 function refreshUI() {
@@ -39,45 +52,48 @@ function refreshUI() {
     renderTransactionJournal();
     renderGoals();
     renderAllocationChart();
+    renderPnLChart(); // Default view
     
+    // Update Dropdowns
     const coinSelects = [document.getElementById('tx-coin'), document.getElementById('delete-coin-select')];
     coinSelects.forEach(sel => {
         if (!sel) return;
         sel.innerHTML = '';
         state.coins.forEach(c => {
             const opt = document.createElement('option');
-            opt.value = c.symbol; opt.textContent = c.symbol; sel.appendChild(opt);
+            opt.value = c.symbol; 
+            opt.textContent = c.symbol; 
+            sel.appendChild(opt);
         });
     });
 }
 
-// === FIX: Išeksportuojam funkcijas į window, kad HTML jas matytų ===
+// ==========================================
+// 2. GLOBAL HANDLERS (For HTML onclick)
+// ==========================================
+
+// Transaction Delete
 window.onDeleteTx = async (id) => {
-    if(confirm("Delete transaction?")) {
+    if(confirm("Ar tikrai norite ištrinti šią transakciją?")) {
         await window.deleteTransaction(id);
         await initData();
-        showToast("Deleted", "success");
+        showToast("Ištrinta sėkmingai", "success");
     }
 };
 
+// Transaction Edit (Opens Modal with Data)
 window.onEditTx = (id) => {
     try {
-        console.log('Editing transaction:', id);
-        
         const tx = state.transactions.find(t => String(t.id) === String(id));
         if (!tx) {
-            console.error('Transaction not found:', id);
-            showToast('Transaction not found', 'error');
+            showToast('Transakcija nerasta', 'error');
             return;
         }
         
-        console.log('Found transaction:', tx);
-        
-        // Fill form fields with null checks
+        // Helper to set values safely
         const setVal = (elId, value) => {
             const el = document.getElementById(elId);
             if (el) el.value = value ?? '';
-            else console.warn('Element not found:', elId);
         };
         
         setVal('tx-id', tx.id);
@@ -89,10 +105,10 @@ window.onEditTx = (id) => {
         setVal('tx-method', tx.method || 'Market Buy');
         setVal('tx-notes', tx.notes || '');
         
-        // Handle coin select - need to ensure option exists
+        // Handle Coin Select
         const coinSelect = document.getElementById('tx-coin');
         if (coinSelect) {
-            // Check if option exists, if not add it temporarily
+            // If coin was deleted but tx exists, add temp option
             const optionExists = Array.from(coinSelect.options).some(opt => opt.value === tx.coin_symbol);
             if (!optionExists && tx.coin_symbol) {
                 const opt = document.createElement('option');
@@ -103,104 +119,123 @@ window.onEditTx = (id) => {
             coinSelect.value = tx.coin_symbol;
         }
         
-        // Handle date/time
+        // Handle Date/Time
         try {
             const d = new Date(tx.date);
             if (!isNaN(d.getTime())) {
                 setVal('tx-date-input', d.toISOString().split('T')[0]);
                 setVal('tx-time-input', d.toTimeString().slice(0, 5));
-            } else {
-                // Fallback to today
-                const now = new Date();
-                setVal('tx-date-input', now.toISOString().split('T')[0]);
-                setVal('tx-time-input', now.toTimeString().slice(0, 5));
             }
-        } catch (dateErr) {
-            console.warn('Date parsing error:', dateErr);
-            const now = new Date();
-            setVal('tx-date-input', now.toISOString().split('T')[0]);
-            setVal('tx-time-input', now.toTimeString().slice(0, 5));
-        }
+        } catch (dateErr) { console.warn('Date error', dateErr); }
         
-        // Update modal title and show
-        const modalTitle = document.getElementById('modal-title');
-        if (modalTitle) modalTitle.textContent = "Edit Transaction";
+        // Update Modal Title & Button
+        document.getElementById('modal-title').textContent = "Redaguoti Transakciją";
+        document.getElementById('btn-save').textContent = "Atnaujinti";
         
-        const modal = document.getElementById('add-modal');
-        if (modal) {
-            modal.classList.remove('hidden');
-            console.log('Edit modal opened');
-        } else {
-            console.error('Modal element not found');
-            showToast('Could not open edit form', 'error');
-        }
+        document.getElementById('add-modal').classList.remove('hidden');
         
     } catch (e) {
-        console.error('Edit transaction error:', e);
-        showToast('Error opening edit form: ' + e.message, 'error');
+        console.error('Edit error:', e);
+        showToast('Klaida atidarant formą', 'error');
     }
 };
 
+// Goal Edit (Opens Goal Modal)
+window.editGoal = (goalId) => {
+    try {
+        const goal = state.goals.find(g => String(g.id) === String(goalId));
+        if (!goal) {
+            showToast('Tikslas nerastas', 'error');
+            return;
+        }
+        
+        document.getElementById('edit-goal-id').value = goal.id;
+        document.getElementById('edit-goal-coin').textContent = goal.coin_symbol;
+        document.getElementById('edit-goal-target').value = goal.target_amount;
+        
+        document.getElementById('edit-goal-modal').classList.remove('hidden');
+    } catch (e) {
+        console.error('Goal edit error:', e);
+    }
+};
+
+// PnL Chart Timeframe Switcher
+window.changePnLTimeframe = (timeframe) => {
+    document.getElementById('tf-indicator').textContent = timeframe;
+    
+    document.querySelectorAll('.tf-btn').forEach(btn => {
+        const tf = btn.getAttribute('data-tf');
+        if (tf === timeframe) {
+            btn.classList.add('text-white', 'bg-gray-800', 'dark:bg-gray-600', 'rounded', 'shadow-sm');
+            btn.classList.remove('text-gray-400', 'hover:text-gray-900', 'dark:hover:text-white');
+        } else {
+            btn.classList.remove('text-white', 'bg-gray-800', 'dark:bg-gray-600', 'rounded', 'shadow-sm');
+            btn.classList.add('text-gray-400', 'hover:text-gray-900', 'dark:hover:text-white');
+        }
+    });
+    
+    renderPnLChart(timeframe);
+};
+
+// ==========================================
+// 3. EVENT LISTENERS SETUP
+// ==========================================
 function setupEventListeners() {
-    // 1. Transaction Save
+    
+    // --- TRANSACTION FORM (Create & Update) ---
     const form = document.getElementById('add-tx-form');
-    // FIX: Paprastas būdas be cloneNode
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('btn-save');
-        btn.textContent = "Saving...";
-        
-        const dVal = document.getElementById('tx-date-input').value;
-        const tVal = document.getElementById('tx-time-input').value || '00:00';
-        const id = document.getElementById('tx-id').value;
+    if (form) {
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save');
+            const originalText = btn.textContent;
+            btn.textContent = "Saugoma...";
+            btn.disabled = true;
+            
+            const dVal = document.getElementById('tx-date-input').value;
+            const tVal = document.getElementById('tx-time-input').value || '00:00';
+            const id = document.getElementById('tx-id').value;
 
-        const txData = {
-            date: new Date(`${dVal}T${tVal}:00`).toISOString(),
-            type: document.getElementById('tx-type').value,
-            coin_symbol: document.getElementById('tx-coin').value,
-            amount: document.getElementById('tx-amount').value,
-            total_cost_usd: document.getElementById('tx-total').value,
-            price_per_coin: document.getElementById('tx-price').value,
-            exchange: document.getElementById('tx-exchange').value,
-            method: document.getElementById('tx-method').value,
-            notes: sanitizeText(document.getElementById('tx-notes').value)
-        };
+            const txData = {
+                date: new Date(`${dVal}T${tVal}:00`).toISOString(),
+                type: document.getElementById('tx-type').value,
+                coin_symbol: document.getElementById('tx-coin').value,
+                amount: document.getElementById('tx-amount').value,
+                total_cost_usd: document.getElementById('tx-total').value,
+                price_per_coin: document.getElementById('tx-price').value,
+                exchange: document.getElementById('tx-exchange').value,
+                method: document.getElementById('tx-method').value,
+                notes: sanitizeText(document.getElementById('tx-notes').value)
+            };
 
-        let success = false;
-        console.log('Saving transaction, edit mode:', !!id, 'txData:', txData);
-        
-        try {
-            if (id) {
-                console.log('Updating transaction:', id);
-                const deleteResult = await window.deleteTransaction(id);
-                console.log('Delete old result:', deleteResult);
-                if (deleteResult) {
-                    success = await window.saveTransaction(txData);
-                    console.log('Save new result:', success);
+            let success = false;
+            try {
+                if (id) {
+                    // UPDATE existing
+                    success = await window.updateTransaction(id, txData);
                 } else {
-                    console.error('Failed to delete old transaction');
-                    showToast('Failed to update transaction', 'error');
+                    // CREATE new
+                    success = await window.saveTransaction(txData);
                 }
-            } else {
-                success = await window.saveTransaction(txData);
+            } catch (err) {
+                console.error('Save error:', err);
             }
-        } catch (saveErr) {
-            console.error('Save error:', saveErr);
-            showToast('Error saving transaction', 'error');
-        }
 
-        if (success) {
-            showToast("Saved!", "success");
-            document.getElementById('add-modal').classList.add('hidden');
-            form.reset();
-            document.getElementById('tx-id').value = '';
-            document.getElementById('modal-title').textContent = "New Transaction";
-            await initData();
-        }
-        btn.textContent = "Save Transaction";
-    };
+            if (success) {
+                showToast("Išsaugota sėkmingai!", "success");
+                document.getElementById('add-modal').classList.add('hidden');
+                form.reset();
+                await initData();
+            } else {
+                showToast("Nepavyko išsaugoti", "error");
+            }
+            
+            btn.textContent = originalText;
+            btn.disabled = false;
+        };
+    }
 
-    // 2. CSV Import
+    // --- CSV IMPORT ---
     const csvInput = document.getElementById('csv-file-input');
     if (csvInput) {
         csvInput.onchange = async (e) => {
@@ -209,115 +244,155 @@ function setupEventListeners() {
             const text = await file.text();
             const parsed = parseCSV(text);
             
-            if (parsed.length === 0) return showToast('Invalid CSV', 'error');
-            if (!confirm(`Import ${parsed.length} transactions?`)) return;
+            if (parsed.length === 0) return showToast('Netinkamas arba tuščias CSV failas', 'error');
+            
+            // Validation: Check if coins exist
+            const validCoins = state.coins.map(c => c.symbol);
+            const invalidTxs = parsed.filter(tx => !validCoins.includes(tx.coin_symbol));
+            
+            if (invalidTxs.length > 0) {
+                const unknownSymbols = [...new Set(invalidTxs.map(tx => tx.coin_symbol))];
+                return showToast(`Nežinomos monetos: ${unknownSymbols.join(', ')}. Pirmiau pridėkite jas į sistemą!`, 'error');
+            }
+            
+            if (!confirm(`Rasta ${parsed.length} transakcijų. Importuoti?`)) return;
 
-            showToast('Importing...', 'info');
+            showToast('Importuojama...', 'info');
             let count = 0;
             for (const tx of parsed) {
                 if (await window.saveTransaction(tx)) count++;
             }
-            showToast(`Imported ${count} transactions`, 'success');
+            showToast(`Sėkmingai importuota: ${count}`, 'success');
             await initData();
-            e.target.value = ''; // Reset
+            e.target.value = '';
         };
     }
 
-    // 3. Coins
+    // --- COIN & GOAL MANAGEMENT ---
+    // Save New Coin
     document.getElementById('btn-save-coin').onclick = async () => {
         const symbol = document.getElementById('new-coin-symbol').value.toUpperCase();
         const coingeckoId = document.getElementById('new-coin-id').value.toLowerCase().trim();
+        const targetAmount = parseFloat(document.getElementById('new-coin-target').value);
         
-        if(!symbol || !coingeckoId) return showToast('Fill all fields', 'error');
+        if(!symbol || !coingeckoId) return showToast('Užpildykite simbolį ir ID', 'error');
         
-        // Validate CoinGecko ID before saving
         const btn = document.getElementById('btn-save-coin');
         const originalText = btn.textContent;
-        btn.textContent = 'Validating...';
+        btn.textContent = 'Tikrinama...';
         btn.disabled = true;
         
         try {
-            // Check if the CoinGecko ID is valid
+            // Validate via API
             const testRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coingeckoId)}&vs_currencies=usd`);
-            if (!testRes.ok) throw new Error(`API error: ${testRes.status} ${testRes.statusText}`);
             const testData = await testRes.json();
             
             if (!testData[coingeckoId]) {
-                showToast(`Invalid CoinGecko ID: "${coingeckoId}". Check https://coingecko.com for correct ID.`, 'error');
+                showToast(`Neteisingas CoinGecko ID: "${coingeckoId}"`, 'error');
                 btn.textContent = originalText;
                 btn.disabled = false;
                 return;
             }
             
-            // Save the coin
+            // Save coin to DB
             if (await window.saveNewCoin({ symbol, coingecko_id: coingeckoId })) {
-                showToast('Coin Added', 'success');
+                // Save goal if provided
+                if (targetAmount && targetAmount > 0) {
+                    await window.saveCryptoGoal({ coin_symbol: symbol, target_amount: targetAmount });
+                }
+                
+                showToast('Moneta pridėta sėkmingai', 'success');
                 document.getElementById('new-coin-modal').classList.add('hidden');
                 
-                // Reset price cache to force refresh
-                resetPriceCache();
+                // Reset inputs
+                document.getElementById('new-coin-symbol').value = '';
+                document.getElementById('new-coin-id').value = '';
+                document.getElementById('new-coin-target').value = '';
                 
+                resetPriceCache();
                 await initData();
             } else {
-                showToast('Failed to save coin', 'error');
+                showToast('Klaida išsaugant monetą', 'error');
             }
         } catch (e) {
-            console.error('Coin validation error:', e);
-            showToast('Could not validate coin. Please try again later.', 'error');
+            showToast('API klaida. Bandykite vėliau.', 'error');
         } finally {
             btn.textContent = originalText;
             btn.disabled = false;
         }
     };
 
+    // Delete Coin
     document.getElementById('btn-delete-coin').onclick = async () => {
         const symbol = document.getElementById('delete-coin-select').value;
+        if (!symbol) return showToast('Pasirinkite monetą', 'error');
+        
+        if (!confirm(`Ar tikrai ištrinti ${symbol}? Bus ištrinti ir susiję tikslai.`)) return;
+        
         if (await window.deleteSupportedCoin(symbol)) {
-            showToast('Coin Deleted', 'success');
+            showToast('Moneta ištrinta', 'success');
             document.getElementById('delete-coin-modal').classList.add('hidden');
             await initData();
+        } else {
+            showToast('Klaida trinant', 'error');
         }
     };
     
-    // 4. Calculator
-    setupCalculator();
+    // --- GOAL MODAL ACTIONS ---
+    // Update Goal
+    document.getElementById('btn-update-goal').onclick = async () => {
+        const goalId = document.getElementById('edit-goal-id').value;
+        const newTarget = parseFloat(document.getElementById('edit-goal-target').value);
+        
+        if (!newTarget || newTarget <= 0) return showToast('Įveskite teisingą skaičių', 'error');
+        
+        if (await window.updateCryptoGoal(goalId, newTarget)) {
+            showToast('Tikslas atnaujintas', 'success');
+            document.getElementById('edit-goal-modal').classList.add('hidden');
+            await initData();
+        } else {
+            showToast('Klaida atnaujinant', 'error');
+        }
+    };
     
-    // Auth listeners
+    // Delete Goal
+    document.getElementById('btn-delete-goal').onclick = async () => {
+        const goalId = document.getElementById('edit-goal-id').value;
+        if (!confirm("Ar tikrai ištrinti šį tikslą?")) return;
+        
+        if (await window.deleteCryptoGoal(goalId)) {
+            showToast('Tikslas ištrintas', 'success');
+            document.getElementById('edit-goal-modal').classList.add('hidden');
+            await initData();
+        } else {
+            showToast('Klaida trinant', 'error');
+        }
+    };
+    
+    // --- AUTHENTICATION ---
     document.getElementById('btn-login').onclick = async () => {
         const btn = document.getElementById('btn-login');
         const email = document.getElementById('auth-email').value.trim();
         const pass = document.getElementById('auth-pass').value;
         
-        // Validation
-        if (!email || !pass) {
-            showToast('Please enter email and password', 'error');
-            return;
-        }
+        if (!email || !pass) return showToast('Įveskite duomenis', 'error');
         
-        // Show loading state
-        const originalText = btn.textContent;
-        btn.textContent = 'Logging in...';
+        btn.textContent = 'Jungiamasi...';
         btn.disabled = true;
         
         try {
             const result = await window.userLogin(email, pass);
-            console.log('Login result:', result); // Debug log
-            
             if (result.error) {
-                console.error('Login error:', result.error);
-                showToast(result.error.message || 'Login failed', 'error');
+                showToast('Prisijungti nepavyko', 'error');
             } else if (result.data?.user) {
-                showToast('Login successful!', 'success');
+                showToast('Sveiki sugrįžę!', 'success');
                 showAppScreen();
                 await initData();
-            } else {
-                showToast('Login failed - please try again', 'error');
             }
         } catch (e) {
-            console.error('Login exception:', e);
-            showToast('Connection error - please try again', 'error');
+            showToast('Ryšio klaida', 'error');
         } finally {
-            btn.textContent = originalText;
+            btn.textContent = 'Prisijungti';
             btn.disabled = false;
         }
     };
@@ -327,57 +402,39 @@ function setupEventListeners() {
         const email = document.getElementById('auth-email').value.trim();
         const pass = document.getElementById('auth-pass').value;
         
-        // Validation
-        if (!email || !pass) {
-            showToast('Please enter email and password', 'error');
-            return;
-        }
+        if (!email || !pass) return showToast('Įveskite duomenis', 'error');
+        if (pass.length < 6) return showToast('Slaptažodis per trumpas (min 6)', 'error');
         
-        if (pass.length < 6) {
-            showToast('Password must be at least 6 characters', 'error');
-            return;
-        }
-        
-        // Show loading state
-        const originalText = btn.textContent;
-        btn.textContent = 'Signing up...';
+        btn.textContent = 'Registruojama...';
         btn.disabled = true;
         
-        try {
-            const result = await window.userSignUp(email, pass);
-            console.log('Signup result:', result); // Debug log
-            
-            if (result.error) {
-                console.error('Signup error:', result.error);
-                showToast(result.error.message || 'Signup failed', 'error');
-            } else {
-                showToast('Check your email for confirmation link!', 'success');
-            }
-        } catch (e) {
-            console.error('Signup exception:', e);
-            showToast('Connection error - please try again', 'error');
-        } finally {
-            btn.textContent = originalText;
-            btn.disabled = false;
+        const result = await window.userSignUp(email, pass);
+        if (result.error) {
+            showToast(result.error.message, 'error');
+        } else {
+            showToast('Registracija sėkminga! Patikrinkite el. paštą.', 'success');
         }
+        btn.textContent = 'Registruotis';
+        btn.disabled = false;
     };
     
-    document.getElementById('btn-logout').onclick = async () => { await window.userSignOut(); showAuthScreen(); };
+    document.getElementById('btn-logout').onclick = async () => { 
+        await window.userSignOut(); 
+        showAuthScreen(); 
+        showToast('Atsijungta sėkmingai', 'success');
+    };
     
-    // Export CSV
+    // --- EXPORT CSV ---
     document.getElementById('btn-export-csv').onclick = () => {
-        if (state.transactions.length === 0) {
-            showToast('No transactions to export', 'error');
-            return;
-        }
+        if (state.transactions.length === 0) return showToast('Nėra duomenų eksportui', 'error');
+        
         const headers = ['date', 'type', 'coin_symbol', 'amount', 'price_per_coin', 'total_cost_usd', 'exchange', 'method', 'notes'];
         const csvContent = [
             headers.join(','),
             ...state.transactions.map(tx => 
                 headers.map(h => {
                     const value = (tx[h] || '').toString();
-                    // Escape quotes and wrap in quotes, escape newlines and carriage returns
-                    return `"${value.replace(/"/g, '""').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
+                    return `"${value.replace(/"/g, '""').replace(/\n/g, ' ')}"`;
                 }).join(',')
             )
         ].join('\n');
@@ -385,90 +442,117 @@ function setupEventListeners() {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `crypto-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `crypto-export-${new Date().toISOString().slice(0,10)}.csv`;
         link.click();
-        showToast('CSV exported!', 'success');
+        showToast('Failas paruoštas atsisiuntimui', 'success');
     };
     
-    // Fetch Price
+    // --- FETCH PRICE API ---
     document.getElementById('btn-fetch-price').onclick = async () => {
         const btn = document.getElementById('btn-fetch-price');
         const coinSymbol = document.getElementById('tx-coin').value;
         const coin = state.coins.find(c => c.symbol === coinSymbol);
         
-        if (!coin) {
-            showToast('Select a coin first', 'error');
-            return;
-        }
+        if (!coin) return showToast('Pasirinkite monetą', 'error');
         
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        btn.innerHTML = '...';
         btn.disabled = true;
         
         try {
-            const encodedId = encodeURIComponent(coin.coingecko_id);
-            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodedId}&vs_currencies=usd`);
-            
-            if (!res.ok) {
-                if (res.status === 429) {
-                    showToast('Rate limited. Try again in a minute.', 'error');
-                } else {
-                    showToast('API error. Try again later.', 'error');
-                }
-                return;
-            }
-            
+            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coin.coingecko_id)}&vs_currencies=usd`);
+            if(!res.ok) throw new Error();
             const data = await res.json();
             
             if (data[coin.coingecko_id]?.usd) {
                 document.getElementById('tx-price').value = data[coin.coingecko_id].usd;
+                // Trigger calculation
                 document.getElementById('tx-price').dispatchEvent(new Event('input'));
-                showToast('Price fetched!', 'success');
+                showToast('Kaina atnaujinta', 'success');
             } else {
-                showToast(`Price not found for ${coin.symbol}. Check CoinGecko ID.`, 'error');
-                console.error('CoinGecko response:', data, 'Expected ID:', coin.coingecko_id);
+                showToast('Kaina nerasta', 'error');
             }
         } catch (e) {
-            console.error('Fetch price error:', e);
-            showToast('Network error. Check your connection.', 'error');
+            showToast('Nepavyko gauti kainos (API limitas?)', 'error');
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
     };
     
-    // Passkey buttons
+    // --- PASSKEY HANDLERS ---
     document.getElementById('btn-setup-passkey').onclick = async () => {
         if (await window.registerPasskey()) {
-            showToast('Passkey enabled!', 'success');
+            showToast('Passkey sėkmingai sukurtas!', 'success');
             await checkPasskeyStatus();
         }
     };
 
     document.getElementById('btn-remove-passkey').onclick = async () => {
-        if (confirm('Remove passkey from this device?')) {
+        if (confirm('Pašalinti passkey?')) {
             await window.removePasskey();
-            showToast('Passkey removed', 'success');
+            showToast('Passkey pašalintas', 'success');
             await checkPasskeyStatus();
         }
     };
     
-    // Add Button Reset
+    // --- CALCULATOR & UI HELPERS ---
+    setupCalculator();
+    setupBulkSelection();
+    
+    // Reset Add Modal on Open
     const btnAdd = document.querySelector('button[onclick*="add-modal"]');
     if (btnAdd) {
          btnAdd.onclick = (e) => {
-             e.preventDefault();
+             // If manual listener is needed (usually HTML onclick handles class removal)
              document.getElementById('add-tx-form').reset();
              document.getElementById('tx-id').value = '';
-             document.getElementById('modal-title').textContent = "New Transaction";
+             document.getElementById('modal-title').textContent = "Nauja Transakcija";
+             document.getElementById('btn-save').textContent = "Išsaugoti";
              const now = new Date();
              document.getElementById('tx-date-input').value = now.toISOString().split('T')[0];
              document.getElementById('tx-time-input').value = now.toTimeString().slice(0, 5);
              document.getElementById('add-modal').classList.remove('hidden');
          }
     }
-    
-    // Select All checkbox
+}
+
+// ==========================================
+// 4. UTILITY FUNCTIONS
+// ==========================================
+
+function setupCalculator() {
+    // Auto-calculate fields
+    const calc = (src) => {
+        const amountIn = document.getElementById('tx-amount');
+        const priceIn = document.getElementById('tx-price');
+        const totalIn = document.getElementById('tx-total');
+        if (!amountIn || !priceIn || !totalIn) return;
+        
+        const val = (el) => parseFloat(el.value) || 0;
+        const a = val(amountIn), p = val(priceIn), t = val(totalIn);
+        
+        if (src === 'total') { 
+            if(a>0) priceIn.value=(t/a).toFixed(8); 
+            else if(p>0) amountIn.value=(t/p).toFixed(6); 
+        }
+        else if (src === 'amount') { 
+            if(t>0) priceIn.value=(t/a).toFixed(8); 
+            else if(p>0) totalIn.value=(a*p).toFixed(2); 
+        }
+        else if (src === 'price') { 
+            if(a>0) totalIn.value=(a*p).toFixed(2); 
+            else if(t>0) amountIn.value=(t/p).toFixed(6); 
+        }
+    };
+
+    ['tx-amount', 'tx-price', 'tx-total'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.addEventListener('input', (e) => calc(e.target.id.split('-')[1]));
+    });
+}
+
+function setupBulkSelection() {
     const selectAllCheckbox = document.getElementById('select-all-tx');
     if (selectAllCheckbox) {
         selectAllCheckbox.onchange = () => {
@@ -480,41 +564,32 @@ function setupEventListeners() {
         };
     }
 
-    // Delete Selected button
     const deleteSelectedBtn = document.getElementById('btn-delete-selected');
     if (deleteSelectedBtn) {
         deleteSelectedBtn.onclick = async () => {
             const selectedIds = Array.from(document.querySelectorAll('.tx-checkbox:checked'))
                 .map(cb => cb.dataset.txId);
             
-            if (selectedIds.length === 0) {
-                showToast('No transactions selected', 'error');
-                return;
-            }
-            
-            if (!confirm(`Delete ${selectedIds.length} transaction(s)?`)) return;
+            if (selectedIds.length === 0) return showToast('Nepasirinkta nieko', 'error');
+            if (!confirm(`Ištrinti ${selectedIds.length} įrašus?`)) return;
             
             deleteSelectedBtn.disabled = true;
-            deleteSelectedBtn.setAttribute('aria-label', 'Deleting selected transactions');
-            deleteSelectedBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+            deleteSelectedBtn.innerHTML = 'Trinama...';
             
-            // Use Promise.all for concurrent deletions
             const results = await Promise.all(selectedIds.map(id => window.deleteTransaction(id)));
             const deleted = results.filter(Boolean).length;
             
-            showToast(`Deleted ${deleted} transaction(s)`, 'success');
+            showToast(`Ištrinta: ${deleted}`, 'success');
             document.getElementById('select-all-tx').checked = false;
             await initData();
             
             deleteSelectedBtn.disabled = false;
-            deleteSelectedBtn.removeAttribute('aria-label');
-            deleteSelectedBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete (<span id="selected-count">0</span>)';
         };
     }
 }
 
-// Helper function to update delete button visibility
-function updateDeleteSelectedButton() {
+// Exported for UI.js usage
+window.updateDeleteSelectedButton = () => {
     const selectedCount = document.querySelectorAll('.tx-checkbox:checked').length;
     const deleteBtn = document.getElementById('btn-delete-selected');
     const countSpan = document.getElementById('selected-count');
@@ -529,31 +604,8 @@ function updateDeleteSelectedButton() {
         }
     }
     if (countSpan) countSpan.textContent = selectedCount;
-}
+};
 
-// Make updateDeleteSelectedButton available globally for checkbox changes
-window.updateDeleteSelectedButton = updateDeleteSelectedButton;
-
-// Calculator Logic moved here or imported? Kept simple inside setupCalculator
-function setupCalculator() {
-    const amountIn = document.getElementById('tx-amount');
-    const priceIn = document.getElementById('tx-price');
-    const totalIn = document.getElementById('tx-total');
-    if (!amountIn) return;
-    
-    const val = (el) => parseFloat(el.value) || 0;
-    const calc = (src) => {
-        const a = val(amountIn), p = val(priceIn), t = val(totalIn);
-        if (src === 'total') { if(a>0) priceIn.value=(t/a).toFixed(8); else if(p>0) amountIn.value=(t/p).toFixed(6); }
-        else if (src === 'amount') { if(t>0) priceIn.value=(t/a).toFixed(8); else if(p>0) totalIn.value=(a*p).toFixed(2); }
-        else if (src === 'price') { if(a>0) totalIn.value=(a*p).toFixed(2); else if(t>0) amountIn.value=(t/p).toFixed(6); }
-    };
-    amountIn.oninput = () => calc('amount');
-    priceIn.oninput = () => calc('price');
-    totalIn.oninput = () => calc('total');
-}
-
-// Passkey functions
 async function checkPasskeyStatus() {
     const settingsSection = document.getElementById('passkey-settings');
     const statusEl = document.getElementById('passkey-status');
@@ -569,11 +621,11 @@ async function checkPasskeyStatus() {
     
     const hasKey = await window.hasPasskey();
     if (hasKey) {
-        if (statusEl) statusEl.textContent = 'Enabled';
+        if (statusEl) statusEl.textContent = 'Aktyvuota';
         if (setupBtn) setupBtn.classList.add('hidden');
         if (removeBtn) removeBtn.classList.remove('hidden');
     } else {
-        if (statusEl) statusEl.textContent = 'Not set up';
+        if (statusEl) statusEl.textContent = 'Neaktyvuota';
         if (setupBtn) setupBtn.classList.remove('hidden');
         if (removeBtn) removeBtn.classList.add('hidden');
     }
