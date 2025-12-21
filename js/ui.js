@@ -1,4 +1,6 @@
-// js/ui.js - v3.0.1 (Features: Nested Accordion Year > Month, PnL Chart, Celebration)
+// js/ui.js - v3.0.2
+// Features: 5Y Support, Nested Accordion, PnL Chart Axes
+
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
 
@@ -20,7 +22,7 @@ export function setupThemeHandlers() {
             localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
             
             if(allocationChart) renderAllocationChart();
-            if(pnlChart) renderPnLChart();
+            if(pnlChart) renderPnLChart(document.getElementById('tf-indicator')?.textContent || 'ALL');
         };
     }
 }
@@ -141,7 +143,6 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
-// ✅ PATAISYTA: Dvigubas Akordeonas (Metai -> Mėnesiai)
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
@@ -154,14 +155,13 @@ export function renderTransactionJournal() {
         return; 
     }
 
-    // 1. Grupuojame: Metai -> Mėnuo -> [Transakcijos]
     const grouped = {};
     sortedTxs.forEach(tx => { 
         const d = new Date(tx.date); 
         if(isNaN(d)) return; 
         
         const year = d.getFullYear();
-        const month = d.getMonth(); // 0-11
+        const month = d.getMonth(); 
         
         if (!grouped[year]) grouped[year] = {};
         if (!grouped[year][month]) grouped[year][month] = [];
@@ -173,13 +173,11 @@ export function renderTransactionJournal() {
 
     const fragment = document.createDocumentFragment();
     
-    // Rikiuojame Metus (2025, 2024...)
     Object.keys(grouped).sort((a, b) => b - a).forEach((year, yIndex) => {
         const yearData = grouped[year];
         const yearId = `year-${year}`;
-        const isYearOpen = yIndex === 0; // Tik naujausi metai atidaryti
+        const isYearOpen = yIndex === 0;
 
-        // A. METŲ HEADER
         const yearWrapper = document.createElement('div');
         yearWrapper.className = 'mb-4 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden';
 
@@ -193,7 +191,6 @@ export function renderTransactionJournal() {
             <i class="fa-solid fa-chevron-down transition-transform duration-300 text-gray-500 ${isYearOpen ? '' : '-rotate-90'}" id="icon-${yearId}"></i>
         `;
 
-        // B. METŲ TURINYS (Mėnesiai)
         const yearContent = document.createElement('div');
         yearContent.id = yearId;
         yearContent.className = `bg-white dark:bg-gray-900/50 p-2 space-y-2 ${isYearOpen ? '' : 'hidden'}`;
@@ -206,20 +203,15 @@ export function renderTransactionJournal() {
 
         yearWrapper.appendChild(yearHeader);
 
-        // C. MĖNESIŲ CIKLAS (Vidiniai Akordeonai)
-        // Rikiuojame mėnesius: 11, 10, 9...
         const sortedMonths = Object.keys(yearData).sort((a, b) => parseInt(b) - parseInt(a));
         
         sortedMonths.forEach((monthIndex, mIndex) => {
             const txs = yearData[monthIndex];
             const monthId = `month-${year}-${monthIndex}`;
-            
-            // Logika: Tik pirmas (naujausias) mėnuo išskleistas
             const isMonthOpen = mIndex === 0;
 
             const monthWrapper = document.createElement('div');
             
-            // Mėnesio antraštė (Clickable)
             const monthHeader = document.createElement('div');
             monthHeader.className = 'flex justify-between items-center px-2 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded mb-1 select-none group';
             monthHeader.innerHTML = `
@@ -230,12 +222,10 @@ export function renderTransactionJournal() {
                 <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 transition-transform duration-300 ${isMonthOpen ? '' : '-rotate-90'}" id="icon-${monthId}"></i>
             `;
 
-            // Mėnesio turinys (Transakcijos)
             const monthContent = document.createElement('div');
             monthContent.id = monthId;
             monthContent.className = `space-y-2 pl-2 ${isMonthOpen ? '' : 'hidden'}`;
 
-            // Toggle mėnesiui
             monthHeader.onclick = () => {
                 monthContent.classList.toggle('hidden');
                 const icon = document.getElementById(`icon-${monthId}`);
@@ -244,7 +234,6 @@ export function renderTransactionJournal() {
 
             monthWrapper.appendChild(monthHeader);
 
-            // Transakcijų kortelės
             txs.forEach(tx => {
                 monthContent.appendChild(createTransactionCard(tx));
             });
@@ -369,6 +358,7 @@ export function renderAllocationChart() {
     });
 }
 
+// ✅ PATAISYTA: PnL Grafikas su 5Y logika
 export function renderPnLChart(timeframe = 'ALL') {
     const canvas = document.getElementById('pnlChart');
     if (!canvas) return;
@@ -378,20 +368,51 @@ export function renderPnLChart(timeframe = 'ALL') {
         pnlChart = null;
     }
     
-    const sortedTxs = state.transactions.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+    const now = new Date();
+    const cutoff = new Date();
+    
+    if (timeframe === '24H') cutoff.setHours(now.getHours() - 24);
+    else if (timeframe === '1W') cutoff.setDate(now.getDate() - 7);
+    else if (timeframe === '1M') cutoff.setMonth(now.getMonth() - 1);
+    else if (timeframe === '3M') cutoff.setMonth(now.getMonth() - 3);
+    else if (timeframe === '6M') cutoff.setMonth(now.getMonth() - 6);
+    else if (timeframe === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
+    else if (timeframe === '5Y') cutoff.setFullYear(now.getFullYear() - 5); // ✅ 5Y Logika
+    else if (timeframe === 'ALL') cutoff.setFullYear(1900);
+
+    const sortedTxs = state.transactions
+        .filter(tx => new Date(tx.date) >= cutoff)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    
     if (sortedTxs.length === 0) return;
 
     const dataPoints = [];
     const labels = [];
     let cumulativeInvested = 0;
     
+    if (timeframe !== 'ALL') {
+        const previousTxs = state.transactions.filter(tx => new Date(tx.date) < cutoff);
+        previousTxs.forEach(tx => {
+            const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
+            if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
+            else cumulativeInvested -= Number(tx.total_cost_usd);
+        });
+        dataPoints.push(cumulativeInvested);
+        labels.push('');
+    }
+
     sortedTxs.forEach(tx => {
         const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
         if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
         else cumulativeInvested -= Number(tx.total_cost_usd);
         
         dataPoints.push(cumulativeInvested);
-        labels.push(new Date(tx.date).toLocaleDateString());
+        
+        const d = new Date(tx.date);
+        let dateLabel = d.toLocaleDateString();
+        if (timeframe === '24H') dateLabel = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        labels.push(dateLabel);
     });
     
     const ctx = canvas.getContext('2d');
@@ -409,10 +430,10 @@ export function renderPnLChart(timeframe = 'ALL') {
                 borderColor: color,
                 backgroundColor: isPositive ? 'rgba(45, 212, 191, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                 borderWidth: 2,
-                tension: 0.4,
+                tension: 0.2,
                 fill: true,
-                pointRadius: 0,
-                pointHoverRadius: 4
+                pointRadius: timeframe === '24H' ? 3 : 0,
+                pointHoverRadius: 5
             }]
         },
         options: {
@@ -436,8 +457,31 @@ export function renderPnLChart(timeframe = 'ALL') {
                 }
             },
             scales: {
-                x: { display: false },
-                y: { display: false }
+                x: { 
+                    display: true,
+                    grid: { display: false },
+                    ticks: {
+                        color: isDark ? '#6b7280' : '#9ca3af',
+                        font: { size: 9 },
+                        maxTicksLimit: 6,
+                        maxRotation: 0
+                    }
+                },
+                y: { 
+                    display: true,
+                    position: 'right',
+                    grid: { 
+                        color: isDark ? '#374151' : '#f3f4f6',
+                        drawBorder: false 
+                    },
+                    ticks: {
+                        color: isDark ? '#6b7280' : '#9ca3af',
+                        font: { size: 9 },
+                        callback: function(value) {
+                            return '$' + value.toLocaleString(undefined, {notation: "compact"});
+                        }
+                    }
+                }
             },
             interaction: {
                 mode: 'nearest',
