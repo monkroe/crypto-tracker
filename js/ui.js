@@ -49,10 +49,6 @@ export function updateDashboardUI(totals) {
     setStat('header-total-pnl', totals.totalPnL);
 }
 
-// ... (GOALS, COIN CARDS, JOURNAL, CHARTS - viskas lieka kaip buvo v3.8.0)
-// Kad sutaupytume vietos, čia įkopijuokite tas pačias funkcijas iš praeito atsakymo.
-// Jei reikia, galiu sugeneruoti visą ilgą failą vėl, bet pakeitimų žemiau nėra.
-
 export function renderGoals() {
     const container = document.getElementById('goals-container');
     if (!container) return;
@@ -564,4 +560,4 @@ export function renderPnLChart(timeframe = 'ALL') {
             }
         }
     });
-                             }
+}
