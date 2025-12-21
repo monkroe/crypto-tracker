@@ -1,11 +1,9 @@
-// js/ui.js - v3.0.0
-// Features: Fixed Accordion, PnL Chart, Goals Edit, Celebration
-
+// js/ui.js - v3.0.0 (Fixed: Year/Month Accordion & Sorting)
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
-let pnlChart = null; 
+let pnlChart = null;
 const celebratedGoals = new Set();
 
 const CHART_COLORS = { 
@@ -61,6 +59,7 @@ export function renderGoals() {
         const tgt = Number(goal.target_amount);
         const pct = tgt > 0 ? Math.min(100, (cur/tgt)*100) : 0;
         
+        // Celebration logic
         if (pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) {
             triggerCelebration(goal.coin_symbol);
             celebratedGoals.add(goal.coin_symbol);
@@ -143,7 +142,7 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
-// ✅ PATAISYTA: Transakcijų žurnalas su veikiančiu akordeonu
+// ✅ FIX: Transakcijų žurnalas (Metai -> Mėnesiai -> Transakcijos)
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
@@ -156,111 +155,135 @@ export function renderTransactionJournal() {
         return; 
     }
 
+    // 1. Grupuojame: Metai -> Mėnuo -> [Transakcijos]
     const grouped = {};
     sortedTxs.forEach(tx => { 
         const d = new Date(tx.date); 
         if(isNaN(d)) return; 
-        const k = `${d.getFullYear()}-${d.getMonth()}`; 
-        if(!grouped[k]) grouped[k]=[]; 
-        grouped[k].push(tx); 
+        
+        const year = d.getFullYear();
+        const month = d.getMonth(); // 0-11
+        
+        if (!grouped[year]) grouped[year] = {};
+        if (!grouped[year][month]) grouped[year][month] = [];
+        
+        grouped[year][month].push(tx);
     });
     
     const monthsLT = ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'];
 
-    const fragment = document.createDocumentFragment();
-    const sortedKeys = Object.keys(grouped).sort((a,b) => b.localeCompare(a)); // Naujausi viršuje
+    // 2. Generuojame UI
+    // Metų rikiavimas (2025, 2024...)
+    Object.keys(grouped).sort((a, b) => b - a).forEach((year, index) => {
+        const yearData = grouped[year];
+        const yearId = `year-${year}`;
+        const isYearOpen = index === 0; // Tik naujausi metai atidaryti pagal nutylėjimą
 
-    sortedKeys.forEach((key, index) => {
-        const [yr, mo] = key.split('-');
-        const txs = grouped[key];
-        const monthId = `group-${key}`;
-        
-        // Pagal nutylėjimą pirmas (naujausias) mėnuo atidarytas, kiti uždaryti
-        const isExpanded = index === 0;
-        
-        // 1. Antraštė (Header)
-        const groupHeader = document.createElement('div');
-        groupHeader.className = 'bg-gray-50 dark:bg-gray-800/50 px-4 py-3 text-[10px] font-bold text-gray-500 uppercase mt-4 mb-2 rounded-lg border border-gray-200 dark:border-gray-800 flex justify-between items-center cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
-        groupHeader.innerHTML = `
-            <div class="flex items-center gap-2">
-                <i class="fa-solid fa-chevron-down transition-transform duration-300 ${isExpanded ? '' : '-rotate-90'}" id="icon-${monthId}"></i>
-                <span>${yr} ${monthsLT[parseInt(mo)]}</span>
+        // --- A. METŲ HEADER ---
+        const yearWrapper = document.createElement('div');
+        yearWrapper.className = 'mb-4 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden';
+
+        const yearHeader = document.createElement('div');
+        yearHeader.className = 'bg-gray-100 dark:bg-gray-800 px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors';
+        yearHeader.innerHTML = `
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-calendar-days text-primary-500"></i>
+                <span class="font-bold text-gray-800 dark:text-gray-200 text-sm">${year}</span>
             </div>
-            <span class="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded text-[9px]">${txs.length}</span>
+            <i class="fa-solid fa-chevron-down transition-transform duration-300 text-gray-500 ${isYearOpen ? '' : '-rotate-90'}" id="icon-${yearId}"></i>
         `;
-        
-        // Click handler for accordion
-        groupHeader.onclick = () => {
-            const content = document.getElementById(monthId);
-            const icon = document.getElementById(`icon-${monthId}`);
-            if (content) {
-                content.classList.toggle('hidden');
-                if (content.classList.contains('hidden')) {
-                    icon.style.transform = 'rotate(-90deg)';
-                } else {
-                    icon.style.transform = 'rotate(0deg)';
-                }
+
+        // --- B. METŲ TURINYS (Mėnesiai) ---
+        const yearContent = document.createElement('div');
+        yearContent.id = yearId;
+        yearContent.className = `bg-white dark:bg-gray-900/50 p-2 space-y-4 ${isYearOpen ? '' : 'hidden'}`;
+
+        // Header click toggle
+        yearHeader.onclick = () => {
+            yearContent.classList.toggle('hidden');
+            const icon = document.getElementById(`icon-${yearId}`);
+            if (yearContent.classList.contains('hidden')) {
+                icon.classList.add('-rotate-90');
+            } else {
+                icon.classList.remove('-rotate-90');
             }
         };
-        fragment.appendChild(groupHeader);
 
-        // 2. Konteineris transakcijoms (Accordion Body)
-        const txContainer = document.createElement('div');
-        txContainer.id = monthId;
-        txContainer.className = `space-y-2 ${isExpanded ? '' : 'hidden'}`;
+        yearWrapper.appendChild(yearHeader);
 
-        txs.forEach(tx => {
-            const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
-            const color = isBuy ? 'text-primary-500' : 'text-red-500';
+        // --- C. MĖNESIŲ CIKLAS ---
+        // Rikiuojame mėnesius skaitine mažėjimo tvarka (11, 10, 9...)
+        Object.keys(yearData).sort((a, b) => parseInt(b) - parseInt(a)).forEach(monthIndex => {
+            const txs = yearData[monthIndex];
             
-            let pnlHTML = '';
-            if (isBuy) {
-                 const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
-                 if (coin && state.prices[coin.coingecko_id]) {
-                     const currentVal = tx.amount * state.prices[coin.coingecko_id].usd;
-                     const diff = currentVal - tx.total_cost_usd;
-                     const pct = (diff / tx.total_cost_usd) * 100;
-                     const cls = diff >= 0 ? 'text-primary-500' : 'text-red-500';
-                     pnlHTML = `<div class="text-[9px] ${cls} font-mono mt-1">PnL: ${diff>=0?'+':''}$${diff.toFixed(2)} (${pct.toFixed(1)}%)</div>`;
-                 }
-            }
-
-            let badges = '';
-            if (tx.exchange) badges += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
-
-            const card = document.createElement('div');
-            card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/30';
+            const monthBlock = document.createElement('div');
             
-            card.innerHTML = `
-                <div class="flex items-start gap-3">
-                    <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 mt-1 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-0 cursor-pointer" 
-                           data-tx-id="${tx.id}" 
-                           onchange="window.updateDeleteSelectedButton()">
-                    <div class="flex-1">
-                        <div class="flex items-center flex-wrap">
-                            <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
-                            <span class="text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded ml-2">${tx.type}</span>
-                            ${badges}
-                        </div>
-                        <div class="text-[10px] text-gray-400 mt-1">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                        ${pnlHTML}
-                    </div>
-                </div>
-                <div class="text-right flex flex-col items-end">
-                    <div class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
-                    <div class="font-bold text-sm text-gray-900 dark:text-white mt-0.5">${formatMoney(tx.total_cost_usd)}</div>
-                    <div class="flex gap-2 mt-2 opacity-50 hover:opacity-100 transition-opacity">
-                        <button onclick="window.onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-xs"></i></button>
-                        <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
-                    </div>
-                </div>`;
-            txContainer.appendChild(card);
+            // Mėnesio antraštė
+            const monthHeader = document.createElement('div');
+            monthHeader.className = 'text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-2 border-l-2 border-primary-500/30';
+            monthHeader.textContent = `${monthsLT[parseInt(monthIndex)]} (${txs.length})`;
+            monthBlock.appendChild(monthHeader);
+
+            // Transakcijų kortelės
+            txs.forEach(tx => {
+                monthBlock.appendChild(createTransactionCard(tx));
+            });
+
+            yearContent.appendChild(monthBlock);
         });
-        
-        fragment.appendChild(txContainer);
+
+        yearWrapper.appendChild(yearContent);
+        container.appendChild(yearWrapper);
     });
+}
+
+// Helper: Create individual transaction card
+function createTransactionCard(tx) {
+    const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
+    const color = isBuy ? 'text-primary-500' : 'text-red-500';
     
-    container.appendChild(fragment);
+    let pnlHTML = '';
+    if (isBuy) {
+            const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
+            if (coin && state.prices[coin.coingecko_id]) {
+                const currentVal = tx.amount * state.prices[coin.coingecko_id].usd;
+                const diff = currentVal - tx.total_cost_usd;
+                const pct = (diff / tx.total_cost_usd) * 100;
+                const cls = diff >= 0 ? 'text-primary-500' : 'text-red-500';
+                pnlHTML = `<div class="text-[9px] ${cls} font-mono mt-1">PnL: ${diff>=0?'+':''}$${diff.toFixed(2)} (${pct.toFixed(1)}%)</div>`;
+            }
+    }
+
+    let badges = '';
+    if (tx.exchange) badges += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
+
+    const card = document.createElement('div');
+    card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 mb-2 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/30';
+    
+    card.innerHTML = `
+        <div class="flex items-start gap-3">
+            <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 mt-1 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-0 cursor-pointer" 
+                    data-tx-id="${tx.id}" 
+                    onchange="window.updateDeleteSelectedButton()">
+            <div class="flex-1">
+                <div class="flex items-center flex-wrap">
+                    <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
+                    <span class="text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded ml-2">${tx.type}</span>
+                    ${badges}
+                </div>
+                <div class="text-[10px] text-gray-400 mt-1">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                ${pnlHTML}
+            </div>
+        </div>
+        <div class="text-right flex flex-col items-end">
+            <div class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
+            <div class="font-bold text-sm text-gray-900 dark:text-white mt-0.5">${formatMoney(tx.total_cost_usd)}</div>
+            <div class="flex gap-2 mt-2 opacity-50 hover:opacity-100 transition-opacity">
+                <button onclick="window.onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-xs"></i></button>
+                <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+            </div>
+        </div>`;
+    return card;
 }
 
 export function renderAllocationChart() {
