@@ -1,13 +1,11 @@
 // js/ui.js - v3.0.0
-// Features: PnL Chart, Goals Edit, Theme Handlers, UI Rendering, Celebration Logic
+// Features: Fixed Accordion, PnL Chart, Goals Edit, Celebration
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
 let pnlChart = null; 
-
-// ✅ NAUJA: Saugome, kurie tikslai jau atšvęsti šioje sesijoje, kad nekartotume animacijos
 const celebratedGoals = new Set();
 
 const CHART_COLORS = { 
@@ -63,7 +61,6 @@ export function renderGoals() {
         const tgt = Number(goal.target_amount);
         const pct = tgt > 0 ? Math.min(100, (cur/tgt)*100) : 0;
         
-        // ✅ NAUJA: Patikriname ar pasiektas tikslas ir paleidžiame animaciją
         if (pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) {
             triggerCelebration(goal.coin_symbol);
             celebratedGoals.add(goal.coin_symbol);
@@ -92,7 +89,6 @@ export function renderGoals() {
     container.appendChild(fragment);
 }
 
-// ✅ NAUJA FUNKCIJA: Paleidžia konfeti ir parodo modalą
 function triggerCelebration(symbol) {
     const modal = document.getElementById('celebration-modal');
     const coinSpan = document.getElementById('celebration-coin');
@@ -100,31 +96,13 @@ function triggerCelebration(symbol) {
     if (modal && coinSpan) {
         coinSpan.textContent = symbol;
         modal.classList.remove('hidden');
-        
-        // Paleidžiame konfeti (jei biblioteka užkrauta iš index.html)
         if (typeof window.confetti === 'function') {
             const duration = 3000;
             const end = Date.now() + duration;
-
             (function frame() {
-                window.confetti({
-                    particleCount: 5,
-                    angle: 60,
-                    spread: 55,
-                    origin: { x: 0 },
-                    colors: ['#2dd4bf', '#fbbf24', '#f87171']
-                });
-                window.confetti({
-                    particleCount: 5,
-                    angle: 120,
-                    spread: 55,
-                    origin: { x: 1 },
-                    colors: ['#2dd4bf', '#fbbf24', '#f87171']
-                });
-
-                if (Date.now() < end) {
-                    requestAnimationFrame(frame);
-                }
+                window.confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#2dd4bf', '#fbbf24', '#f87171'] });
+                window.confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#2dd4bf', '#fbbf24', '#f87171'] });
+                if (Date.now() < end) requestAnimationFrame(frame);
             }());
         }
     }
@@ -165,6 +143,7 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
+// ✅ PATAISYTA: Transakcijų žurnalas su veikiančiu akordeonu
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
@@ -189,15 +168,46 @@ export function renderTransactionJournal() {
     const monthsLT = ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė', 'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis', 'Gruodis'];
 
     const fragment = document.createDocumentFragment();
-    
-    Object.keys(grouped).sort((a,b) => b.localeCompare(a)).forEach(key => {
+    const sortedKeys = Object.keys(grouped).sort((a,b) => b.localeCompare(a)); // Naujausi viršuje
+
+    sortedKeys.forEach((key, index) => {
         const [yr, mo] = key.split('-');
         const txs = grouped[key];
+        const monthId = `group-${key}`;
         
+        // Pagal nutylėjimą pirmas (naujausias) mėnuo atidarytas, kiti uždaryti
+        const isExpanded = index === 0;
+        
+        // 1. Antraštė (Header)
         const groupHeader = document.createElement('div');
-        groupHeader.className = 'bg-gray-50 dark:bg-gray-800/50 px-4 py-2 text-[10px] font-bold text-gray-500 uppercase mt-4 mb-2 rounded-lg border border-gray-200 dark:border-gray-800 flex justify-between';
-        groupHeader.innerHTML = `<span>${yr} ${monthsLT[parseInt(mo)]}</span> <span>${txs.length}</span>`;
+        groupHeader.className = 'bg-gray-50 dark:bg-gray-800/50 px-4 py-3 text-[10px] font-bold text-gray-500 uppercase mt-4 mb-2 rounded-lg border border-gray-200 dark:border-gray-800 flex justify-between items-center cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
+        groupHeader.innerHTML = `
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-chevron-down transition-transform duration-300 ${isExpanded ? '' : '-rotate-90'}" id="icon-${monthId}"></i>
+                <span>${yr} ${monthsLT[parseInt(mo)]}</span>
+            </div>
+            <span class="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded text-[9px]">${txs.length}</span>
+        `;
+        
+        // Click handler for accordion
+        groupHeader.onclick = () => {
+            const content = document.getElementById(monthId);
+            const icon = document.getElementById(`icon-${monthId}`);
+            if (content) {
+                content.classList.toggle('hidden');
+                if (content.classList.contains('hidden')) {
+                    icon.style.transform = 'rotate(-90deg)';
+                } else {
+                    icon.style.transform = 'rotate(0deg)';
+                }
+            }
+        };
         fragment.appendChild(groupHeader);
+
+        // 2. Konteineris transakcijoms (Accordion Body)
+        const txContainer = document.createElement('div');
+        txContainer.id = monthId;
+        txContainer.className = `space-y-2 ${isExpanded ? '' : 'hidden'}`;
 
         txs.forEach(tx => {
             const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
@@ -219,7 +229,7 @@ export function renderTransactionJournal() {
             if (tx.exchange) badges += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
 
             const card = document.createElement('div');
-            card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 mb-2 shadow-sm flex justify-between items-start transition-colors hover:border-primary-500/30';
+            card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/30';
             
             card.innerHTML = `
                 <div class="flex items-start gap-3">
@@ -244,9 +254,12 @@ export function renderTransactionJournal() {
                         <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
                     </div>
                 </div>`;
-            fragment.appendChild(card);
+            txContainer.appendChild(card);
         });
+        
+        fragment.appendChild(txContainer);
     });
+    
     container.appendChild(fragment);
 }
 
