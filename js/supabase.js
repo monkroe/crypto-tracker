@@ -4,11 +4,22 @@ const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; // Įrašykite 
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjaXVlcmNtaHJ4cXhubmRrdmJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2Njg1NzAsImV4cCI6MjA4MTI0NDU3MH0.j5PLJI-8Brcx4q7wFXdmWcciRlBXS3Z2w9O50yAbDWs'; // Įrašykite savo KEY
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Padarome supabase objektą pasiekiamą globaliai (jei reiktų)
 window.supabase = supabase;
 
-// --- 1. GET DATA ---
+// --- AUTH ---
+window.userLogin = async function(email, password) {
+    return await supabase.auth.signInWithPassword({ email, password });
+};
+
+window.userSignUp = async function(email, password) {
+    return await supabase.auth.signUp({ email, password });
+};
+
+window.userSignOut = async function() {
+    return await supabase.auth.signOut();
+};
+
+// --- DATA ---
 window.getSupportedCoins = async function() {
     const { data, error } = await supabase.from('supported_coins').select('*');
     if (error) { console.error('Error fetching coins:', error); return []; }
@@ -27,7 +38,6 @@ window.getCryptoGoals = async function() {
     return data;
 };
 
-// --- 2. TRANSACTIONS (CRUD) ---
 window.addTransaction = async function(txData) {
     const { data, error } = await supabase.from('crypto_transactions').insert([txData]).select();
     if (error) throw error;
@@ -45,7 +55,6 @@ window.deleteTransaction = async function(id) {
     if (error) throw error;
 };
 
-// --- 3. GOALS (CRUD) ---
 window.addGoal = async function(goalData) {
     const { data, error } = await supabase.from('crypto_goals').insert([goalData]).select();
     if (error) throw error;
