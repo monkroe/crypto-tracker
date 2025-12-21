@@ -1,5 +1,5 @@
-// js/ui.js - v3.5.1
-// Features: Notes display, Method/Exchange Badges, Group Stats, Advanced Charts
+// js/ui.js - v3.7.0
+// Features: New Header UI, Goals Sorted, Group Stats, Advanced Charts, Badges
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
@@ -9,7 +9,7 @@ let pnlChart = null;
 const celebratedGoals = new Set();
 
 const CHART_COLORS = { 
-    KAS: '#2dd4bf', ASTER: '#fbc527',  BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308', 
+    KAS: '#2dd4bf', ASTER: '#fbc527', BTC: '#f97316', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308', 
     PEPE: '#097a22', USDT: '#26a17b', USDC: '#2775ca', default: '#6b7280'
 };
 
@@ -31,43 +31,59 @@ export function setupThemeHandlers() {
 }
 
 export function updateDashboardUI(totals) {
-    document.getElementById('header-total-value').textContent = formatMoney(totals.totalValue);
-    document.getElementById('total-invested').textContent = formatMoney(totals.totalInvested);
+    // 1. Pagrindinė vertė (Didelis skaičius)
+    const headerValue = document.getElementById('header-total-value');
+    if(headerValue) headerValue.textContent = formatMoney(totals.totalValue);
     
-    const pnlEl = document.getElementById('total-pnl');
-    pnlEl.textContent = formatMoney(totals.totalPnL);
-    pnlEl.className = `text-2xl font-bold ${totals.totalPnL >= 0 ? 'text-primary-500' : 'text-red-500'}`;
-    
-    const pctEl = document.getElementById('total-pnl-percent');
-    pctEl.textContent = (totals.totalPnL >= 0 ? '+' : '') + totals.totalPnLPercent.toFixed(2) + '%';
-    pctEl.className = `text-xs font-bold px-2 py-0.5 rounded ${totals.totalPnL >= 0 ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`;
+    // 2. 24H Pokytis (Kairėje)
+    const change24hEl = document.getElementById('header-24h-change');
+    const change24hVal = totals.change24hUsd;
+    if (change24hEl) {
+        const sign = change24hVal >= 0 ? '↗' : '↘';
+        change24hEl.innerHTML = `${sign} ${formatMoney(Math.abs(change24hVal))}`;
+        change24hEl.className = `text-sm font-bold ${change24hVal >= 0 ? 'text-primary-500' : 'text-red-500'}`;
+    }
+
+    // 3. Unrealized Return (Dešinėje) - Visas PnL
+    const unrealizedEl = document.getElementById('header-unrealized-return');
+    const unrealizedVal = totals.totalPnL;
+    if (unrealizedEl) {
+        const sign = unrealizedVal >= 0 ? '↗' : '↘';
+        unrealizedEl.innerHTML = `${sign} ${formatMoney(Math.abs(unrealizedVal))}`;
+        unrealizedEl.className = `text-sm font-bold ${unrealizedVal >= 0 ? 'text-primary-500' : 'text-red-500'}`;
+    }
 }
 
 // ==========================================
-// 2. GOALS
+// 2. GOALS (SORTED)
 // ==========================================
 export function renderGoals() {
     const container = document.getElementById('goals-container');
     if (!container) return;
     container.innerHTML = '';
     
-    const validGoals = state.goals.filter(goal => 
-        state.coins.some(c => c.symbol === goal.coin_symbol)
-    );
-    
-    if (validGoals.length === 0) { 
+    // Filtruojame, skaičiuojame ir rikiuojame
+    const goalsWithProgress = state.goals
+        .filter(goal => state.coins.some(c => c.symbol === goal.coin_symbol))
+        .map(goal => {
+            const cur = state.holdings[goal.coin_symbol]?.qty || 0;
+            const tgt = Number(goal.target_amount);
+            const pct = tgt > 0 ? (cur / tgt) * 100 : 0;
+            return { ...goal, cur, tgt, pct };
+        })
+        .sort((a, b) => b.pct - a.pct); // Daugiausiai % viršuje
+
+    if (goalsWithProgress.length === 0) { 
         document.getElementById('goals-section').classList.add('hidden'); 
         return; 
     }
     document.getElementById('goals-section').classList.remove('hidden');
 
     const fragment = document.createDocumentFragment();
-    validGoals.forEach(goal => {
-        const cur = state.holdings[goal.coin_symbol]?.qty || 0;
-        const tgt = Number(goal.target_amount);
-        const pct = tgt > 0 ? Math.min(100, (cur/tgt)*100) : 0;
+    goalsWithProgress.forEach(goal => {
+        const displayPct = Math.min(100, goal.pct);
         
-        if (pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) {
+        if (goal.pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) {
             triggerCelebration(goal.coin_symbol);
             celebratedGoals.add(goal.coin_symbol);
         }
@@ -78,17 +94,17 @@ export function renderGoals() {
             <div class="flex justify-between items-center text-xs mb-1">
                 <span class="font-bold text-gray-800 dark:text-gray-300">${goal.coin_symbol}</span>
                 <div class="flex items-center gap-2">
-                    <span class="text-primary-600 dark:text-primary-400 font-bold">${pct.toFixed(1)}%</span>
+                    <span class="text-primary-600 dark:text-primary-400 font-bold">${goal.pct.toFixed(1)}%</span>
                     <button onclick="window.editGoal('${goal.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1">
                         <i class="fa-solid fa-pen text-[10px]"></i>
                     </button>
                 </div>
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                <div class="bg-primary-500 h-1.5 rounded-full transition-all duration-1000 ease-out" style="width:${pct}%"></div>
+                <div class="bg-primary-500 h-1.5 rounded-full transition-all duration-1000 ease-out" style="width:${displayPct}%"></div>
             </div>
             <div class="text-[9px] text-gray-500 mt-1 text-right font-mono">
-                ${cur.toLocaleString(undefined, {maximumFractionDigits: 4})} / ${tgt.toLocaleString()}
+                ${goal.cur.toLocaleString(undefined, {maximumFractionDigits: 4})} / ${goal.tgt.toLocaleString()}
             </div>`;
         fragment.appendChild(div);
     });
@@ -153,7 +169,7 @@ export function renderCoinCards() {
 }
 
 // ==========================================
-// 4. TRANSACTION JOURNAL (ACCORDION + NOTES + BADGES)
+// 4. TRANSACTION JOURNAL
 // ==========================================
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
@@ -167,7 +183,6 @@ export function renderTransactionJournal() {
         return; 
     }
 
-    // 1. Grupuojame
     const grouped = {};
     sortedTxs.forEach(tx => { 
         const d = new Date(tx.date); 
@@ -201,7 +216,6 @@ export function renderTransactionJournal() {
                </span>` 
             : '';
 
-        // A. METŲ HEADER
         const yearWrapper = document.createElement('div');
         yearWrapper.className = 'mb-4 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden';
 
@@ -218,7 +232,6 @@ export function renderTransactionJournal() {
             <i class="fa-solid fa-chevron-down transition-transform duration-300 text-gray-500 ${isYearOpen ? '' : '-rotate-90'}" id="icon-${yearId}"></i>
         `;
 
-        // B. METŲ TURINYS
         const yearContent = document.createElement('div');
         yearContent.id = yearId;
         yearContent.className = `bg-white dark:bg-gray-900/50 p-2 space-y-2 ${isYearOpen ? '' : 'hidden'}`;
@@ -231,7 +244,6 @@ export function renderTransactionJournal() {
 
         yearWrapper.appendChild(yearHeader);
 
-        // C. MĖNESIŲ CIKLAS
         const sortedMonths = Object.keys(yearData).sort((a, b) => parseInt(b) - parseInt(a));
         
         sortedMonths.forEach((monthIndex, mIndex) => {
@@ -310,12 +322,10 @@ function calculateGroupStats(txs) {
     return { pnl, pct, totalVal };
 }
 
-// ✅ PATAISYTA: Transakcijos kortelė su Pastabomis ir Metodais
 function createTransactionCard(tx) {
     const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
     const color = isBuy ? 'text-primary-500' : 'text-red-500';
     
-    // PnL (jei pirkimas)
     let pnlHTML = '';
     if (isBuy) {
             const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
@@ -328,20 +338,16 @@ function createTransactionCard(tx) {
             }
     }
 
-    // Ženkliukai (Exchange + Method)
     let badgesHTML = '';
     if (tx.exchange) {
         badgesHTML += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
     }
     if (tx.method && tx.method !== 'Market Buy') {
-        // Jei metodas nėra default, rodom jį
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
     } else if (tx.method) {
-        // Arba rodom visada
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
     }
 
-    // Pastabos
     let notesHTML = '';
     if (tx.notes && tx.notes.trim() !== '') {
         notesHTML = `<div class="text-[9px] text-gray-400 italic mt-1.5 pl-2 border-l-2 border-gray-200 dark:border-gray-700 line-clamp-2">${tx.notes}</div>`;
@@ -470,7 +476,7 @@ export function renderPnLChart(timeframe = 'ALL') {
     
     const pastTxs = allTxs.filter(tx => new Date(tx.date) < cutoff);
     pastTxs.forEach(tx => {
-        const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
+        const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
         if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
         else cumulativeInvested -= Number(tx.total_cost_usd);
     });
