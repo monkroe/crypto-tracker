@@ -1,11 +1,11 @@
-// js/supabase.js - Corrected Table Names
+// js/supabase.js - v3.9.7
 
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co'; // Įrašykite savo URL
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjaXVlcmNtaHJ4cXhubmRrdmJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2Njg1NzAsImV4cCI6MjA4MTI0NDU3MH0.j5PLJI-8Brcx4q7wFXdmWcciRlBXS3Z2w9O50yAbDWs'; // Įrašykite savo KEY
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Padarome supabase objektą pasiekiamą globaliai (pvz. coin add funkcijai)
+// Padarome supabase objektą pasiekiamą globaliai (jei reiktų)
 window.supabase = supabase;
 
 // --- 1. GET DATA ---
@@ -16,7 +16,6 @@ window.getSupportedCoins = async function() {
 };
 
 window.getTransactions = async function() {
-    // Čia svarbu: crypto_transactions
     const { data, error } = await supabase.from('crypto_transactions').select('*');
     if (error) { console.error('Error fetching transactions:', error); return []; }
     return data;
