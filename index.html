@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#2dd4bf">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Crypto Tracker v4.3.3</title>
+    <title>Crypto Tracker v4.4.0</title>
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
     <link rel="manifest" href="manifest.json">
@@ -38,7 +38,6 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -238,7 +237,7 @@
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">Sukurta su <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> ir DI pagalba</p>
                 <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v4.3.3</span></p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v4.4.0</span></p>
             </footer>
         </main>
     </div>
@@ -486,12 +485,29 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-gray-950 rounded-xl p-1 border border-gray-200 dark:border-gray-800 h-64 w-full relative overflow-hidden shadow-inner mt-4">
-                <div id="coin-chart-container" class="w-full h-full"></div>
-                <div id="chart-loader" class="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-10 hidden">
-                    <div class="flex flex-col items-center gap-2">
-                        <div class="spinner border-primary-500 w-8 h-8"></div>
-                        <span class="text-xs text-gray-500 font-bold animate-pulse">Kraunamas grafikas...</span>
+            <div class="bg-white dark:bg-gray-950 rounded-xl p-3 border border-gray-200 dark:border-gray-800 mt-4 shadow-inner">
+                
+                <div class="flex justify-between items-end mb-2 px-1">
+                    <div id="chart-live-price-container">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Kaina</p>
+                        <div id="coin-live-price" class="text-xl font-bold dark:text-white">...</div>
+                    </div>
+                    <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+                        <button onclick="window.changeCoinChartTimeframe('1H')" class="chart-tf-btn text-[9px] px-2 py-1 rounded font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors" data-tf="1H">1H</button>
+                        <button onclick="window.changeCoinChartTimeframe('24H')" class="chart-tf-btn text-[9px] px-2 py-1 rounded font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors" data-tf="24H">24H</button>
+                        <button onclick="window.changeCoinChartTimeframe('7D')" class="chart-tf-btn text-[9px] px-2 py-1 rounded font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm transition-colors" data-tf="7D">7D</button>
+                        <button onclick="window.changeCoinChartTimeframe('30D')" class="chart-tf-btn text-[9px] px-2 py-1 rounded font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors" data-tf="30D">30D</button>
+                        <button onclick="window.changeCoinChartTimeframe('ALL')" class="chart-tf-btn text-[9px] px-2 py-1 rounded font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors" data-tf="ALL">ALL</button>
+                    </div>
+                </div>
+
+                <div class="h-64 w-full relative overflow-hidden">
+                    <div id="coin-chart-container" class="w-full h-full"></div>
+                    <div id="chart-loader" class="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-10 hidden">
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="spinner border-primary-500 w-8 h-8"></div>
+                            <span class="text-xs text-gray-500 font-bold animate-pulse">Kraunamas grafikas...</span>
+                        </div>
                     </div>
                 </div>
             </div>
