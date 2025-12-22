@@ -1,5 +1,5 @@
-// js/ui.js - v4.2.0
-// Features: Clean Badges, Clickable Rows (Open Detail), Buttons Edit/Delete
+// js/ui.js - v4.2.1
+// Features: Clean Badges, Clickable Rows (Open Detail), Buttons Edit/Delete, Exchange Filtering
 
 import { formatMoney } from './utils.js';
 import { state } from './logic.js';
@@ -7,6 +7,7 @@ import { state } from './logic.js';
 let allocationChart = null;
 let pnlChart = null;
 const celebratedGoals = new Set();
+let currentExchangeFilter = null; // ✅ NEW: Track active filter
 
 const CHART_COLORS = { 
     KAS: '#2dd4bf', ASTER: '#eec25e', BTC: '#f89907', ETH: '#3b82f6', 
@@ -137,7 +138,6 @@ export function renderCoinCards() {
         const pnlClass = data.pnl >= 0 ? 'text-primary-500' : 'text-red-500';
         const card = document.createElement('div');
         
-        // CLICK LOGIKA: Paspaudus kortelę atidaromas modalas
         card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm mb-3 cursor-pointer hover:border-primary-500 hover:shadow-lg transition-all';
         card.onclick = () => window.openCoinDetail(sym);
         
@@ -157,12 +157,35 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
+// ✅ NEW: Filter transactions by exchange
+window.filterByExchange = (exchange) => {
+    currentExchangeFilter = exchange;
+    renderTransactionJournal();
+    
+    // Update button styles
+    document.querySelectorAll('.exchange-filter-btn').forEach(btn => {
+        if (btn.dataset.exchange === exchange) {
+            btn.classList.add('bg-primary-500', 'text-white');
+            btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-300');
+        } else {
+            btn.classList.remove('bg-primary-500', 'text-white');
+            btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-300');
+        }
+    });
+};
+
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
     container.innerHTML = '';
     
-    const sortedTxs = state.transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    // ✅ Apply exchange filter
+    let filteredTxs = state.transactions.slice();
+    if (currentExchangeFilter && currentExchangeFilter !== 'All') {
+        filteredTxs = filteredTxs.filter(tx => tx.exchange === currentExchangeFilter);
+    }
+    
+    const sortedTxs = filteredTxs.sort((a, b) => new Date(b.date) - new Date(a.date));
     
     if (sortedTxs.length === 0) { 
         container.innerHTML = `<div class="text-center py-8 text-sm text-gray-500">Nėra transakcijų</div>`; 
@@ -306,7 +329,7 @@ function calculateGroupStats(txs) {
     return { pnl, pct, totalVal };
 }
 
-// ✅ ATNAUJINTA: Išvalyti Badges, Eilutė atidaro Modalą
+// ✅ UPDATED: Clean Badges + Transfer Icons
 function createTransactionCard(tx) {
     const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
     const color = isBuy ? 'text-primary-500' : 'text-red-500';
@@ -325,30 +348,44 @@ function createTransactionCard(tx) {
 
     let badgesHTML = '';
     
-    // 1. Biržos ženklelis
+    // 1. ✅ Clickable Exchange Badge
     if (tx.exchange) {
-        badgesHTML += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
+        badgesHTML += `<span onclick="window.filterByExchange('${tx.exchange}')" class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-primary-500 hover:text-white transition-colors">${tx.exchange}</span>`;
     }
 
-    // 2. Metodo valymas (Trumpi tekstai)
-    let methodDisplay = tx.method || '';
-    
-    methodDisplay = methodDisplay
-        .replace('Transfer to ', '')        // "Transfer to Hot Wallet" -> "Hot Wallet"
-        .replace('Transfer from ', 'From ') // "Transfer from Exchange" -> "From Exchange"
-        .replace(' (Card)', '')             // Panaikinti (Card)
-        .replace(' (DCA)', '');             // Panaikinti (DCA)
+    // 2. ✅ Transfer Badge with Icons
+    if (tx.type === 'Transfer') {
+        let transferText = tx.method || 'Transfer';
+        let icon = '⇄';
         
-    if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
-    if (methodDisplay === 'Market Buy') methodDisplay = ''; // Default, nerodome
+        if (transferText.includes('Transfer to')) {
+            icon = '→';
+            transferText = transferText.replace('Transfer to ', '');
+        } else if (transferText.includes('Transfer from')) {
+            icon = '←';
+            transferText = transferText.replace('Transfer from ', '');
+        }
+        
+        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/30">${icon} ${transferText}</span>`;
+    } else {
+        // 2b. Method Badge (for non-Transfer)
+        let methodDisplay = tx.method || '';
+        
+        methodDisplay = methodDisplay
+            .replace(' (Card)', '')
+            .replace(' (DCA)', '');
+            
+        if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
+        if (methodDisplay === 'Market Buy') methodDisplay = '';
 
-    if (methodDisplay) {
-        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${methodDisplay}</span>`;
+        if (methodDisplay) {
+            badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${methodDisplay}</span>`;
+        }
     }
     
-    // 3. Mokesčio ženklelis
+    // 3. ✅ Fee Badge WITHOUT "Fee:" word
     if (tx.fee_usd && Number(tx.fee_usd) > 0) {
-        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30">Fee: $${Number(tx.fee_usd).toFixed(2)}</span>`;
+        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30">$${Number(tx.fee_usd).toFixed(2)}</span>`;
     }
 
     let notesHTML = '';
@@ -359,12 +396,8 @@ function createTransactionCard(tx) {
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/50 cursor-pointer';
     
-    // ✅ CLICK LOGIKA: 
-    // Jei paspaudžia ant checkbox arba mygtukų - veikia jie.
-    // Jei paspaudžia bet kur kitur eilutėje - atidaro "Detali Peržiūra" (Modalą).
     card.onclick = (e) => {
-        if (!e.target.closest('.tx-checkbox') && !e.target.closest('.action-btn')) {
-            // Ši funkcija atidaro "Coin Detail" langą
+        if (!e.target.closest('.tx-checkbox') && !e.target.closest('.action-btn') && !e.target.closest('[onclick*="filterByExchange"]')) {
             window.openCoinDetail(tx.coin_symbol);
         }
     };
@@ -460,7 +493,6 @@ export function renderAllocationChart() {
     });
 }
 
-// ✅ PATAISYTA: Apsauga grafikui
 export function renderPnLChart(timeframe = 'ALL') {
     const canvas = document.getElementById('pnlChart');
     if (!canvas) return;
@@ -564,3 +596,39 @@ export function renderPnLChart(timeframe = 'ALL') {
         }
     });
 }
+
+// ✅ NEW: Render exchange filter buttons
+export function renderExchangeFilters() {
+    const container = document.getElementById('exchange-filters-container');
+    if (!container) return;
+    
+    // Get unique exchanges from transactions
+    const exchanges = [...new Set(state.transactions.map(tx => tx.exchange).filter(Boolean))].sort();
+    
+    if (exchanges.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    // Add "All" button
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'exchange-filter-btn px-2 py-1 rounded text-[9px] font-bold transition-colors bg-primary-500 text-white';
+    allBtn.textContent = 'All';
+    allBtn.dataset.exchange = 'All';
+    allBtn.onclick = () => window.filterByExchange('All');
+    container.appendChild(allBtn);
+    
+    // Add exchange buttons
+    exchanges.forEach(exchange => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'exchange-filter-btn px-2 py-1 rounded text-[9px] font-bold transition-colors bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white';
+        btn.textContent = exchange;
+        btn.dataset.exchange = exchange;
+        btn.onclick = () => window.filterByExchange(exchange);
+        container.appendChild(btn);
+    });
+    }
