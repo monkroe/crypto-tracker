@@ -1,11 +1,11 @@
-// js/app.js - v4.2.0
-// Features: Fee Support, Modal Filters, Dynamic Method Dropdown, Coin Detail Modal
+// js/app.js - v4.3.1
+// Features: Clean Architecture (Logic separated from UI)
 
 import { showToast, parseCSV, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state, resetPriceCache } from './logic.js';
 import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, renderPnLChart, setupThemeHandlers, renderExchangeFilters } from './ui.js';
 
-const APP_VERSION = '4.2.0';
+const APP_VERSION = '4.3.1';
 
 // ==========================================
 // 1. INITIALIZATION
@@ -247,131 +247,6 @@ window.updateMethodOptions = function() {
     });
 };
 
-// ✅ ATNAUJINTA: Biržų filtravimas Modale
-window.openCoinDetail = async function(symbol) {
-    const modal = document.getElementById('coin-detail-modal');
-    if (!modal) return;
-    
-    const coin = state.coins.find(c => c.symbol === symbol);
-    const holding = state.holdings[symbol];
-    if (!coin || !holding) return;
-    
-    // UI atnaujinimas
-    document.getElementById('coin-detail-symbol').textContent = symbol;
-    document.getElementById('coin-detail-qty').textContent = holding.qty.toLocaleString(undefined, {maximumFractionDigits: 4});
-    document.getElementById('coin-detail-value').textContent = `$${holding.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    document.getElementById('coin-detail-invested').textContent = `$${holding.invested.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    
-    const pnlEl = document.getElementById('coin-detail-pnl');
-    pnlEl.textContent = `${holding.pnl >= 0 ? '+' : ''}$${Math.abs(holding.pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    pnlEl.className = `text-xl font-bold ${holding.pnl >= 0 ? 'text-primary-500' : 'text-red-500'}`;
-    
-    // Kainos užkrovimas (tyliai)
-    try {
-        fetch(`https://api.coingecko.com/api/v3/coins/${coin.coingecko_id}?localization=false&tickers=true&market_data=true&sparkline=false`)
-            .then(res => res.json())
-            .then(data => { if (data.tickers) renderExchangePrices(data.tickers, symbol); })
-            .catch(err => console.warn('CG Error', err));
-    } catch (e) { }
-    
-    // Transakcijų paruošimas
-    const coinTxs = state.transactions.filter(tx => tx.coin_symbol === symbol);
-    const exchanges = [...new Set(coinTxs.map(tx => tx.exchange).filter(Boolean))].sort();
-    
-    // ✅ FILTRAVIMO MYGTUKŲ KŪRIMAS
-    const exchangesContainer = document.getElementById('coin-detail-exchanges');
-    if (exchangesContainer) {
-        exchangesContainer.innerHTML = '';
-        
-        // Funkcija stilių atnaujinimui
-        const setActiveBtn = (activeBtn) => {
-            Array.from(exchangesContainer.children).forEach(child => {
-                child.className = 'px-3 py-1 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700';
-            });
-            activeBtn.className = 'px-3 py-1 text-xs font-bold rounded-lg bg-primary-500 text-white shadow-md transition-transform active:scale-95';
-        };
-
-        // 1. "Visos" mygtukas
-        const allBtn = document.createElement('button');
-        allBtn.textContent = 'Visos';
-        allBtn.onclick = () => {
-            renderCoinTransactions(coinTxs);
-            setActiveBtn(allBtn);
-        };
-        exchangesContainer.appendChild(allBtn);
-        setActiveBtn(allBtn); // Default active
-
-        // 2. Biržų mygtukai
-        exchanges.forEach(ex => {
-            const btn = document.createElement('button');
-            btn.textContent = ex;
-            btn.onclick = () => {
-                const filtered = coinTxs.filter(tx => tx.exchange === ex);
-                renderCoinTransactions(filtered);
-                setActiveBtn(btn);
-            };
-            exchangesContainer.appendChild(btn);
-        });
-    }
-    
-    renderCoinTransactions(coinTxs);
-    modal.classList.remove('hidden');
-};
-
-function renderExchangePrices(tickers, symbol) { /* Placeholder */ }
-
-function renderCoinTransactions(txs) {
-    const container = document.getElementById('coin-detail-transactions');
-    if (!container) return;
-    container.innerHTML = '';
-    
-    if (txs.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 text-gray-500 text-xs">Nėra transakcijų pagal šį filtrą</div>`;
-        return;
-    }
-
-    const sorted = txs.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    sorted.forEach(tx => {
-        const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
-        const typeColor = isBuy ? 'text-primary-500' : 'text-red-500';
-        
-        // Išvalome metodus atvaizdavimui (kaip ir UI.js)
-        let methodDisplay = tx.method || '';
-        methodDisplay = methodDisplay
-            .replace('Transfer to ', '→ ')
-            .replace('Transfer from ', '← ')
-            .replace(' (Card)', '')
-            .replace(' (DCA)', '');
-            
-        if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
-        if (methodDisplay === 'Market Buy') methodDisplay = ''; 
-
-        const row = document.createElement('div');
-        row.className = 'flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 mb-2 cursor-pointer hover:border-primary-500 transition-colors';
-        
-        // Leidžiame redaguoti paspaudus
-        row.onclick = () => window.onEditTx(tx.id);
-
-        row.innerHTML = `
-            <div>
-                <div class="flex items-center gap-2">
-                    <p class="font-bold text-sm ${typeColor}">${tx.type}</p>
-                    ${methodDisplay ? `<span class="text-[9px] bg-gray-200 dark:bg-gray-700 px-1.5 rounded text-gray-600 dark:text-gray-300">${methodDisplay}</span>` : ''}
-                </div>
-                <p class="text-xs text-gray-500">${new Date(tx.date).toLocaleDateString()}</p>
-            </div>
-            <div class="text-right">
-                <p class="font-bold text-sm text-gray-900 dark:text-white">${isBuy ? '+' : ''}${Number(tx.amount).toFixed(4)}</p>
-                <p class="text-xs font-bold text-gray-700 dark:text-gray-300">$${Number(tx.total_cost_usd).toFixed(2)}</p>
-            </div>`;
-        container.appendChild(row);
-    });
-}
-
-// ==========================================
-// 3. EVENT LISTENERS SETUP
-// ==========================================
 function setupEventListeners() {
     
     const form = document.getElementById('add-tx-form');
@@ -387,7 +262,7 @@ function setupEventListeners() {
             const tVal = document.getElementById('tx-time-input').value || '00:00';
             const id = document.getElementById('tx-id').value;
 
-            // Fee Logic
+            // Fee Conversion
             let finalFee = parseFloat(document.getElementById('tx-fee').value) || 0;
             const isFeeInCoin = document.getElementById('chk-fee-in-coin').checked;
             const price = parseFloat(document.getElementById('tx-price').value) || 0;
@@ -403,7 +278,7 @@ function setupEventListeners() {
                 amount: document.getElementById('tx-amount').value,
                 total_cost_usd: document.getElementById('tx-total').value,
                 price_per_coin: document.getElementById('tx-price').value,
-                fee_usd: finalFee, 
+                fee_usd: finalFee,
                 exchange: document.getElementById('tx-exchange').value,
                 method: document.getElementById('tx-method').value,
                 notes: sanitizeText(document.getElementById('tx-notes').value)
