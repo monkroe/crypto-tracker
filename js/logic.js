@@ -1,8 +1,11 @@
-// js/logic.js - v4.1.0 (Fee Integration + Infinity Bug Fix + Transfer Support)
+// js/logic.js - v4.5.0 (MERGED: Auth + Fees + Fixes)
+
+import { showToast } from './utils.js';
 
 const CACHE_DURATION = 60000; 
 const safeFloat = (num) => parseFloat(Number(num).toFixed(8));
 
+// 1. GLOBAL STATE
 export let state = {
     coins: [],
     transactions: [],
@@ -12,25 +15,71 @@ export let state = {
     lastFetchTime: 0
 };
 
-export async function loadInitialData() {
-    if (!window.getSupportedCoins) {
-        console.error("Supabase funkcijos nerastos!");
-        return;
+// ==========================================
+// 2. AUTHENTICATION (Būtina prisijungimui!)
+// ==========================================
+
+window.userLogin = async (email, password) => {
+    try {
+        if (!window._supabase) throw new Error("Supabase nepaleistas (patikrinkite js/supabase.js)");
+        const { data, error } = await window._supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        return { data };
+    } catch (e) {
+        console.error("Login fail:", e);
+        return { error: e };
     }
+};
+
+window.userSignUp = async (email, password) => {
+    try {
+        const { data, error } = await window._supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        return { data };
+    } catch (e) {
+        return { error: e };
+    }
+};
+
+window.userSignOut = async () => {
+    if (window._supabase) await window._supabase.auth.signOut();
+    localStorage.clear();
+    window.location.reload();
+};
+
+// Passkey placeholderiai (kad nemestų klaidų nustatymuose)
+window.isWebAuthnSupported = () => window.PublicKeyCredential !== undefined;
+window.hasPasskey = async () => false;
+window.registerPasskey = async () => { showToast('Funkcija kuriama', 'info'); return false; };
+window.removePasskey = async () => { return true; };
+
+
+// ==========================================
+// 3. DATA LOADING & CALCULATIONS
+// ==========================================
+
+export async function loadInitialData() {
+    // Čia naudojame tiesiogines užklausas, nes CRUD funkcijos žemiau
+    const { data: { session } } = await window._supabase.auth.getSession();
+    if (!session) return;
+    const userId = session.user.id;
 
     try {
-        const [coinsData, txData, goalsData] = await Promise.all([
-            window.getSupportedCoins(),
-            window.getTransactions(),
-            window.getCryptoGoals()
+        const [coinsRes, txRes, goalsRes] = await Promise.all([
+            window._supabase.from('supported_coins').select('*').eq('user_id', userId),
+            window._supabase.from('transactions').select('*').eq('user_id', userId),
+            window._supabase.from('crypto_goals').select('*').eq('user_id', userId)
         ]);
-        
-        state.coins = Array.isArray(coinsData) ? coinsData : [];
-        state.transactions = Array.isArray(txData) ? txData.sort((a, b) => new Date(a.date) - new Date(b.date)) : [];
-        state.goals = Array.isArray(goalsData) ? goalsData : [];
+
+        if (coinsRes.error) throw coinsRes.error;
+        if (txRes.error) throw txRes.error;
+
+        state.coins = coinsRes.data || [];
+        state.transactions = (txRes.data || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+        state.goals = goalsRes.data || [];
         
         await fetchPrices();
-        return calculateHoldings();
+        return calculateHoldings(); // Grąžiname rezultatus į app.js
     } catch (e) {
         console.error("Klaida kraunant duomenis:", e);
         throw e;
@@ -49,7 +98,6 @@ export async function fetchPrices() {
     
     try {
         const res = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=30d`);
-        
         if (!res.ok) {
             if (res.status === 429) console.warn('API limitas.');
             return;
@@ -83,24 +131,18 @@ export function calculateHoldings() {
         
         const amount = safeFloat(tx.amount);
         const cost = safeFloat(tx.total_cost_usd);
-        const fee = safeFloat(tx.fee_usd || 0); // ✅ MOKESČIAI
+        const fee = safeFloat(tx.fee_usd || 0);
 
         if (['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy', 'Staking Reward', 'Gift/Airdrop'].includes(tx.type)) {
-            // Pirkimas: Didėja kiekis, didėja investuota suma (kaina + mokesčiai)
             state.holdings[sym].qty = safeFloat(state.holdings[sym].qty + amount);
             state.holdings[sym].invested = safeFloat(state.holdings[sym].invested + cost + fee);
             
         } else if (['Sell', 'Withdraw', 'Market Sell', 'Limit Sell', 'Instant Sell', 'Stop Loss'].includes(tx.type)) {
-            // Pardavimas: Mažėja kiekis, mažėja investuota suma proporcingai
             const currentAvgPrice = state.holdings[sym].qty > 0 ? state.holdings[sym].invested / state.holdings[sym].qty : 0;
             state.holdings[sym].qty = safeFloat(state.holdings[sym].qty - amount);
-            // Pastaba: Pardavus, fee mažina jūsų gautą pelną, bet čia mažiname cost basis, kad liktų teisinga likusių monetų savikaina
             state.holdings[sym].invested = Math.max(0, safeFloat(state.holdings[sym].invested - safeFloat(amount * currentAvgPrice)));
             
         } else if (['Transfer'].includes(tx.type)) {
-            // ✅ TRANSFER LOGIKA:
-            // Kiekis nesikeičia (nes pervedate sau), bet sumokate mokestį.
-            // Mokestis prisideda prie investuotos sumos (cost basis), nes tai išlaidos.
             state.holdings[sym].invested = safeFloat(state.holdings[sym].invested + fee);
         }
     });
@@ -110,7 +152,7 @@ export function calculateHoldings() {
     let total24hChangeUsd = 0;
     let total30dChangeUsd = 0;
 
-    // 2. Value & Change Calculation
+    // 2. Value Calculation
     Object.keys(state.holdings).forEach(sym => {
         const h = state.holdings[sym];
         const coin = state.coins.find(c => c.symbol === sym);
@@ -118,20 +160,11 @@ export function calculateHoldings() {
         const priceData = (coin && state.prices[coin.coingecko_id]) || { usd: 0, change_24h: 0, change_30d: 0 };
         let price = priceData.usd;
         
-        // 
-        // ✅ INFINITY BUG FIX - Handle Airdrop/Gift with 0 price
+        // Zero price fix (Airdrops)
         if (price === 0 && h.qty > 0) {
-            const hasAirdrop = state.transactions.some(tx => 
-                tx.coin_symbol === sym && 
-                (tx.type === 'Gift/Airdrop' || parseFloat(tx.price_per_coin) === 0)
-            );
-            
+            const hasAirdrop = state.transactions.some(tx => tx.coin_symbol === sym && (tx.type === 'Gift/Airdrop' || parseFloat(tx.price_per_coin) === 0));
             if (hasAirdrop) {
-                if (coin && state.prices[coin.coingecko_id]?.usd > 0) {
-                    price = state.prices[coin.coingecko_id].usd;
-                } else {
-                    price = h.invested > 0 ? h.invested / h.qty : 0;
-                }
+                price = (coin && state.prices[coin.coingecko_id]?.usd > 0) ? state.prices[coin.coingecko_id].usd : (h.invested > 0 ? h.invested / h.qty : 0);
             }
         }
         
@@ -139,16 +172,10 @@ export function calculateHoldings() {
         h.currentPrice = price;
         h.pnl = safeFloat(h.currentValue - h.invested);
         
-        // ✅ PnL Percent Fix
-        if (h.invested > 0) {
-            h.pnlPercent = (h.pnl / h.invested) * 100;
-        } else if (h.currentValue > 0) {
-            h.pnlPercent = 100; // Pure profit (Airdrop)
-        } else {
-            h.pnlPercent = 0;
-        }
+        if (h.invested > 0) h.pnlPercent = (h.pnl / h.invested) * 100;
+        else if (h.currentValue > 0) h.pnlPercent = 100;
+        else h.pnlPercent = 0;
 
-        // 24H & 30D Change USD
         if (price > 0 && h.qty > 0) {
             const pct24 = priceData.change_24h || 0;
             const val24 = h.currentValue / (1 + (pct24 / 100));
@@ -175,3 +202,54 @@ export function calculateHoldings() {
 
 export function resetPriceCache() { state.lastFetchTime = 0; }
 window.resetPriceCache = resetPriceCache;
+
+// ==========================================
+// 4. DATABASE CRUD OPERATIONS (Prikabinta prie window)
+// ==========================================
+
+window.saveTransaction = async (txData) => {
+    const { data: { session } } = await window._supabase.auth.getSession();
+    if (!session) return false;
+    const { error } = await window._supabase.from('transactions').insert([{ ...txData, user_id: session.user.id }]);
+    if (error) { showToast('Klaida saugant', 'error'); return false; }
+    return true;
+};
+
+window.updateTransaction = async (id, txData) => {
+    const { error } = await window._supabase.from('transactions').update(txData).eq('id', id);
+    return !error;
+};
+
+window.deleteTransaction = async (id) => {
+    const { error } = await window._supabase.from('transactions').delete().eq('id', id);
+    return !error;
+};
+
+window.saveNewCoin = async (coinData) => {
+    const { data: { session } } = await window._supabase.auth.getSession();
+    if (!session) return false;
+    const { error } = await window._supabase.from('supported_coins').insert([{ ...coinData, user_id: session.user.id }]);
+    return !error;
+};
+
+window.deleteSupportedCoin = async (symbol) => {
+    const { error } = await window._supabase.from('supported_coins').delete().eq('symbol', symbol);
+    return !error;
+};
+
+window.saveCryptoGoal = async (data) => {
+    const { data: { session } } = await window._supabase.auth.getSession();
+    if (!session) return false;
+    const { error } = await window._supabase.from('crypto_goals').insert([{ ...data, user_id: session.user.id }]);
+    return !error;
+};
+
+window.updateCryptoGoal = async (id, target) => {
+    const { error } = await window._supabase.from('crypto_goals').update({ target_amount: target }).eq('id', id);
+    return !error;
+};
+
+window.deleteCryptoGoal = async (id) => {
+    const { error } = await window._supabase.from('crypto_goals').delete().eq('id', id);
+    return !error;
+};
