@@ -1,4 +1,4 @@
-// js/ui.js - v4.3.2
+// js/ui.js - v4.3.3
 // Features: LIVE Chart (Fixed), Clean Badges, Modals, Filters
 
 import { formatMoney, formatPrice, sanitizeText } from './utils.js';
@@ -57,7 +57,6 @@ export async function renderCandleChart(coinId) {
     const loader = document.getElementById('chart-loader');
     if (!container) return;
 
-    // Išvalome seną grafiką
     if (chartInstance) {
         chartInstance.remove();
         chartInstance = null;
@@ -67,15 +66,15 @@ export async function renderCandleChart(coinId) {
     if (loader) loader.classList.remove('hidden');
 
     try {
-        // 1. Patikrinimas ar biblioteka užsikrovė iš index.html
-        if (typeof LightweightCharts === 'undefined') {
-            throw new Error('KLAIDA: index.html neatnaujintas (nėra Chart bibliotekos).');
+        // 1. Patikrinimas: Naudojame window objektą
+        const LWCharts = window.LightweightCharts;
+        if (!LWCharts) {
+            throw new Error('KLAIDA: Nepavyko užkrauti grafiko bibliotekos. Patikrinkite internetą arba index.html.');
         }
 
-        // 2. Siunčiame užklausą į CoinGecko
+        // 2. Siunčiame užklausą
         const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=14`);
         
-        // 3. Tikriname API klaidas
         if (res.status === 404) throw new Error(`Neteisingas ID: "${coinId}". Reikia tikslaus CoinGecko ID.`);
         if (res.status === 429) throw new Error('Viršytas limitas. Palaukite 1 min.');
         if (!res.ok) throw new Error('Tinklo klaida.');
@@ -86,7 +85,7 @@ export async function renderCandleChart(coinId) {
             throw new Error('Nėra duomenų šiai monetai.');
         }
 
-        // 4. Paruošiame duomenis
+        // 3. Paruošiame duomenis
         const candleData = data.map(d => ({
             time: d[0] / 1000,
             open: d[1],
@@ -95,7 +94,7 @@ export async function renderCandleChart(coinId) {
             close: d[4]
         }));
 
-        // 5. Piešiame grafiką
+        // 4. Piešiame grafiką
         const isDark = document.documentElement.classList.contains('dark');
         const chartOptions = {
             layout: {
@@ -111,7 +110,7 @@ export async function renderCandleChart(coinId) {
             timeScale: { timeVisible: true, secondsVisible: false },
         };
 
-        chartInstance = LightweightCharts.createChart(container, chartOptions);
+        chartInstance = LWCharts.createChart(container, chartOptions);
         
         const candlestickSeries = chartInstance.addCandlestickSeries({
             upColor: '#2dd4bf',
@@ -135,7 +134,6 @@ export async function renderCandleChart(coinId) {
 
     } catch (e) {
         console.error("Chart error:", e);
-        // Rodyti TIKSLIĄ klaidą vartotojui
         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center p-4">
             <i class="fa-solid fa-triangle-exclamation text-yellow-500 text-2xl mb-2"></i>
             <span class="text-xs text-gray-500 font-bold">${e.message}</span>
@@ -207,7 +205,7 @@ export async function openCoinDetail(symbol) {
     modal.classList.remove('hidden');
 }
 
-// Globali nuoroda HTML failui
+// Globali nuoroda
 window.openCoinDetail = openCoinDetail; 
 
 function renderCoinTransactions(txs) {
