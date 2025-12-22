@@ -1,5 +1,5 @@
-// js/supabase.js - v3.0.0
-// Includes: Goals CRUD, Transaction Updates, WebAuthn
+// js/supabase.js - v4.1.0
+// Includes: Goals CRUD, Transaction Updates with Fee, WebAuthn
 
 // ======================================
 // 1. CONFIGURATION
@@ -7,16 +7,14 @@
 const SUPABASE_URL = 'https://hciuercmhrxqxnndkvbs.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjaXVlcmNtaHJ4cXhubmRrdmJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2Njg1NzAsImV4cCI6MjA4MTI0NDU3MH0.j5PLJI-8Brcx4q7wFXdmWcciRlBXS3Z2w9O50yAbDWs';
 
-// Safety Check
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_SUPABASE')) {
     console.error('❌ CRITICAL: Supabase credentials missing in js/supabase.js');
     throw new Error('Supabase URL or Key is missing.');
 }
 
-// Initialize Client
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 window._supabase = _supabase;
-console.log('🔗 Supabase Connected v3.0.0');
+console.log('🔗 Supabase Connected v4.0.0');
 
 // ======================================
 // 2. WEBAUTHN (Passkey) UTILS
@@ -112,7 +110,8 @@ window.saveTransaction = async function(txData) {
             ...txData, 
             amount: parseFloat(parseFloat(txData.amount).toFixed(8)), 
             price_per_coin: parseFloat(parseFloat(txData.price_per_coin).toFixed(8)), 
-            total_cost_usd: parseFloat(parseFloat(txData.total_cost_usd).toFixed(2)), 
+            total_cost_usd: parseFloat(parseFloat(txData.total_cost_usd).toFixed(2)),
+            fee_usd: parseFloat(parseFloat(txData.fee_usd || 0).toFixed(2)), // ✅ NAUJAS
             user_id: user.id 
         };
         
@@ -122,7 +121,6 @@ window.saveTransaction = async function(txData) {
     } catch (e) { console.error('saveTransaction error:', e); return false; }
 };
 
-// ✅ FIX: Update function (Better than Delete+Insert)
 window.updateTransaction = async function(id, txData) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
@@ -135,6 +133,7 @@ window.updateTransaction = async function(id, txData) {
             amount: parseFloat(parseFloat(txData.amount).toFixed(8)), 
             price_per_coin: parseFloat(parseFloat(txData.price_per_coin).toFixed(8)), 
             total_cost_usd: parseFloat(parseFloat(txData.total_cost_usd).toFixed(2)),
+            fee_usd: parseFloat(parseFloat(txData.fee_usd || 0).toFixed(2)), // ✅ NAUJAS
             exchange: txData.exchange,
             method: txData.method,
             notes: txData.notes
@@ -198,7 +197,7 @@ window.deleteSupportedCoin = async function(symbol) {
 };
 
 // ======================================
-// 6. CRYPTO GOALS (New v3.0 Features)
+// 6. CRYPTO GOALS
 // ======================================
 window.getCryptoGoals = async function() {
     try {
@@ -210,7 +209,6 @@ window.getCryptoGoals = async function() {
     } catch (e) { console.error('getCryptoGoals error:', e); return []; }
 };
 
-// ✅ FIX: Create new goal
 window.saveCryptoGoal = async function(goalData) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
@@ -231,7 +229,6 @@ window.saveCryptoGoal = async function(goalData) {
     }
 };
 
-// ✅ FIX: Update existing goal
 window.updateCryptoGoal = async function(goalId, newTargetAmount) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
@@ -251,7 +248,6 @@ window.updateCryptoGoal = async function(goalId, newTargetAmount) {
     }
 };
 
-// ✅ FIX: Delete goal
 window.deleteCryptoGoal = async function(goalId) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
