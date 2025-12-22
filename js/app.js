@@ -1,11 +1,11 @@
-// js/app.js - v4.1.0
-// Features: Fee Coin-to-USD Conversion, Fee Support, Dynamic Method Dropdown, Coin Detail Modal, Invested by Timeframe
+// js/app.js - v4.1.1
+// Features: Fee Coin-to-USD Conversion, Fee Support, Dynamic Method Dropdown, Coin Detail Modal, Invested by Timeframe, Exchange Filtering
 
 import { showToast, parseCSV, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state, resetPriceCache } from './logic.js';
-import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, renderPnLChart, setupThemeHandlers } from './ui.js';
+import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, renderPnLChart, setupThemeHandlers, renderExchangeFilters } from './ui.js';
 
-const APP_VERSION = '4.1.0';
+const APP_VERSION = '4.1.1';
 
 // ==========================================
 // 1. INITIALIZATION
@@ -53,6 +53,7 @@ function refreshUI() {
     renderGoals();
     renderAllocationChart();
     renderPnLChart(); // Default view
+    renderExchangeFilters(); // ✅ NEW: Render exchange filter buttons
     
     // Update Dropdowns
     const coinSelects = [document.getElementById('tx-coin'), document.getElementById('delete-coin-select')];
@@ -651,4 +652,4 @@ function showAppScreen() {
 function showAuthScreen() { 
     document.getElementById('auth-screen').classList.remove('hidden'); 
     document.getElementById('app-content').classList.add('hidden'); 
-}
+            }
