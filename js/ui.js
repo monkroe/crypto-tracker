@@ -1,12 +1,12 @@
-// js/ui.js - v4.3.1
-// Features: LIVE Chart, Clean Badges, Modals, All UI Logic
+// js/ui.js - v4.3.2
+// Features: LIVE Chart (Fixed), Clean Badges, Modals, Filters
 
 import { formatMoney, formatPrice, sanitizeText } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
 let pnlChart = null;
-let chartInstance = null; // Grafiko objektas
+let chartInstance = null;
 const celebratedGoals = new Set();
 let currentExchangeFilter = null;
 
@@ -28,12 +28,6 @@ export function setupThemeHandlers() {
             
             if(allocationChart) renderAllocationChart();
             if(pnlChart) renderPnLChart(document.getElementById('tf-indicator')?.textContent || 'ALL');
-            // Jei atidarytas modalas, perpiešiam ir jo grafiką
-            const modal = document.getElementById('coin-detail-modal');
-            if (modal && !modal.classList.contains('hidden') && chartInstance) {
-                // TradingView grafikas pats pasiims naujas spalvas per renderCandleChart, jei perkviesime, 
-                // arba galime palikti kaip yra iki kito atidarymo.
-            }
         };
     }
 }
@@ -69,14 +63,30 @@ export async function renderCandleChart(coinId) {
         chartInstance = null;
     }
     container.innerHTML = '';
-    loader.classList.remove('hidden');
+    
+    if (loader) loader.classList.remove('hidden');
 
     try {
-        // 14 dienų duomenys
+        // 1. Patikrinimas ar biblioteka užsikrovė iš index.html
+        if (typeof LightweightCharts === 'undefined') {
+            throw new Error('KLAIDA: index.html neatnaujintas (nėra Chart bibliotekos).');
+        }
+
+        // 2. Siunčiame užklausą į CoinGecko
         const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=14`);
-        if (!res.ok) throw new Error('API Error');
+        
+        // 3. Tikriname API klaidas
+        if (res.status === 404) throw new Error(`Neteisingas ID: "${coinId}". Reikia tikslaus CoinGecko ID.`);
+        if (res.status === 429) throw new Error('Viršytas limitas. Palaukite 1 min.');
+        if (!res.ok) throw new Error('Tinklo klaida.');
+        
         const data = await res.json();
 
+        if (!Array.isArray(data) || data.length === 0) {
+            throw new Error('Nėra duomenų šiai monetai.');
+        }
+
+        // 4. Paruošiame duomenis
         const candleData = data.map(d => ({
             time: d[0] / 1000,
             open: d[1],
@@ -85,10 +95,11 @@ export async function renderCandleChart(coinId) {
             close: d[4]
         }));
 
+        // 5. Piešiame grafiką
         const isDark = document.documentElement.classList.contains('dark');
         const chartOptions = {
             layout: {
-                background: { type: 'solid', color: isDark ? '#0b0f19' : '#ffffff' },
+                background: { type: 'solid', color: 'transparent' },
                 textColor: isDark ? '#9ca3af' : '#374151',
             },
             grid: {
@@ -113,17 +124,24 @@ export async function renderCandleChart(coinId) {
         candlestickSeries.setData(candleData);
         chartInstance.timeScale().fitContent();
 
+        // Responsive dydis
         new ResizeObserver(entries => {
             if (entries.length === 0 || entries[0].target !== container) return;
             const newRect = entries[0].contentRect;
-            chartInstance.applyOptions({ height: newRect.height, width: newRect.width });
+            if (chartInstance) {
+                chartInstance.applyOptions({ height: newRect.height, width: newRect.width });
+            }
         }).observe(container);
 
     } catch (e) {
         console.error("Chart error:", e);
-        container.innerHTML = '<div class="flex items-center justify-center h-full text-xs text-gray-500">Grafikas neprieinamas</div>';
+        // Rodyti TIKSLIĄ klaidą vartotojui
+        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center p-4">
+            <i class="fa-solid fa-triangle-exclamation text-yellow-500 text-2xl mb-2"></i>
+            <span class="text-xs text-gray-500 font-bold">${e.message}</span>
+        </div>`;
     } finally {
-        loader.classList.add('hidden');
+        if (loader) loader.classList.add('hidden');
     }
 }
 
@@ -146,7 +164,7 @@ export async function openCoinDetail(symbol) {
     pnlEl.textContent = `${holding.pnl >= 0 ? '+' : ''}$${Math.abs(holding.pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
     pnlEl.className = `text-xl font-bold ${holding.pnl >= 0 ? 'text-primary-500' : 'text-red-500'}`;
     
-    // Piešiame grafiką
+    // KVIEČIAME GRAFIKĄ SU ID
     renderCandleChart(coin.coingecko_id);
     
     // Filtrai ir transakcijos
@@ -189,7 +207,7 @@ export async function openCoinDetail(symbol) {
     modal.classList.remove('hidden');
 }
 
-// Būtina priskirti globaliam objektui, nes HTML onclick kviečia window.openCoinDetail
+// Globali nuoroda HTML failui
 window.openCoinDetail = openCoinDetail; 
 
 function renderCoinTransactions(txs) {
@@ -208,6 +226,7 @@ function renderCoinTransactions(txs) {
         const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
         const typeColor = isBuy ? 'text-primary-500' : 'text-red-500';
         
+        // Išvalyti tekstai (Clean Badges)
         let methodDisplay = tx.method || '';
         methodDisplay = methodDisplay
             .replace('Transfer to ', '→ ')
