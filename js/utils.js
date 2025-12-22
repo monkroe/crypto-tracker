@@ -1,4 +1,4 @@
-// js/utils.js - v4.0.0
+// js/utils.js - v4.1.0
 // Features: Debug, Formatters, Toast, CSV Parser (Updated for Fees)
 
 export const DEBUG_MODE = localStorage.getItem('debug') === 'true';
