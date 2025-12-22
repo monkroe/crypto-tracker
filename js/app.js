@@ -1,20 +1,16 @@
-// js/app.js - v4.3.1
-// Features: Clean Architecture (Logic separated from UI)
+// js/app.js - v4.4.0
+// Features: Clean Architecture, Final Fixes
 
 import { showToast, parseCSV, debugLog, sanitizeText } from './utils.js';
 import { loadInitialData, calculateHoldings, state, resetPriceCache } from './logic.js';
 import { updateDashboardUI, renderCoinCards, renderTransactionJournal, renderGoals, renderAllocationChart, renderPnLChart, setupThemeHandlers, renderExchangeFilters } from './ui.js';
 
-const APP_VERSION = '4.3.1';
+const APP_VERSION = '4.4.0';
 
-// ==========================================
-// 1. INITIALIZATION
-// ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('app-version').textContent = APP_VERSION;
     setupThemeHandlers();
     
-    // Settings Button Handler
     const btnSettings = document.getElementById('btn-settings');
     if (btnSettings) {
         btnSettings.onclick = async () => {
@@ -23,26 +19,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // Check Auth Session
     const { data: { session } } = await window._supabase.auth.getSession();
-    if (session) { 
-        showAppScreen(); 
-        await initData(); 
-    } else { 
-        showAuthScreen(); 
-    }
+    if (session) { showAppScreen(); await initData(); } else { showAuthScreen(); }
     
     setupEventListeners();
 });
 
 async function initData() {
-    try {
-        await loadInitialData();
-        refreshUI();
-    } catch (e) { 
-        console.error(e); 
-        showToast("Klaida kraunant duomenis", "error"); 
-    }
+    try { await loadInitialData(); refreshUI(); } 
+    catch (e) { console.error(e); showToast("Klaida kraunant duomenis", "error"); }
 }
 
 function refreshUI() {
@@ -55,69 +40,41 @@ function refreshUI() {
     renderPnLChart(); 
     renderExchangeFilters(); 
     
-    // Update Dropdowns
     const coinSelects = [document.getElementById('tx-coin'), document.getElementById('delete-coin-select')];
     coinSelects.forEach(sel => {
         if (!sel) return;
         sel.innerHTML = '';
         state.coins.forEach(c => {
             const opt = document.createElement('option');
-            opt.value = c.symbol; 
-            opt.textContent = c.symbol; 
-            sel.appendChild(opt);
+            opt.value = c.symbol; opt.textContent = c.symbol; sel.appendChild(opt);
         });
     });
 }
 
-// ==========================================
-// 2. GLOBAL HANDLERS (For HTML onclick)
-// ==========================================
-
 window.onDeleteTx = async (id) => {
     if(confirm("Ar tikrai norite ištrinti šią transakciją?")) {
-        await window.deleteTransaction(id);
-        await initData();
-        showToast("Ištrinta sėkmingai", "success");
+        await window.deleteTransaction(id); await initData(); showToast("Ištrinta sėkmingai", "success");
     }
 };
 
 window.onEditTx = (id) => {
     try {
         const tx = state.transactions.find(t => String(t.id) === String(id));
-        if (!tx) {
-            showToast('Transakcija nerasta', 'error');
-            return;
-        }
+        if (!tx) { showToast('Transakcija nerasta', 'error'); return; }
         
-        const setVal = (elId, value) => {
-            const el = document.getElementById(elId);
-            if (el) el.value = value ?? '';
-        };
-        
-        setVal('tx-id', tx.id);
-        setVal('tx-type', tx.type || 'Buy');
-        setVal('tx-amount', tx.amount);
-        setVal('tx-price', tx.price_per_coin);
-        setVal('tx-total', tx.total_cost_usd);
-        setVal('tx-fee', tx.fee_usd || 0);
-        setVal('tx-exchange', tx.exchange || '');
-        setVal('tx-method', tx.method || 'Market Buy');
-        setVal('tx-notes', tx.notes || '');
+        const setVal = (elId, value) => { const el = document.getElementById(elId); if (el) el.value = value ?? ''; };
+        setVal('tx-id', tx.id); setVal('tx-type', tx.type || 'Buy'); setVal('tx-amount', tx.amount);
+        setVal('tx-price', tx.price_per_coin); setVal('tx-total', tx.total_cost_usd); setVal('tx-fee', tx.fee_usd || 0);
+        setVal('tx-exchange', tx.exchange || ''); setVal('tx-method', tx.method || 'Market Buy'); setVal('tx-notes', tx.notes || '');
         
         const feeChk = document.getElementById('chk-fee-in-coin');
-        if(feeChk) {
-            feeChk.checked = false;
-            feeChk.dispatchEvent(new Event('change'));
-        }
+        if(feeChk) { feeChk.checked = false; feeChk.dispatchEvent(new Event('change')); }
         
         const coinSelect = document.getElementById('tx-coin');
         if (coinSelect) {
             const optionExists = Array.from(coinSelect.options).some(opt => opt.value === tx.coin_symbol);
             if (!optionExists && tx.coin_symbol) {
-                const opt = document.createElement('option');
-                opt.value = tx.coin_symbol;
-                opt.textContent = tx.coin_symbol;
-                coinSelect.appendChild(opt);
+                const opt = document.createElement('option'); opt.value = tx.coin_symbol; opt.textContent = tx.coin_symbol; coinSelect.appendChild(opt);
             }
             coinSelect.value = tx.coin_symbol;
         }
@@ -130,26 +87,17 @@ window.onEditTx = (id) => {
             }
         } catch (dateErr) { console.warn('Date error', dateErr); }
         
-        updateMethodOptions();
-        setVal('tx-method', tx.method || 'Market Buy');
-        
-        document.getElementById('modal-title').textContent = "Transakcijos redagavimas";
+        updateMethodOptions(); setVal('tx-method', tx.method || 'Market Buy');
+        document.getElementById('modal-title').textContent = "Redaguoti Transakciją";
         document.getElementById('btn-save').textContent = "Atnaujinti";
         document.getElementById('add-modal').classList.remove('hidden');
-        
-    } catch (e) {
-        console.error('Edit error:', e);
-        showToast('Klaida atidarant formą', 'error');
-    }
+    } catch (e) { console.error('Edit error:', e); showToast('Klaida', 'error'); }
 };
 
 window.editGoal = (goalId) => {
     try {
         const goal = state.goals.find(g => String(g.id) === String(goalId));
-        if (!goal) {
-            showToast('Tikslas nerastas', 'error');
-            return;
-        }
+        if (!goal) return;
         document.getElementById('edit-goal-id').value = goal.id;
         document.getElementById('edit-goal-coin').textContent = goal.coin_symbol;
         document.getElementById('edit-goal-target').value = goal.target_amount;
@@ -161,7 +109,6 @@ window.changePnLTimeframe = (timeframe) => {
     document.getElementById('tf-indicator').textContent = timeframe;
     const label = document.getElementById('header-timeframe-label');
     if(label) label.textContent = timeframe;
-    
     document.querySelectorAll('.tf-btn').forEach(btn => {
         const tf = btn.getAttribute('data-tf');
         if (tf === timeframe) {
@@ -172,15 +119,11 @@ window.changePnLTimeframe = (timeframe) => {
             btn.classList.add('text-gray-400', 'hover:text-gray-900', 'dark:hover:text-white');
         }
     });
-    
-    updateInvestedByTimeframe(timeframe);
-    renderPnLChart(timeframe);
+    updateInvestedByTimeframe(timeframe); renderPnLChart(timeframe);
 };
 
 function updateInvestedByTimeframe(timeframe) {
-    const now = new Date();
-    const cutoff = new Date();
-    
+    const now = new Date(); const cutoff = new Date();
     if (timeframe === '24H') cutoff.setHours(now.getHours() - 24);
     else if (timeframe === '1W') cutoff.setDate(now.getDate() - 7);
     else if (timeframe === '1M') cutoff.setMonth(now.getMonth() - 1);
@@ -189,88 +132,44 @@ function updateInvestedByTimeframe(timeframe) {
     else if (timeframe === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
     else if (timeframe === '5Y') cutoff.setFullYear(now.getFullYear() - 5);
     else if (timeframe === 'ALL') cutoff.setFullYear(2000);
-    
     const relevantTxs = state.transactions.filter(tx => new Date(tx.date) >= cutoff);
-    
     let totalInvested = 0;
     relevantTxs.forEach(tx => {
         const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
-        if (isBuy) {
-            totalInvested += Number(tx.total_cost_usd) + Number(tx.fee_usd || 0);
-        } else if (tx.type === 'Transfer') {
-            totalInvested += Number(tx.fee_usd || 0);
-        }
+        if (isBuy) totalInvested += Number(tx.total_cost_usd) + Number(tx.fee_usd || 0);
+        else if (tx.type === 'Transfer') totalInvested += Number(tx.fee_usd || 0);
     });
-    
     const investedEl = document.getElementById('header-total-invested');
-    if (investedEl) {
-        investedEl.textContent = `$${totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    }
+    if (investedEl) investedEl.textContent = `$${totalInvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 }
 
 window.updateMethodOptions = function() {
     const type = document.getElementById('tx-type').value;
     const methodSelect = document.getElementById('tx-method');
-    
     const optionsMap = {
-        'Buy': [
-            { value: 'Market Buy', label: 'Market Buy' },
-            { value: 'Limit Buy', label: 'Limit Buy' },
-            { value: 'Instant Buy', label: 'Instant Buy' },
-            { value: 'Recurring Buy', label: 'Recurring Buy' },
-            { value: 'Swap', label: 'Swap / DeFi' },
-            { value: 'Staking Reward', label: 'Reward' },
-            { value: 'Gift/Airdrop', label: 'Gift/Airdrop' }
-        ],
-        'Sell': [
-            { value: 'Market Sell', label: 'Market Sell' },
-            { value: 'Limit Sell', label: 'Limit Sell' },
-            { value: 'Instant Sell', label: 'Instant Sell' },
-            { value: 'Stop Loss', label: 'Stop Loss' }
-        ],
-        'Transfer': [
-            { value: 'Transfer to Cold Wallet', label: '→ Cold Wallet' },
-            { value: 'Transfer to Hot Wallet', label: '→ Hot Wallet' },
-            { value: 'Transfer to Exchange', label: '→ To Exchange' },
-            { value: 'Transfer from Wallet', label: '← From Wallet' },
-            { value: 'Transfer from Exchange', label: '← From Exchange' }
-        ]
+        'Buy': [{ value: 'Market Buy', label: 'Market Buy' }, { value: 'Limit Buy', label: 'Limit Buy' }, { value: 'Instant Buy', label: 'Instant Buy' }, { value: 'Recurring Buy', label: 'Recurring Buy' }, { value: 'Swap', label: 'Swap / DeFi' }, { value: 'Staking Reward', label: 'Reward' }, { value: 'Gift/Airdrop', label: 'Gift/Airdrop' }],
+        'Sell': [{ value: 'Market Sell', label: 'Market Sell' }, { value: 'Limit Sell', label: 'Limit Sell' }, { value: 'Instant Sell', label: 'Instant Sell' }, { value: 'Stop Loss', label: 'Stop Loss' }],
+        'Transfer': [{ value: 'Transfer to Cold Wallet', label: '→ Cold Wallet' }, { value: 'Transfer to Hot Wallet', label: '→ Hot Wallet' }, { value: 'Transfer to Exchange', label: '→ To Exchange' }, { value: 'Transfer from Wallet', label: '← From Wallet' }, { value: 'Transfer from Exchange', label: '← From Exchange' }]
     };
-    
     const options = optionsMap[type] || optionsMap['Buy'];
     methodSelect.innerHTML = '';
-    options.forEach(opt => {
-        const option = document.createElement('option');
-        option.value = opt.value;
-        option.textContent = opt.label;
-        methodSelect.appendChild(option);
-    });
+    options.forEach(opt => { const option = document.createElement('option'); option.value = opt.value; option.textContent = opt.label; methodSelect.appendChild(option); });
 };
 
 function setupEventListeners() {
-    
     const form = document.getElementById('add-tx-form');
     if (form) {
         form.onsubmit = async (e) => {
             e.preventDefault();
-            const btn = document.getElementById('btn-save');
-            const originalText = btn.textContent;
-            btn.textContent = "Saugoma...";
-            btn.disabled = true;
-            
+            const btn = document.getElementById('btn-save'); const originalText = btn.textContent;
+            btn.textContent = "Saugoma..."; btn.disabled = true;
             const dVal = document.getElementById('tx-date-input').value;
             const tVal = document.getElementById('tx-time-input').value || '00:00';
             const id = document.getElementById('tx-id').value;
-
-            // Fee Conversion
             let finalFee = parseFloat(document.getElementById('tx-fee').value) || 0;
             const isFeeInCoin = document.getElementById('chk-fee-in-coin').checked;
             const price = parseFloat(document.getElementById('tx-price').value) || 0;
-            
-            if (isFeeInCoin && price > 0) {
-                finalFee = finalFee * price;
-            }
-
+            if (isFeeInCoin && price > 0) finalFee = finalFee * price;
             const txData = {
                 date: new Date(`${dVal}T${tVal}:00`).toISOString(),
                 type: document.getElementById('tx-type').value,
@@ -278,300 +177,136 @@ function setupEventListeners() {
                 amount: document.getElementById('tx-amount').value,
                 total_cost_usd: document.getElementById('tx-total').value,
                 price_per_coin: document.getElementById('tx-price').value,
-                fee_usd: finalFee,
-                exchange: document.getElementById('tx-exchange').value,
-                method: document.getElementById('tx-method').value,
-                notes: sanitizeText(document.getElementById('tx-notes').value)
+                fee_usd: finalFee, exchange: document.getElementById('tx-exchange').value,
+                method: document.getElementById('tx-method').value, notes: sanitizeText(document.getElementById('tx-notes').value)
             };
-
             let success = false;
-            try {
-                if (id) success = await window.updateTransaction(id, txData);
-                else success = await window.saveTransaction(txData);
-            } catch (err) { console.error('Save error:', err); }
-
-            if (success) {
-                showToast("Išsaugota!", "success");
-                document.getElementById('add-modal').classList.add('hidden');
-                form.reset();
-                await initData();
-            } else { showToast("Klaida saugant", "error"); }
-            btn.textContent = originalText;
-            btn.disabled = false;
+            try { if (id) success = await window.updateTransaction(id, txData); else success = await window.saveTransaction(txData); } catch (err) { console.error('Save error:', err); }
+            if (success) { showToast("Išsaugota!", "success"); document.getElementById('add-modal').classList.add('hidden'); form.reset(); await initData(); } else { showToast("Klaida saugant", "error"); }
+            btn.textContent = originalText; btn.disabled = false;
         };
     }
-    
     const txTypeSelect = document.getElementById('tx-type');
     if (txTypeSelect) txTypeSelect.addEventListener('change', updateMethodOptions);
-
-    // CSV Import
     const csvInput = document.getElementById('csv-file-input');
     if (csvInput) {
         csvInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const text = await file.text();
-            const parsed = parseCSV(text);
+            const file = e.target.files[0]; if (!file) return;
+            const text = await file.text(); const parsed = parseCSV(text);
             if (parsed.length === 0) return showToast('Klaida CSV', 'error');
             if (!confirm(`Importuoti ${parsed.length}?`)) return;
-            
-            showToast('Importuojama...', 'info');
-            let count = 0;
+            showToast('Importuojama...', 'info'); let count = 0;
             for (const tx of parsed) if (await window.saveTransaction(tx)) count++;
-            showToast(`Importuota: ${count}`, 'success');
-            await initData();
-            e.target.value = '';
+            showToast(`Importuota: ${count}`, 'success'); await initData(); e.target.value = '';
         };
     }
-
-    // Coin Management
     document.getElementById('btn-save-coin').onclick = async () => {
         const symbol = document.getElementById('new-coin-symbol').value.toUpperCase();
         const id = document.getElementById('new-coin-id').value.toLowerCase().trim();
         const target = parseFloat(document.getElementById('new-coin-target').value);
         if(!symbol || !id) return;
-        
         try {
             const testRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
             const testData = await testRes.json();
             if (!testData[id]) return showToast('Neteisingas ID', 'error');
-            
             if (await window.saveNewCoin({ symbol, coingecko_id: id })) {
                 if (target > 0) await window.saveCryptoGoal({ coin_symbol: symbol, target_amount: target });
-                showToast('Pridėta', 'success');
-                document.getElementById('new-coin-modal').classList.add('hidden');
-                await initData();
+                showToast('Pridėta', 'success'); document.getElementById('new-coin-modal').classList.add('hidden'); await initData();
             }
         } catch (e) { showToast('Klaida', 'error'); }
     };
-
     document.getElementById('btn-delete-coin').onclick = async () => {
         const s = document.getElementById('delete-coin-select').value;
-        if (s && confirm('Trinti?')) {
-            if (await window.deleteSupportedCoin(s)) {
-                showToast('Ištrinta', 'success');
-                document.getElementById('delete-coin-modal').classList.add('hidden');
-                await initData();
-            }
-        }
+        if (s && confirm('Trinti?')) { if (await window.deleteSupportedCoin(s)) { showToast('Ištrinta', 'success'); document.getElementById('delete-coin-modal').classList.add('hidden'); await initData(); } }
     };
-    
-    // Goal Management
     document.getElementById('btn-update-goal').onclick = async () => {
-        const id = document.getElementById('edit-goal-id').value;
-        const t = parseFloat(document.getElementById('edit-goal-target').value);
-        if (await window.updateCryptoGoal(id, t)) {
-            showToast('Atnaujinta', 'success');
-            document.getElementById('edit-goal-modal').classList.add('hidden');
-            await initData();
-        }
+        const id = document.getElementById('edit-goal-id').value; const t = parseFloat(document.getElementById('edit-goal-target').value);
+        if (await window.updateCryptoGoal(id, t)) { showToast('Atnaujinta', 'success'); document.getElementById('edit-goal-modal').classList.add('hidden'); await initData(); }
     };
     document.getElementById('btn-delete-goal').onclick = async () => {
         const id = document.getElementById('edit-goal-id').value;
-        if (await window.deleteCryptoGoal(id)) {
-            showToast('Ištrinta', 'success');
-            document.getElementById('edit-goal-modal').classList.add('hidden');
-            await initData();
-        }
+        if (await window.deleteCryptoGoal(id)) { showToast('Ištrinta', 'success'); document.getElementById('edit-goal-modal').classList.add('hidden'); await initData(); }
     };
-    
-    // Auth
     document.getElementById('btn-login').onclick = async () => {
-        const btn = document.getElementById('btn-login');
-        const e = document.getElementById('auth-email').value.trim();
-        const p = document.getElementById('auth-pass').value;
-        if (!e || !p) return;
-        btn.textContent = '...'; btn.disabled = true;
-        try {
-            const res = await window.userLogin(e, p);
-            if (res.error) showToast('Klaida', 'error');
-            else { showAppScreen(); await initData(); }
-        } catch(err) { showToast('Ryšio klaida', 'error'); }
-        finally { btn.textContent = 'Prisijungti'; btn.disabled = false; }
+        const btn = document.getElementById('btn-login'); const e = document.getElementById('auth-email').value.trim(); const p = document.getElementById('auth-pass').value;
+        if (!e || !p) return; btn.textContent = '...'; btn.disabled = true;
+        try { const res = await window.userLogin(e, p); if (res.error) showToast('Klaida', 'error'); else { showAppScreen(); await initData(); } } catch(err) { showToast('Ryšio klaida', 'error'); } finally { btn.textContent = 'Prisijungti'; btn.disabled = false; }
     };
     document.getElementById('btn-signup').onclick = async () => {
-        const e = document.getElementById('auth-email').value.trim();
-        const p = document.getElementById('auth-pass').value;
+        const e = document.getElementById('auth-email').value.trim(); const p = document.getElementById('auth-pass').value;
         if (p.length<6) return showToast('Per trumpas slaptažodis', 'error');
-        const res = await window.userSignUp(e, p);
-        if(res.error) showToast(res.error.message,'error');
-        else showToast('Patikrinkite paštą','success');
+        const res = await window.userSignUp(e, p); if(res.error) showToast(res.error.message,'error'); else showToast('Patikrinkite paštą','success');
     };
-    document.getElementById('btn-logout').onclick = async () => { 
-        await window.userSignOut(); 
-        showAuthScreen(); 
-    };
-    
-    // Export & Fetch
+    document.getElementById('btn-logout').onclick = async () => { await window.userSignOut(); showAuthScreen(); };
     document.getElementById('btn-export-csv').onclick = () => {
         if (state.transactions.length === 0) return showToast('Nėra duomenų', 'error');
         const h = ['date', 'type', 'coin_symbol', 'amount', 'price_per_coin', 'total_cost_usd', 'fee_usd', 'exchange', 'method', 'notes'];
         const c = [h.join(','), ...state.transactions.map(tx => h.map(k => `"${(tx[k]||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
-        const b = new Blob([c], { type: 'text/csv;charset=utf-8;' });
-        const l = document.createElement('a');
-        l.href = URL.createObjectURL(b);
-        l.download = `export-${new Date().toISOString().slice(0,10)}.csv`;
-        l.click();
+        const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = `export-${new Date().toISOString().slice(0,10)}.csv`; l.click();
     };
-    
     document.getElementById('btn-fetch-price').onclick = async () => {
-        const btn = document.getElementById('btn-fetch-price');
-        const s = document.getElementById('tx-coin').value;
-        const c = state.coins.find(x => x.symbol === s);
-        if (!c) return;
+        const btn = document.getElementById('btn-fetch-price'); const s = document.getElementById('tx-coin').value; const c = state.coins.find(x => x.symbol === s); if (!c) return;
         btn.innerHTML = '...';
         try {
             const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${c.coingecko_id}&vs_currencies=usd`);
-            const d = await r.json();
-            if (d[c.coingecko_id]?.usd) {
-                document.getElementById('tx-price').value = d[c.coingecko_id].usd;
-                document.getElementById('tx-price').dispatchEvent(new Event('input'));
-            }
-        } catch(e) { showToast('Klaida', 'error'); }
-        finally { btn.innerHTML = 'GAUTI KAINĄ'; }
+            const d = await r.json(); if (d[c.coingecko_id]?.usd) { document.getElementById('tx-price').value = d[c.coingecko_id].usd; document.getElementById('tx-price').dispatchEvent(new Event('input')); }
+        } catch(e) { showToast('Klaida', 'error'); } finally { btn.innerHTML = 'GAUTI KAINĄ'; }
     };
-
-    // Passkeys
     const btnSetup = document.getElementById('btn-setup-passkey');
     if(btnSetup) btnSetup.onclick = async () => { if(await window.registerPasskey()) await checkPasskeyStatus(); };
     const btnRemove = document.getElementById('btn-remove-passkey');
     if(btnRemove) btnRemove.onclick = async () => { if(confirm('Trinti?') && await window.removePasskey()) await checkPasskeyStatus(); };
-    
-    setupCalculator();
-    setupBulkSelection();
-    
-    // Reset Modal
+    setupCalculator(); setupBulkSelection();
     const btnAdd = document.querySelector('button[onclick*="add-modal"]');
     if (btnAdd) btnAdd.onclick = () => {
-        document.getElementById('add-tx-form').reset();
-        document.getElementById('tx-id').value = '';
-        document.getElementById('modal-title').textContent = "Nauja Transakcija";
-        document.getElementById('btn-save').textContent = "Išsaugoti";
-        updateMethodOptions();
-        
-        // Reset check
-        const chk = document.getElementById('chk-fee-in-coin');
-        if(chk) { chk.checked = false; chk.dispatchEvent(new Event('change')); }
-        
-        document.getElementById('add-modal').classList.remove('hidden');
+        document.getElementById('add-tx-form').reset(); document.getElementById('tx-id').value = ''; document.getElementById('modal-title').textContent = "Nauja Transakcija"; document.getElementById('btn-save').textContent = "Išsaugoti";
+        updateMethodOptions(); const chk = document.getElementById('chk-fee-in-coin'); if(chk) { chk.checked = false; chk.dispatchEvent(new Event('change')); } document.getElementById('add-modal').classList.remove('hidden');
     };
 }
 
-// ==========================================
-// 4. UTILITY FUNCTIONS
-// ==========================================
-
 function setupCalculator() {
     const getVal = (id) => parseFloat(document.getElementById(id).value) || 0;
-    const feeLabel = document.getElementById('fee-label-currency');
-    const feeHelper = document.getElementById('fee-helper-text');
-    const feeCheck = document.getElementById('chk-fee-in-coin');
-    
-    if (feeCheck) {
-        feeCheck.onchange = () => {
-            const isCoin = feeCheck.checked;
-            const sym = document.getElementById('tx-coin').value || 'Coin';
-            feeLabel.textContent = isCoin ? `(${sym})` : '($)';
-            
-            // Re-trigger calculation to update visual helper text
-            document.getElementById('tx-fee').dispatchEvent(new Event('input'));
-        };
-    }
-
+    const feeLabel = document.getElementById('fee-label-currency'); const feeHelper = document.getElementById('fee-helper-text'); const feeCheck = document.getElementById('chk-fee-in-coin');
+    if (feeCheck) { feeCheck.onchange = () => { const isCoin = feeCheck.checked; const sym = document.getElementById('tx-coin').value || 'Coin'; feeLabel.textContent = isCoin ? `(${sym})` : '($)'; document.getElementById('tx-fee').dispatchEvent(new Event('input')); }; }
     const calc = (src) => {
-        const amountIn = document.getElementById('tx-amount');
-        const priceIn = document.getElementById('tx-price');
-        const totalIn = document.getElementById('tx-total');
+        const amountIn = document.getElementById('tx-amount'); const priceIn = document.getElementById('tx-price'); const totalIn = document.getElementById('tx-total');
         if (!amountIn || !priceIn || !totalIn) return;
-        
-        const a = getVal('tx-amount');
-        const p = getVal('tx-price');
-        const f = getVal('tx-fee');
-        const type = document.getElementById('tx-type').value;
-        const isFeeInCoin = feeCheck?.checked;
-
-        let feeUSD = f;
-        if (isFeeInCoin && p > 0) {
-            feeUSD = f * p;
-            if (feeHelper) feeHelper.textContent = `= $${feeUSD.toFixed(2)}`;
-        } else {
-            if (feeHelper) feeHelper.textContent = 'USD vertė';
-        }
-
-        if (src === 'total') { 
-            if(a>0) priceIn.value=(getVal('tx-total')/a).toFixed(8); 
-        }
+        const a = getVal('tx-amount'); const p = getVal('tx-price'); const f = getVal('tx-fee'); const type = document.getElementById('tx-type').value; const isFeeInCoin = feeCheck?.checked;
+        let feeUSD = f; if (isFeeInCoin && p > 0) { feeUSD = f * p; if (feeHelper) feeHelper.textContent = `= $${feeUSD.toFixed(2)}`; } else { if (feeHelper) feeHelper.textContent = 'USD vertė'; }
+        if (src === 'total') { if(a>0) priceIn.value=(getVal('tx-total')/a).toFixed(8); }
         else if (src === 'amount' || src === 'price' || src === 'fee') { 
-            if (a > 0 && p > 0) {
-                let base = a * p;
-                if(type === 'Buy') totalIn.value = (base + feeUSD).toFixed(2);
-                else if(type === 'Sell') totalIn.value = Math.max(0, base - feeUSD).toFixed(2);
-                else totalIn.value = base.toFixed(2);
-            }
+            if (a > 0 && p > 0) { let base = a * p; if(type === 'Buy') totalIn.value = (base + feeUSD).toFixed(2); else if(type === 'Sell') totalIn.value = Math.max(0, base - feeUSD).toFixed(2); else totalIn.value = base.toFixed(2); }
         }
     };
-
-    ['tx-amount', 'tx-price', 'tx-total', 'tx-fee'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.addEventListener('input', (e) => calc(e.target.id.split('-')[1]));
-    });
+    ['tx-amount', 'tx-price', 'tx-total', 'tx-fee'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', (e) => calc(e.target.id.split('-')[1])); });
 }
 
 function setupBulkSelection() {
     const cbAll = document.getElementById('select-all-tx');
-    if (cbAll) cbAll.onchange = () => {
-        document.querySelectorAll('.tx-checkbox').forEach(c => c.checked = cbAll.checked);
-        updateDeleteSelectedButton();
-    };
-
+    if (cbAll) cbAll.onchange = () => { document.querySelectorAll('.tx-checkbox').forEach(c => c.checked = cbAll.checked); updateDeleteSelectedButton(); };
     const btnDel = document.getElementById('btn-delete-selected');
     if (btnDel) btnDel.onclick = async () => {
         const ids = Array.from(document.querySelectorAll('.tx-checkbox:checked')).map(c => c.dataset.txId);
         if (!ids.length || !confirm(`Trinti ${ids.length}?`)) return;
-        await Promise.all(ids.map(id => window.deleteTransaction(id)));
-        showToast('Ištrinta', 'success');
-        document.getElementById('select-all-tx').checked = false;
-        await initData();
+        await Promise.all(ids.map(id => window.deleteTransaction(id))); showToast('Ištrinta', 'success'); document.getElementById('select-all-tx').checked = false; await initData();
     };
 }
 
 window.updateDeleteSelectedButton = () => {
     const count = document.querySelectorAll('.tx-checkbox:checked').length;
-    const btn = document.getElementById('btn-delete-selected');
-    const span = document.getElementById('selected-count');
-    if (btn) {
-        if (count > 0) { btn.classList.remove('hidden'); btn.classList.add('flex'); }
-        else { btn.classList.add('hidden'); btn.classList.remove('flex'); }
-    }
+    const btn = document.getElementById('btn-delete-selected'); const span = document.getElementById('selected-count');
+    if (btn) { if (count > 0) { btn.classList.remove('hidden'); btn.classList.add('flex'); } else { btn.classList.add('hidden'); btn.classList.remove('flex'); } }
     if (span) span.textContent = count;
 };
 
 async function checkPasskeyStatus() {
-    const s = document.getElementById('passkey-settings');
-    const st = document.getElementById('passkey-status');
-    const bSet = document.getElementById('btn-setup-passkey');
-    const bRem = document.getElementById('btn-remove-passkey');
-    
+    const s = document.getElementById('passkey-settings'); const st = document.getElementById('passkey-status'); const bSet = document.getElementById('btn-setup-passkey'); const bRem = document.getElementById('btn-remove-passkey');
     if (!window.isWebAuthnSupported()) { if(s) s.classList.add('hidden'); return; }
     if(s) s.classList.remove('hidden');
-    
     const has = await window.hasPasskey();
-    if (has) {
-        if(st) st.textContent = 'Aktyvuota';
-        if(bSet) bSet.classList.add('hidden');
-        if(bRem) bRem.classList.remove('hidden');
-    } else {
-        if(st) st.textContent = 'Neaktyvuota';
-        if(bSet) bSet.classList.remove('hidden');
-        if(bRem) bRem.classList.add('hidden');
-    }
+    if (has) { if(st) st.textContent = 'Aktyvuota'; if(bSet) bSet.classList.add('hidden'); if(bRem) bRem.classList.remove('hidden'); } 
+    else { if(st) st.textContent = 'Neaktyvuota'; if(bSet) bSet.classList.remove('hidden'); if(bRem) bRem.classList.add('hidden'); }
 }
 
-function showAppScreen() { 
-    document.getElementById('auth-screen').classList.add('hidden'); 
-    document.getElementById('app-content').classList.remove('hidden'); 
-}
-function showAuthScreen() { 
-    document.getElementById('auth-screen').classList.remove('hidden'); 
-    document.getElementById('app-content').classList.add('hidden'); 
-}
+function showAppScreen() { document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden'); }
+function showAuthScreen() { document.getElementById('auth-screen').classList.remove('hidden'); document.getElementById('app-content').classList.add('hidden'); }
