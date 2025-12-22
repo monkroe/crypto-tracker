@@ -1,7 +1,7 @@
-// js/ui.js - v4.3.4
-// Features: PRO Chart (30 Days, Auto-Precision), Clean Badges, Modals
+// js/ui.js - v4.4.0
+// Features: Premium Area Chart (KasLens Style), Auto-Precision, Clean UI
 
-import { formatMoney, formatPrice, sanitizeText } from './utils.js';
+import { formatMoney, sanitizeText } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
@@ -50,7 +50,7 @@ export function updateDashboardUI(totals) {
     setStat('header-total-pnl', totals.totalPnL);
 }
 
-// --- PRO KAINOS GRAFIKAS ---
+// --- PREMIUM GRAFIKO LOGIKA (AREA CHART) ---
 
 export async function renderCandleChart(coinId) {
     const container = document.getElementById('coin-chart-container');
@@ -67,64 +67,68 @@ export async function renderCandleChart(coinId) {
 
     try {
         const LWCharts = window.LightweightCharts;
-        if (!LWCharts) throw new Error('KLAIDA: Nėra grafiko bibliotekos (index.html).');
+        if (!LWCharts) throw new Error('KLAIDA: Nėra grafiko bibliotekos.');
 
-        // ✅ PAKEITIMAS: Imame 30 dienų (daugiau duomenų)
+        // Imame 30 dienų duomenis (optimalu "Area" grafikui telefone)
         const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=30`);
         
-        if (res.status === 404) throw new Error(`Neteisingas ID: "${coinId}"`);
+        if (res.status === 404) throw new Error(`Neteisingas ID: "${coinId}". Patikrinkite nustatymus.`);
         if (res.status === 429) throw new Error('Viršytas limitas. Palaukite 1 min.');
         
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) throw new Error('Nėra duomenų.');
 
-        const candleData = data.map(d => ({
+        // Konvertuojame į "Area" serijai tinkamą formatą (tik laikas ir kaina)
+        const areaData = data.map(d => ({
             time: d[0] / 1000,
-            open: d[1],
-            high: d[2],
-            low: d[3],
-            close: d[4]
+            value: d[4] // Close price
         }));
 
-        // ✅ AUTO-PRECISION: Nustatome tikslumą pagal kainą
-        const lastPrice = candleData[candleData.length - 1].close;
+        // IŠMANUS TIKSLUMAS (Precision)
+        const lastPrice = areaData[areaData.length - 1].value;
         let precision = 2;
         let minMove = 0.01;
 
-        if (lastPrice < 0.001) { precision = 8; minMove = 0.00000001; }
+        if (lastPrice < 0.0001) { precision = 8; minMove = 0.00000001; }
         else if (lastPrice < 1) { precision = 6; minMove = 0.000001; }
-        else if (lastPrice < 10) { precision = 4; minMove = 0.0001; }
+        else if (lastPrice < 50) { precision = 4; minMove = 0.0001; }
 
         const isDark = document.documentElement.classList.contains('dark');
         
-        // Kuriame grafiką
+        // Grafiko Nustatymai (Švarus stilius)
         chartInstance = LWCharts.createChart(container, {
             layout: {
                 background: { type: 'solid', color: 'transparent' },
-                textColor: isDark ? '#9ca3af' : '#374151',
+                textColor: isDark ? '#9ca3af' : '#6b7280',
+                fontFamily: "'Inter', sans-serif",
             },
             grid: {
-                vertLines: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f0f3fa' },
-                horzLines: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f0f3fa' },
+                vertLines: { visible: false },
+                horzLines: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', style: 3 }, // Punktyrinė, vos matoma
             },
             width: container.clientWidth,
             height: 250,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
-                borderColor: isDark ? '#374151' : '#e5e7eb',
+                borderVisible: false,
             },
             rightPriceScale: {
-                borderColor: isDark ? '#374151' : '#e5e7eb',
+                borderVisible: false,
+                scaleMargins: { top: 0.1, bottom: 0.1 }, // Kad grafikas neliestų kraštų
+            },
+            crosshair: {
+                vertLine: { labelVisible: false, style: 2, color: '#9ca3af' },
+                horzLine: { labelVisible: true, style: 2, color: '#9ca3af' },
             },
         });
         
-        const candlestickSeries = chartInstance.addCandlestickSeries({
-            upColor: '#10b981',    // Graži žalia
-            downColor: '#ef4444',  // Graži raudona
-            borderVisible: false,
-            wickUpColor: '#10b981',
-            wickDownColor: '#ef4444',
+        // Sukuriame "Area" seriją (Gradientas kaip KasLens)
+        const areaSeries = chartInstance.addAreaSeries({
+            topColor: 'rgba(45, 212, 191, 0.5)',    // Primary spalva (skaidri)
+            bottomColor: 'rgba(45, 212, 191, 0.0)', // Visiškai permatoma apačioje
+            lineColor: 'rgba(45, 212, 191, 1)',     // Ryški linija
+            lineWidth: 2,
             priceFormat: {
                 type: 'price',
                 precision: precision,
@@ -132,9 +136,10 @@ export async function renderCandleChart(coinId) {
             },
         });
 
-        candlestickSeries.setData(candleData);
+        areaSeries.setData(areaData);
         chartInstance.timeScale().fitContent();
 
+        // Responsive
         new ResizeObserver(entries => {
             if (entries.length === 0 || entries[0].target !== container) return;
             const newRect = entries[0].contentRect;
@@ -143,7 +148,7 @@ export async function renderCandleChart(coinId) {
 
     } catch (e) {
         console.error("Chart error:", e);
-        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center p-4"><i class="fa-solid fa-chart-line text-gray-300 text-3xl mb-2"></i><span class="text-xs text-gray-500 font-bold">${e.message}</span></div>`;
+        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center p-4"><i class="fa-solid fa-chart-area text-gray-300 text-3xl mb-2"></i><span class="text-xs text-gray-500 font-bold">${e.message}</span></div>`;
     } finally {
         if (loader) loader.classList.add('hidden');
     }
@@ -159,18 +164,20 @@ export async function openCoinDetail(symbol) {
     const holding = state.holdings[symbol];
     if (!coin || !holding) return;
     
+    // UI atnaujinimas
     document.getElementById('coin-detail-symbol').textContent = symbol;
-    document.getElementById('coin-detail-qty').textContent = holding.qty.toLocaleString(undefined, {maximumFractionDigits: 4});
-    document.getElementById('coin-detail-value').textContent = `$${holding.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    document.getElementById('coin-detail-invested').textContent = `$${holding.invested.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('coin-detail-qty').textContent = holding.qty.toLocaleString(undefined, {maximumFractionDigits: 6}); // Daugiau skaičių kiekiui
+    document.getElementById('coin-detail-value').textContent = formatMoney(holding.currentValue);
+    document.getElementById('coin-detail-invested').textContent = formatMoney(holding.invested);
     
     const pnlEl = document.getElementById('coin-detail-pnl');
-    pnlEl.textContent = `${holding.pnl >= 0 ? '+' : ''}$${Math.abs(holding.pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    pnlEl.textContent = `${holding.pnl >= 0 ? '+' : ''}${formatMoney(holding.pnl)}`;
     pnlEl.className = `text-xl font-bold ${holding.pnl >= 0 ? 'text-primary-500' : 'text-red-500'}`;
     
-    // KVIEČIAME GRAFIKĄ
+    // KVIEČIAME NAUJĄ GRAFIKĄ
     renderCandleChart(coin.coingecko_id);
     
+    // Filtrai ir transakcijos
     const coinTxs = state.transactions.filter(tx => tx.coin_symbol === symbol);
     const exchanges = [...new Set(coinTxs.map(tx => tx.exchange).filter(Boolean))].sort();
     
@@ -250,7 +257,7 @@ function renderCoinTransactions(txs) {
     });
 }
 
-// --- PAGRINDINIO SĄRAŠO FUNKCIJOS ---
+// --- SĄRAŠAS IR FILTRAI ---
 
 export function renderExchangeFilters() {
     const container = document.getElementById('exchange-filters-container');
