@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Crypto Tracker">
     
-    <title>Crypto Tracker v4.1.0</title>
+    <title>Crypto Tracker v4.3.1</title>
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
@@ -46,6 +46,8 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
@@ -249,7 +251,7 @@
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">Sukurta su <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> ir DI pagalba</p>
                 <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v4.1.0</span></p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v4.3.1</span></p>
             </footer>
         </main>
     </div>
@@ -481,32 +483,40 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                     <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Turimas kiekis</p>
-                    <p id="coin-detail-qty" class="text-xl font-bold text-gray-900 dark:text-white">0.5234</p>
+                    <p id="coin-detail-qty" class="text-xl font-bold text-gray-900 dark:text-white">0.0000</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                     <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Dabartinė vertė</p>
-                    <p id="coin-detail-value" class="text-xl font-bold text-gray-900 dark:text-white">$45,280</p>
+                    <p id="coin-detail-value" class="text-xl font-bold text-gray-900 dark:text-white">$0.00</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                     <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Investuota</p>
-                    <p id="coin-detail-invested" class="text-xl font-bold text-gray-900 dark:text-white">$32,830</p>
+                    <p id="coin-detail-invested" class="text-xl font-bold text-gray-900 dark:text-white">$0.00</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                     <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">P&L</p>
-                    <p id="coin-detail-pnl" class="text-xl font-bold text-primary-500">+$12,450</p>
+                    <p id="coin-detail-pnl" class="text-xl font-bold text-gray-900">+$0.00</p>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-950 rounded-xl p-1 border border-gray-200 dark:border-gray-800 h-64 w-full relative overflow-hidden shadow-inner mt-4">
+                <div id="coin-chart-container" class="w-full h-full"></div>
+                <div id="chart-loader" class="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-10 hidden">
+                    <div class="flex flex-col items-center gap-2">
+                        <div class="spinner border-primary-500 w-8 h-8"></div>
+                        <span class="text-xs text-gray-500 font-bold animate-pulse">Kraunamas grafikas...</span>
+                    </div>
                 </div>
             </div>
             
             <div>
                 <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Biržos</h3>
-                <div id="coin-detail-exchanges" class="flex flex-wrap gap-2">
-                    </div>
+                <div id="coin-detail-exchanges" class="flex flex-wrap gap-2"></div>
             </div>
             
             <div>
                 <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Transakcijos</h3>
-                <div id="coin-detail-transactions" class="space-y-2 max-h-96 overflow-y-auto">
-                    </div>
+                <div id="coin-detail-transactions" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
             </div>
         </div>
     </div>
