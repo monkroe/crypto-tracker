@@ -1,5 +1,5 @@
-// js/ui.js - v3.0.0
-// Features: 3-Column Stats (24H, 30D, PnL), Goals Sorted, Group Stats
+// js/ui.js - v4.1.0
+// Features: 3-Column Stats, Clickable Coin Cards, Fee Display, Transfer Logic Fix
 
 import { formatMoney, formatPrice } from './utils.js';
 import { state } from './logic.js';
@@ -9,8 +9,9 @@ let pnlChart = null;
 const celebratedGoals = new Set();
 
 const CHART_COLORS = { 
-    KAS: '#2dd4bf', ASTER: '#eec25e', BTC: '#f89907', ETH: '#3b82f6', SOL: '#8b5cf6', BNB: '#eab308', 
-    PEPE: '#097a22', USDT: '#26a17b', USDC: '#2775ca', MON: '#6f32e4', default: '#6b7280'
+    KAS: '#2dd4bf', ASTER: '#eec25e', BTC: '#f89907', ETH: '#3b82f6', 
+    SOL: '#8b5cf6', BNB: '#eab308', PEPE: '#097a22', USDT: '#26a17b', 
+    USDC: '#2775ca', MON: '#6f32e4', default: '#6b7280'
 };
 
 export function setupThemeHandlers() {
@@ -27,18 +28,14 @@ export function setupThemeHandlers() {
     }
 }
 
-// ✅ ATNAUJINTA: 3 Stulpelių užpildymas
 export function updateDashboardUI(totals) {
-    // Main Value
     const headerValue = document.getElementById('header-total-value');
     if(headerValue) headerValue.textContent = formatMoney(totals.totalValue);
     
-    // Helper to set color and text
     const setStat = (id, val) => {
         const el = document.getElementById(id);
         if (el) {
             const sign = val >= 0 ? '↗' : '↘';
-            // Naudojame compact formatavimą mažame plote, jei skaičius labai didelis
             el.innerHTML = `${sign} ${formatMoney(Math.abs(val))}`;
             el.className = `text-xs sm:text-sm font-bold truncate ${val >= 0 ? 'text-primary-500' : 'text-red-500'}`;
         }
@@ -139,11 +136,14 @@ export function renderCoinCards() {
     sorted.forEach(([sym, data]) => {
         const pnlClass = data.pnl >= 0 ? 'text-primary-500' : 'text-red-500';
         const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm mb-3';
+        
+        card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm mb-3 cursor-pointer hover:border-primary-500 hover:shadow-lg transition-all';
+        card.onclick = () => window.openCoinDetail(sym);
+        
         card.innerHTML = `
             <div class="flex justify-between mb-2">
                 <span class="text-[10px] font-bold text-gray-400 uppercase">Balansas</span>
-                <span class="text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">${sym}</span>
+                <span class="text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded hover:bg-primary-500 hover:text-white transition-colors">${sym}</span>
             </div>
             <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-0.5">${formatMoney(data.currentValue)}</h2>
             <p class="text-xs text-gray-500 mb-4 font-mono">${data.qty.toLocaleString()} ${sym} @ ${formatMoney(data.currentPrice)}</p>
@@ -311,14 +311,14 @@ function createTransactionCard(tx) {
     
     let pnlHTML = '';
     if (isBuy) {
-            const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
-            if (coin && state.prices[coin.coingecko_id]) {
-                const currentVal = tx.amount * state.prices[coin.coingecko_id].usd;
-                const diff = currentVal - tx.total_cost_usd;
-                const pct = (diff / tx.total_cost_usd) * 100;
-                const cls = diff >= 0 ? 'text-primary-500' : 'text-red-500';
-                pnlHTML = `<div class="text-[9px] ${cls} font-mono mt-1">PnL: ${diff>=0?'+':''}$${diff.toFixed(2)} (${pct.toFixed(1)}%)</div>`;
-            }
+        const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
+        if (coin && state.prices[coin.coingecko_id]) {
+            const currentVal = tx.amount * state.prices[coin.coingecko_id].usd;
+            const diff = currentVal - tx.total_cost_usd;
+            const pct = (diff / tx.total_cost_usd) * 100;
+            const cls = diff >= 0 ? 'text-primary-500' : 'text-red-500';
+            pnlHTML = `<div class="text-[9px] ${cls} font-mono mt-1">PnL: ${diff>=0?'+':''}$${diff.toFixed(2)} (${pct.toFixed(1)}%)</div>`;
+        }
     }
 
     let badgesHTML = '';
@@ -329,6 +329,11 @@ function createTransactionCard(tx) {
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
     } else if (tx.method) {
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
+    }
+    
+    // ✅ Fee badge
+    if (tx.fee_usd && Number(tx.fee_usd) > 0) {
+        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30">Fee: $${Number(tx.fee_usd).toFixed(2)}</span>`;
     }
 
     let notesHTML = '';
@@ -430,6 +435,7 @@ export function renderAllocationChart() {
     });
 }
 
+// ✅ PATAISYTA: Transfer Logic Handling ir Visų Tipų Palaikymas
 export function renderPnLChart(timeframe = 'ALL') {
     const canvas = document.getElementById('pnlChart');
     if (!canvas) return;
@@ -454,21 +460,30 @@ export function renderPnLChart(timeframe = 'ALL') {
     let cumulativeInvested = 0;
     const allTxs = state.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
     
+    // ✅ PATAISYTA: Viena logika abiems ciklams su visais tipais
+    const updateInvested = (tx) => {
+        const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy', 'Gift/Airdrop', 'Staking Reward'].includes(tx.type);
+        const isTransfer = tx.type === 'Transfer';
+        
+        if (isBuy) {
+            cumulativeInvested += Number(tx.total_cost_usd) + Number(tx.fee_usd || 0);
+        } else if (isTransfer) {
+            // Transfer: Tik mokesčiai prisideda prie išlaidų, vertė nedingsta
+            cumulativeInvested += Number(tx.fee_usd || 0);
+        } else {
+            // Sell: Mažiname investuotą sumą (cash out)
+            cumulativeInvested -= Number(tx.total_cost_usd);
+        }
+    };
+
     const pastTxs = allTxs.filter(tx => new Date(tx.date) < cutoff);
-    pastTxs.forEach(tx => {
-        const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
-        if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
-        else cumulativeInvested -= Number(tx.total_cost_usd);
-    });
+    pastTxs.forEach(updateInvested);
 
     const points = [{ date: cutoff, val: cumulativeInvested }];
 
     const relevantTxs = allTxs.filter(tx => new Date(tx.date) >= cutoff);
     relevantTxs.forEach(tx => {
-        const isBuy = ['Buy', 'Instant Buy'].includes(tx.type);
-        if(isBuy) cumulativeInvested += Number(tx.total_cost_usd);
-        else cumulativeInvested -= Number(tx.total_cost_usd);
-        
+        updateInvested(tx);
         points.push({ date: new Date(tx.date), val: cumulativeInvested });
     });
 
