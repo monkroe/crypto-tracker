@@ -4,21 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <meta name="description" content="Profesionalus kriptovaliutų portfelio valdymo įrankis su realaus laiko kainom, PnL skaičiavimu ir biržų integracija">
-    <meta name="keywords" content="crypto, portfolio, tracker, bitcoin, ethereum, kaspa, kriptovaliutos, investicijos, biržos">
-    <meta name="author" content="LTV Media PRO">
-    <meta name="robots" content="index, follow">
-    
+    <meta name="description" content="Profesionalus kriptovaliutų portfelio valdymo įrankis">
     <meta name="theme-color" content="#2dd4bf">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Crypto Tracker">
-    
-    <title>Crypto Tracker v4.3.1</title>
+    <title>Crypto Tracker v4.3.3</title>
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
-    
     <link rel="manifest" href="manifest.json">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -46,7 +38,8 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -55,24 +48,18 @@
         input, select, textarea { -webkit-appearance: none; -moz-appearance: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; } 
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
         .fade-in { animation: fadeIn 0.5s ease-in-out; } 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
         .animate-slide-up { animation: slideUp 0.3s ease-out; } 
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        
         .pop-in { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        
         .spinner { border: 2px solid rgba(156, 163, 175, 0.3); border-top-color: #2dd4bf; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; } 
         @keyframes spin { to { transform: rotate(360deg); } }
-        
         .form-checkbox { appearance: none; background-color: #f3f4f6; border: 1px solid #d1d5db; display: inline-block; position: relative; }
         .dark .form-checkbox { background-color: #1f2937; border-color: #374151; }
         .form-checkbox:checked { background-color: #2dd4bf; border-color: #2dd4bf; }
         .form-checkbox:checked:after { content: '✔'; position: absolute; top: -2px; left: 1px; font-size: 10px; color: #000; }
-        
         .toast { position: fixed; bottom: 20px; right: 20px; z-index: 9999; transform: translateX(400px); transition: transform 0.3s ease-out; }
         .toast.show { transform: translateX(0); }
     </style>
@@ -251,7 +238,7 @@
             <footer class="mt-10 py-8 text-center space-y-1 opacity-70">
                 <p class="text-[11px] text-gray-500">Sukurta su <i class="fa-solid fa-heart text-red-500 mx-0.5 animate-pulse"></i> ir DI pagalba</p>
                 <p class="text-[10px] text-gray-600">&copy; <span id="auto-year"></span> LTV Media PRO. Visos teisės saugomos.</p>
-                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v4.3.1</span></p>
+                <p class="text-[9px] font-mono text-gray-700 pt-1">Versija <span id="app-version">v4.3.3</span></p>
             </footer>
         </main>
     </div>
@@ -537,8 +524,6 @@
     
     <script>
         document.getElementById('auto-year').textContent = new Date().getFullYear();
-        
-        // ESC key to close modals
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 ['add-modal', 'new-coin-modal', 'delete-coin-modal', 'celebration-modal', 'settings-modal', 'edit-goal-modal', 'coin-detail-modal'].forEach(id => {
