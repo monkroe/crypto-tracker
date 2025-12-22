@@ -138,7 +138,7 @@ window.onEditTx = (id) => {
         updateMethodOptions();
         setVal('tx-method', tx.method || 'Market Buy');
         
-        document.getElementById('modal-title').textContent = "Redaguoti Transakciją";
+        document.getElementById('modal-title').textContent = "Transakcijos redagavimas";
         document.getElementById('btn-save').textContent = "Atnaujinti";
         
         document.getElementById('add-modal').classList.remove('hidden');
@@ -224,11 +224,11 @@ window.updateMethodOptions = function() {
         'Buy': [
             { value: 'Market Buy', label: 'Market Buy' },
             { value: 'Limit Buy', label: 'Limit Buy' },
-            { value: 'Instant Buy', label: 'Instant Buy (Card)' },
-            { value: 'Recurring Buy', label: 'Recurring Buy (DCA)' },
+            { value: 'Instant Buy', label: 'Instant Buy' },
+            { value: 'Recurring Buy', label: 'Recurring Buy' },
             { value: 'Swap', label: 'Swap / DeFi' },
-            { value: 'Staking Reward', label: 'Staking Reward' },
-            { value: 'Gift/Airdrop', label: 'Gift / Airdrop' }
+            { value: 'Staking Reward', label: 'Reward' },
+            { value: 'Gift/Airdrop', label: 'Gift/Airdrop' }
         ],
         'Sell': [
             { value: 'Market Sell', label: 'Market Sell' },
@@ -237,11 +237,11 @@ window.updateMethodOptions = function() {
             { value: 'Stop Loss', label: 'Stop Loss' }
         ],
         'Transfer': [
-            { value: 'Transfer to Cold Wallet', label: '→ Cold Wallet (Ledger, Tangem)' },
-            { value: 'Transfer to Hot Wallet', label: '→ Hot Wallet (Phantom, Rabby)' },
-            { value: 'Transfer to Exchange', label: '→ Kita Birža' },
-            { value: 'Transfer from Wallet', label: '← Iš Piniginės' },
-            { value: 'Transfer from Exchange', label: '← Iš Biržos' }
+            { value: 'Transfer to Cold Wallet', label: '→ Cold Wallet' },
+            { value: 'Transfer to Hot Wallet', label: '→ Hot Wallet' },
+            { value: 'Transfer to Exchange', label: '→ To Exchange' },
+            { value: 'Transfer from Wallet', label: '← From Wallet' },
+            { value: 'Transfer from Exchange', label: '← From Exchange' }
         ]
     };
     
