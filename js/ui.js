@@ -1,12 +1,13 @@
-// js/ui.js - v4.4.0
-// Features: Premium Area Chart (KasLens Style), Auto-Precision, Clean UI
+// js/ui.js - v4.2.2
+// Features: Clean Badges (No Fee in list), Transfer Icon ⇄, LIVE Chart with Timeframes
 
-import { formatMoney, sanitizeText } from './utils.js';
+import { formatMoney } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
 let pnlChart = null;
-let chartInstance = null;
+let coinPriceChart = null; // ✅ NEW: Chart instance
+let currentChartTimeframe = '7D'; // ✅ NEW: Default timeframe
 const celebratedGoals = new Set();
 let currentExchangeFilter = null;
 
@@ -15,8 +16,6 @@ const CHART_COLORS = {
     SOL: '#8b5cf6', BNB: '#eab308', PEPE: '#097a22', USDT: '#26a17b', 
     USDC: '#2775ca', MON: '#6f32e4', default: '#6b7280'
 };
-
-// --- PAGRINDINĖS FUNKCIJOS ---
 
 export function setupThemeHandlers() {
     const btn = document.getElementById('btn-toggle-theme');
@@ -28,6 +27,12 @@ export function setupThemeHandlers() {
             
             if(allocationChart) renderAllocationChart();
             if(pnlChart) renderPnLChart(document.getElementById('tf-indicator')?.textContent || 'ALL');
+            
+            // ✅ Perpiešti coin chart jei atidarytas
+            const symbol = document.getElementById('coin-detail-symbol')?.textContent;
+            if(symbol && !document.getElementById('coin-detail-modal').classList.contains('hidden')) {
+                renderCoinPriceChart(symbol, currentChartTimeframe);
+            }
         };
     }
 }
@@ -50,64 +55,108 @@ export function updateDashboardUI(totals) {
     setStat('header-total-pnl', totals.totalPnL);
 }
 
-// --- PREMIUM GRAFIKO LOGIKA (AREA CHART) ---
+// --- GRAFIKO LOGIKA (AREA CHART + TIMEFRAMES) ---
 
-export async function renderCandleChart(coinId) {
+export async function renderCoinPriceChart(symbol, timeframe = '7D') {
     const container = document.getElementById('coin-chart-container');
     const loader = document.getElementById('chart-loader');
+    const livePriceEl = document.getElementById('chart-live-price'); // Vieta kainai virš grafiko
+    const liveChangeEl = document.getElementById('chart-live-change');
+    
     if (!container) return;
+    
+    // Atnaujiname globalų kintamąjį ir mygtukų stilių
+    currentChartTimeframe = timeframe;
+    document.querySelectorAll('.chart-tf-btn').forEach(btn => {
+        if(btn.dataset.tf === timeframe) {
+            btn.classList.add('bg-white', 'dark:bg-gray-700', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            btn.classList.remove('text-gray-500', 'hover:text-gray-900', 'dark:hover:text-gray-300');
+        } else {
+            btn.classList.remove('bg-white', 'dark:bg-gray-700', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            btn.classList.add('text-gray-500', 'hover:text-gray-900', 'dark:hover:text-gray-300');
+        }
+    });
 
-    if (chartInstance) {
-        chartInstance.remove();
-        chartInstance = null;
+    // Išvalome seną grafiką
+    if (coinPriceChart) {
+        coinPriceChart.remove();
+        coinPriceChart = null;
     }
     container.innerHTML = '';
-    
     if (loader) loader.classList.remove('hidden');
 
     try {
-        const LWCharts = window.LightweightCharts;
-        if (!LWCharts) throw new Error('KLAIDA: Nėra grafiko bibliotekos.');
+        const coin = state.coins.find(c => c.symbol === symbol);
+        if (!coin) throw new Error('Moneta nerasta');
 
-        // Imame 30 dienų duomenis (optimalu "Area" grafikui telefone)
-        const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=30`);
+        const LWCharts = window.LightweightCharts;
+        if (!LWCharts) throw new Error('Grafiko biblioteka nerasta');
+
+        // Nustatome API parametrus
+        let days = '7';
+        if (timeframe === '1H' || timeframe === '24H') days = '1';
+        else if (timeframe === '7D') days = '7';
+        else if (timeframe === '30D') days = '30';
+        else if (timeframe === '1Y') days = '365';
+        else if (timeframe === 'ALL') days = 'max';
+
+        const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin.coingecko_id}/market_chart?vs_currency=usd&days=${days}`);
         
-        if (res.status === 404) throw new Error(`Neteisingas ID: "${coinId}". Patikrinkite nustatymus.`);
-        if (res.status === 429) throw new Error('Viršytas limitas. Palaukite 1 min.');
+        if (res.status === 429) throw new Error('Viršytas limitas. Palaukite.');
+        if (!res.ok) throw new Error('Klaida gaunant duomenis');
         
         const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) throw new Error('Nėra duomenų.');
+        let prices = data.prices;
 
-        // Konvertuojame į "Area" serijai tinkamą formatą (tik laikas ir kaina)
-        const areaData = data.map(d => ({
-            time: d[0] / 1000,
-            value: d[4] // Close price
+        // Papildomas filtravimas 1H (paskutinė valanda iš 24h duomenų)
+        if (timeframe === '1H') {
+            const oneHourAgo = Date.now() - (60 * 60 * 1000);
+            prices = prices.filter(p => p[0] >= oneHourAgo);
+        }
+
+        if (!prices || prices.length === 0) throw new Error('Nėra duomenų');
+
+        // Paruošiame duomenis TradingView formatui
+        const areaData = prices.map(p => ({
+            time: p[0] / 1000,
+            value: p[1]
         }));
 
-        // IŠMANUS TIKSLUMAS (Precision)
-        const lastPrice = areaData[areaData.length - 1].value;
+        // Skaičiuojame pokytį pasirinktam laikotarpiui
+        const startPrice = areaData[0].value;
+        const endPrice = areaData[areaData.length - 1].value;
+        const diff = endPrice - startPrice;
+        const diffPct = (diff / startPrice) * 100;
+        const isPositive = diff >= 0;
+
+        // Atnaujiname Live kainą virš grafiko
+        if (livePriceEl) livePriceEl.textContent = formatMoney(endPrice);
+        if (liveChangeEl) {
+            liveChangeEl.innerHTML = `${isPositive ? '▲' : '▼'} ${Math.abs(diff).toFixed(4)} (${Math.abs(diffPct).toFixed(2)}%)`;
+            liveChangeEl.className = `text-xs font-bold px-2 py-0.5 rounded ${isPositive ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`;
+        }
+
+        // Tikslumas (Precision)
         let precision = 2;
         let minMove = 0.01;
-
-        if (lastPrice < 0.0001) { precision = 8; minMove = 0.00000001; }
-        else if (lastPrice < 1) { precision = 6; minMove = 0.000001; }
-        else if (lastPrice < 50) { precision = 4; minMove = 0.0001; }
+        if (endPrice < 1) { precision = 6; minMove = 0.000001; }
+        else if (endPrice < 10) { precision = 4; minMove = 0.0001; }
 
         const isDark = document.documentElement.classList.contains('dark');
-        
-        // Grafiko Nustatymai (Švarus stilius)
-        chartInstance = LWCharts.createChart(container, {
+        const color = isPositive ? '#10b981' : '#ef4444'; // Green or Red theme based on trend
+
+        // Kuriame grafiką
+        coinPriceChart = LWCharts.createChart(container, {
             layout: {
                 background: { type: 'solid', color: 'transparent' },
                 textColor: isDark ? '#9ca3af' : '#6b7280',
-                fontFamily: "'Inter', sans-serif",
             },
             grid: {
                 vertLines: { visible: false },
-                horzLines: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', style: 3 }, // Punktyrinė, vos matoma
+                horzLines: { style: 3, color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
             },
             width: container.clientWidth,
-            height: 250,
+            height: 220, // Šiek tiek mažesnis, kad tilptų headeris
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
@@ -115,44 +164,45 @@ export async function renderCandleChart(coinId) {
             },
             rightPriceScale: {
                 borderVisible: false,
-                scaleMargins: { top: 0.1, bottom: 0.1 }, // Kad grafikas neliestų kraštų
+                scaleMargins: { top: 0.2, bottom: 0.1 }, // Daugiau vietos viršuje
             },
             crosshair: {
-                vertLine: { labelVisible: false, style: 2, color: '#9ca3af' },
-                horzLine: { labelVisible: true, style: 2, color: '#9ca3af' },
+                vertLine: { labelVisible: false, style: 0, color: '#9ca3af' },
+                horzLine: { labelVisible: true, style: 0, color: '#9ca3af' },
             },
         });
-        
-        // Sukuriame "Area" seriją (Gradientas kaip KasLens)
-        const areaSeries = chartInstance.addAreaSeries({
-            topColor: 'rgba(45, 212, 191, 0.5)',    // Primary spalva (skaidri)
-            bottomColor: 'rgba(45, 212, 191, 0.0)', // Visiškai permatoma apačioje
-            lineColor: 'rgba(45, 212, 191, 1)',     // Ryški linija
+
+        const areaSeries = coinPriceChart.addAreaSeries({
+            topColor: isPositive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
+            bottomColor: isPositive ? 'rgba(16, 185, 129, 0.0)' : 'rgba(239, 68, 68, 0.0)',
+            lineColor: color,
             lineWidth: 2,
-            priceFormat: {
-                type: 'price',
-                precision: precision,
-                minMove: minMove,
-            },
+            priceFormat: { type: 'price', precision: precision, minMove: minMove },
         });
 
         areaSeries.setData(areaData);
-        chartInstance.timeScale().fitContent();
+        coinPriceChart.timeScale().fitContent();
 
-        // Responsive
+        // Responsive resize
         new ResizeObserver(entries => {
             if (entries.length === 0 || entries[0].target !== container) return;
             const newRect = entries[0].contentRect;
-            if (chartInstance) chartInstance.applyOptions({ height: newRect.height, width: newRect.width });
+            if (coinPriceChart) coinPriceChart.applyOptions({ height: newRect.height, width: newRect.width });
         }).observe(container);
 
     } catch (e) {
-        console.error("Chart error:", e);
-        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center p-4"><i class="fa-solid fa-chart-area text-gray-300 text-3xl mb-2"></i><span class="text-xs text-gray-500 font-bold">${e.message}</span></div>`;
+        console.error("Chart Error:", e);
+        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center text-gray-400 text-xs"><i class="fa-solid fa-chart-line text-2xl mb-1"></i>${e.message}</div>`;
     } finally {
         if (loader) loader.classList.add('hidden');
     }
 }
+
+// Globalus handleris mygtukams
+window.changeCoinChartTimeframe = (timeframe) => {
+    const symbol = document.getElementById('coin-detail-symbol')?.textContent;
+    if (symbol) renderCoinPriceChart(symbol, timeframe);
+};
 
 // --- MODALŲ LOGIKA ---
 
@@ -164,9 +214,8 @@ export async function openCoinDetail(symbol) {
     const holding = state.holdings[symbol];
     if (!coin || !holding) return;
     
-    // UI atnaujinimas
     document.getElementById('coin-detail-symbol').textContent = symbol;
-    document.getElementById('coin-detail-qty').textContent = holding.qty.toLocaleString(undefined, {maximumFractionDigits: 6}); // Daugiau skaičių kiekiui
+    document.getElementById('coin-detail-qty').textContent = holding.qty.toLocaleString(undefined, {maximumFractionDigits: 6});
     document.getElementById('coin-detail-value').textContent = formatMoney(holding.currentValue);
     document.getElementById('coin-detail-invested').textContent = formatMoney(holding.invested);
     
@@ -174,8 +223,8 @@ export async function openCoinDetail(symbol) {
     pnlEl.textContent = `${holding.pnl >= 0 ? '+' : ''}${formatMoney(holding.pnl)}`;
     pnlEl.className = `text-xl font-bold ${holding.pnl >= 0 ? 'text-primary-500' : 'text-red-500'}`;
     
-    // KVIEČIAME NAUJĄ GRAFIKĄ
-    renderCandleChart(coin.coingecko_id);
+    // ✅ Atidarome grafiką su default 7D
+    renderCoinPriceChart(symbol, '7D');
     
     // Filtrai ir transakcijos
     const coinTxs = state.transactions.filter(tx => tx.coin_symbol === symbol);
@@ -241,6 +290,12 @@ function renderCoinTransactions(txs) {
         row.className = 'flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 mb-2 cursor-pointer hover:border-primary-500 transition-colors';
         row.onclick = () => window.onEditTx(tx.id);
 
+        // ✅ SHOW FEES IN MODAL ONLY
+        let feeHTML = '';
+        if (Number(tx.fee_usd) > 0) {
+            feeHTML = `<span class="block text-[9px] text-orange-500 mt-0.5">Fee: $${Number(tx.fee_usd).toFixed(2)}</span>`;
+        }
+
         row.innerHTML = `
             <div>
                 <div class="flex items-center gap-2">
@@ -252,6 +307,7 @@ function renderCoinTransactions(txs) {
             <div class="text-right">
                 <p class="font-bold text-sm text-gray-900 dark:text-white">${isBuy ? '+' : ''}${Number(tx.amount).toFixed(4)}</p>
                 <p class="text-xs font-bold text-gray-700 dark:text-gray-300">$${Number(tx.total_cost_usd).toFixed(2)}</p>
+                ${feeHTML} 
             </div>`;
         container.appendChild(row);
     });
@@ -298,96 +354,6 @@ window.filterByExchange = (exchange) => {
         }
     });
 };
-
-export function renderGoals() {
-    const container = document.getElementById('goals-container');
-    if (!container) return;
-    container.innerHTML = '';
-    
-    const goalsWithProgress = state.goals
-        .filter(goal => state.coins.some(c => c.symbol === goal.coin_symbol))
-        .map(goal => {
-            const cur = state.holdings[goal.coin_symbol]?.qty || 0;
-            const tgt = Number(goal.target_amount);
-            const pct = tgt > 0 ? (cur / tgt) * 100 : 0;
-            return { ...goal, cur, tgt, pct };
-        }).sort((a, b) => b.pct - a.pct);
-
-    if (goalsWithProgress.length === 0) { document.getElementById('goals-section').classList.add('hidden'); return; }
-    document.getElementById('goals-section').classList.remove('hidden');
-
-    const fragment = document.createDocumentFragment();
-    goalsWithProgress.forEach(goal => {
-        const displayPct = Math.min(100, goal.pct);
-        if (goal.pct >= 100 && !celebratedGoals.has(goal.coin_symbol)) { triggerCelebration(goal.coin_symbol); celebratedGoals.add(goal.coin_symbol); }
-        
-        const div = document.createElement('div');
-        div.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-sm mb-2';
-        div.innerHTML = `
-            <div class="flex justify-between items-center text-xs mb-1">
-                <span class="font-bold text-gray-800 dark:text-gray-300">${goal.coin_symbol}</span>
-                <div class="flex items-center gap-2">
-                    <span class="text-primary-600 dark:text-primary-400 font-bold">${goal.pct.toFixed(1)}%</span>
-                    <button onclick="window.editGoal('${goal.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-[10px]"></i></button>
-                </div>
-            </div>
-            <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden"><div class="bg-primary-500 h-1.5 rounded-full transition-all duration-1000 ease-out" style="width:${displayPct}%"></div></div>
-            <div class="text-[9px] text-gray-500 mt-1 text-right font-mono">${goal.cur.toLocaleString(undefined, {maximumFractionDigits: 4})} / ${goal.tgt.toLocaleString()}</div>`;
-        fragment.appendChild(div);
-    });
-    container.appendChild(fragment);
-}
-
-function triggerCelebration(symbol) {
-    const modal = document.getElementById('celebration-modal');
-    const coinSpan = document.getElementById('celebration-coin');
-    if (modal && coinSpan) {
-        coinSpan.textContent = symbol;
-        modal.classList.remove('hidden');
-        if (typeof window.confetti === 'function') {
-            const end = Date.now() + 3000;
-            (function frame() {
-                window.confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#2dd4bf', '#fbbf24', '#f87171'] });
-                window.confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#2dd4bf', '#fbbf24', '#f87171'] });
-                if (Date.now() < end) requestAnimationFrame(frame);
-            }());
-        }
-    }
-}
-
-export function renderCoinCards() {
-    const container = document.getElementById('coin-cards-container');
-    if (!container) return;
-    container.innerHTML = '';
-    
-    const sorted = Object.entries(state.holdings)
-        .filter(([_, d]) => d.qty > 0)
-        .sort((a, b) => b[1].currentValue - a[1].currentValue);
-    
-    if (sorted.length === 0) { container.innerHTML = `<div class="text-center py-8 text-gray-500">Nėra aktyvių pozicijų</div>`; return; }
-    
-    const fragment = document.createDocumentFragment();
-    sorted.forEach(([sym, data]) => {
-        const pnlClass = data.pnl >= 0 ? 'text-primary-500' : 'text-red-500';
-        const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm mb-3 cursor-pointer hover:border-primary-500 hover:shadow-lg transition-all';
-        card.onclick = () => window.openCoinDetail(sym);
-        
-        card.innerHTML = `
-            <div class="flex justify-between mb-2">
-                <span class="text-[10px] font-bold text-gray-400 uppercase">Balansas</span>
-                <span class="text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded hover:bg-primary-500 hover:text-white transition-colors">${sym}</span>
-            </div>
-            <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-0.5">${formatMoney(data.currentValue)}</h2>
-            <p class="text-xs text-gray-500 mb-4 font-mono">${data.qty.toLocaleString()} ${sym} @ ${formatMoney(data.currentPrice)}</p>
-            <div class="flex justify-between border-t border-gray-100 dark:border-gray-800 pt-3">
-                <span class="text-xs text-gray-500">Pelnas/Nuostolis</span>
-                <span class="${pnlClass} font-bold text-sm">${data.pnl >=0?'+':''}${formatMoney(data.pnl)} (${data.pnlPercent.toFixed(2)}%)</span>
-            </div>`;
-        fragment.appendChild(card);
-    });
-    container.appendChild(fragment);
-}
 
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
@@ -479,9 +445,11 @@ function calculateGroupStats(txs) {
     return { pnl, pct, totalVal };
 }
 
+// ✅ UPDATED: Clean Badges + Transfer Icon + No Fee in List
 function createTransactionCard(tx) {
     const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
     const color = isBuy ? 'text-primary-500' : 'text-red-500';
+    
     let pnlHTML = '';
     if (isBuy) {
         const coin = state.coins.find(c => c.symbol === tx.coin_symbol);
@@ -495,35 +463,55 @@ function createTransactionCard(tx) {
     }
 
     let badgesHTML = '';
-    if (tx.exchange) { badgesHTML += `<span onclick="window.filterByExchange('${tx.exchange}')" class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-primary-500 hover:text-white transition-colors">${tx.exchange}</span>`; }
+    if (tx.exchange) { 
+        badgesHTML += `<span onclick="window.filterByExchange('${tx.exchange}')" class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-primary-500 hover:text-white transition-colors">${tx.exchange}</span>`; 
+    }
 
+    // ✅ 1. Transfer Icon Logic
     if (tx.type === 'Transfer') {
-        let transferText = tx.method || 'Transfer'; let icon = '⇄';
-        if (transferText.includes('Transfer to')) { icon = '→'; transferText = transferText.replace('Transfer to ', ''); } 
+        let transferText = tx.method || 'Transfer';
+        let icon = '→'; 
+        if (transferText.includes('Transfer to')) { icon = '→'; transferText = transferText.replace('Transfer to ', ''); }
         else if (transferText.includes('Transfer from')) { icon = '←'; transferText = transferText.replace('Transfer from ', ''); }
+        
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/30">${icon} ${transferText}</span>`;
     } else {
         let methodDisplay = tx.method || '';
         methodDisplay = methodDisplay.replace(' (Card)', '').replace(' (DCA)', '');
         if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
         if (methodDisplay === 'Market Buy') methodDisplay = '';
-        if (methodDisplay) { badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${methodDisplay}</span>`; }
+        if (methodDisplay) { 
+            badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${methodDisplay}</span>`; 
+        }
     }
     
-    if (tx.fee_usd && Number(tx.fee_usd) > 0) { badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30">$${Number(tx.fee_usd).toFixed(2)}</span>`; }
+    // ✅ 2. MOKESČIŲ (FEES) ČIA NERODOME. TIK MODALE.
 
     let notesHTML = '';
-    if (tx.notes && tx.notes.trim() !== '') { notesHTML = `<div class="text-[9px] text-gray-400 italic mt-1.5 pl-2 border-l-2 border-gray-200 dark:border-gray-700 line-clamp-2">${tx.notes}</div>`; }
+    if (tx.notes && tx.notes.trim() !== '') { 
+        notesHTML = `<div class="text-[9px] text-gray-400 italic mt-1.5 pl-2 border-l-2 border-gray-200 dark:border-gray-700 line-clamp-2">${tx.notes}</div>`; 
+    }
 
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/50 cursor-pointer';
-    card.onclick = (e) => { if (!e.target.closest('.tx-checkbox') && !e.target.closest('.action-btn') && !e.target.closest('[onclick*="filterByExchange"]')) { window.openCoinDetail(tx.coin_symbol); } };
+    card.onclick = (e) => { 
+        if (!e.target.closest('.tx-checkbox') && !e.target.closest('.action-btn') && !e.target.closest('[onclick*="filterByExchange"]')) { 
+            window.openCoinDetail(tx.coin_symbol); 
+        } 
+    };
+
+    // ✅ Pakeičiame "Transfer" tekstą į ikoną ⇄ pagrindiniame view
+    const typeDisplay = tx.type === 'Transfer' ? '⇄' : tx.type;
 
     card.innerHTML = `
         <div class="flex items-start gap-3 w-full">
             <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 mt-1 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-0 cursor-pointer" data-tx-id="${tx.id}" onchange="window.updateDeleteSelectedButton()">
             <div class="flex-1 min-w-0">
-                <div class="flex items-center flex-wrap"><span class="font-bold text-sm ${color}">${tx.coin_symbol}</span><span class="text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded ml-2">${tx.type}</span>${badgesHTML}</div>
+                <div class="flex items-center flex-wrap">
+                    <span class="font-bold text-sm ${color}">${tx.coin_symbol}</span>
+                    <span class="text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded ml-2">${typeDisplay}</span>
+                    ${badgesHTML}
+                </div>
                 <div class="text-[10px] text-gray-400 mt-1">${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                 ${pnlHTML}${notesHTML}
             </div>
