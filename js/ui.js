@@ -1,7 +1,7 @@
-// js/ui.js - v4.1.0
-// Features: 3-Column Stats, Clickable Coin Cards, Fee Display, Transfer Logic Fix
+// js/ui.js - v4.2.0
+// Features: Clean Badges, Clickable Rows (Open Detail), Buttons Edit/Delete
 
-import { formatMoney, formatPrice } from './utils.js';
+import { formatMoney } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
@@ -137,6 +137,7 @@ export function renderCoinCards() {
         const pnlClass = data.pnl >= 0 ? 'text-primary-500' : 'text-red-500';
         const card = document.createElement('div');
         
+        // CLICK LOGIKA: Paspaudus kortelę atidaromas modalas
         card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm mb-3 cursor-pointer hover:border-primary-500 hover:shadow-lg transition-all';
         card.onclick = () => window.openCoinDetail(sym);
         
@@ -305,6 +306,7 @@ function calculateGroupStats(txs) {
     return { pnl, pct, totalVal };
 }
 
+// ✅ ATNAUJINTA: Išvalyti Badges, Eilutė atidaro Modalą
 function createTransactionCard(tx) {
     const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
     const color = isBuy ? 'text-primary-500' : 'text-red-500';
@@ -322,16 +324,29 @@ function createTransactionCard(tx) {
     }
 
     let badgesHTML = '';
+    
+    // 1. Biržos ženklelis
     if (tx.exchange) {
         badgesHTML += `<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.exchange}</span>`;
     }
-    if (tx.method && tx.method !== 'Market Buy') {
-        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
-    } else if (tx.method) {
-        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${tx.method}</span>`;
+
+    // 2. Metodo valymas (Trumpi tekstai)
+    let methodDisplay = tx.method || '';
+    
+    methodDisplay = methodDisplay
+        .replace('Transfer to ', '')        // "Transfer to Hot Wallet" -> "Hot Wallet"
+        .replace('Transfer from ', 'From ') // "Transfer from Exchange" -> "From Exchange"
+        .replace(' (Card)', '')             // Panaikinti (Card)
+        .replace(' (DCA)', '');             // Panaikinti (DCA)
+        
+    if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
+    if (methodDisplay === 'Market Buy') methodDisplay = ''; // Default, nerodome
+
+    if (methodDisplay) {
+        badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">${methodDisplay}</span>`;
     }
     
-    // ✅ Fee badge
+    // 3. Mokesčio ženklelis
     if (tx.fee_usd && Number(tx.fee_usd) > 0) {
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30">Fee: $${Number(tx.fee_usd).toFixed(2)}</span>`;
     }
@@ -342,8 +357,18 @@ function createTransactionCard(tx) {
     }
 
     const card = document.createElement('div');
-    card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/30';
+    card.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 shadow-sm flex justify-between items-start transition-all hover:border-primary-500/50 cursor-pointer';
     
+    // ✅ CLICK LOGIKA: 
+    // Jei paspaudžia ant checkbox arba mygtukų - veikia jie.
+    // Jei paspaudžia bet kur kitur eilutėje - atidaro "Detali Peržiūra" (Modalą).
+    card.onclick = (e) => {
+        if (!e.target.closest('.tx-checkbox') && !e.target.closest('.action-btn')) {
+            // Ši funkcija atidaro "Coin Detail" langą
+            window.openCoinDetail(tx.coin_symbol);
+        }
+    };
+
     card.innerHTML = `
         <div class="flex items-start gap-3 w-full">
             <input type="checkbox" class="tx-checkbox form-checkbox h-4 w-4 mt-1 text-primary-500 rounded border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-0 cursor-pointer" 
@@ -364,8 +389,8 @@ function createTransactionCard(tx) {
                 <div class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">${isBuy?'+':'-'}${Number(tx.amount).toFixed(4)}</div>
                 <div class="font-bold text-sm text-gray-900 dark:text-white mt-0.5">${formatMoney(tx.total_cost_usd)}</div>
                 <div class="flex gap-2 mt-2 opacity-50 hover:opacity-100 transition-opacity">
-                    <button onclick="window.onEditTx('${tx.id}')" class="text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-xs"></i></button>
-                    <button onclick="window.onDeleteTx('${tx.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                    <button onclick="window.onEditTx('${tx.id}')" class="action-btn text-gray-400 hover:text-yellow-500 transition-colors p-1"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button onclick="window.onDeleteTx('${tx.id}')" class="action-btn text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-trash text-xs"></i></button>
                 </div>
             </div>
         </div>`;
@@ -435,7 +460,7 @@ export function renderAllocationChart() {
     });
 }
 
-// ✅ PATAISYTA: Transfer Logic Handling ir Visų Tipų Palaikymas
+// ✅ PATAISYTA: Apsauga grafikui
 export function renderPnLChart(timeframe = 'ALL') {
     const canvas = document.getElementById('pnlChart');
     if (!canvas) return;
@@ -460,7 +485,6 @@ export function renderPnLChart(timeframe = 'ALL') {
     let cumulativeInvested = 0;
     const allTxs = state.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    // ✅ PATAISYTA: Viena logika abiems ciklams su visais tipais
     const updateInvested = (tx) => {
         const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy', 'Gift/Airdrop', 'Staking Reward'].includes(tx.type);
         const isTransfer = tx.type === 'Transfer';
@@ -468,10 +492,8 @@ export function renderPnLChart(timeframe = 'ALL') {
         if (isBuy) {
             cumulativeInvested += Number(tx.total_cost_usd) + Number(tx.fee_usd || 0);
         } else if (isTransfer) {
-            // Transfer: Tik mokesčiai prisideda prie išlaidų, vertė nedingsta
             cumulativeInvested += Number(tx.fee_usd || 0);
         } else {
-            // Sell: Mažiname investuotą sumą (cash out)
             cumulativeInvested -= Number(tx.total_cost_usd);
         }
     };
@@ -514,9 +536,7 @@ export function renderPnLChart(timeframe = 'ALL') {
                 borderWidth: 2,
                 tension: 0.1,
                 fill: true,
-                pointRadius: (ctx) => {
-                    return points.length < 30 ? 3 : 0; 
-                },
+                pointRadius: (ctx) => points.length < 30 ? 3 : 0,
                 pointHoverRadius: 5
             }]
         },
@@ -533,46 +553,14 @@ export function renderPnLChart(timeframe = 'ALL') {
                     bodyColor: isDark ? '#f9fafb' : '#111827',
                     borderColor: isDark ? '#374151' : '#e5e7eb',
                     borderWidth: 1,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Investuota: ' + formatMoney(context.raw);
-                        }
-                    }
+                    callbacks: { label: function(context) { return 'Investuota: ' + formatMoney(context.raw); } }
                 }
             },
             scales: {
-                x: { 
-                    display: true,
-                    grid: { display: false },
-                    ticks: {
-                        color: isDark ? '#6b7280' : '#9ca3af',
-                        font: { size: 9 },
-                        maxTicksLimit: timeframe === '24H' ? 6 : 7,
-                        maxRotation: 0,
-                        autoSkip: true
-                    }
-                },
-                y: { 
-                    display: true,
-                    position: 'right',
-                    grid: { 
-                        color: isDark ? '#374151' : '#f3f4f6',
-                        drawBorder: false 
-                    },
-                    ticks: {
-                        color: isDark ? '#6b7280' : '#9ca3af',
-                        font: { size: 9 },
-                        callback: function(value) {
-                            return '$' + value.toLocaleString(undefined, {notation: "compact"});
-                        }
-                    }
-                }
+                x: { display: true, grid: { display: false }, ticks: { color: isDark ? '#6b7280' : '#9ca3af', font: { size: 9 }, maxTicksLimit: timeframe === '24H' ? 6 : 7, maxRotation: 0, autoSkip: true } },
+                y: { display: true, position: 'right', grid: { color: isDark ? '#374151' : '#f3f4f6', drawBorder: false }, ticks: { color: isDark ? '#6b7280' : '#9ca3af', font: { size: 9 }, callback: function(value) { return '$' + value.toLocaleString(undefined, {notation: "compact"}); } } }
             },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
         }
     });
 }
