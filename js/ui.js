@@ -1,19 +1,22 @@
-// js/ui.js - v4.2.1
-// Features: Clean Badges, Clickable Rows (Open Detail), Buttons Edit/Delete, Exchange Filtering
+// js/ui.js - v4.3.1
+// Features: LIVE Chart, Clean Badges, Modals, All UI Logic
 
-import { formatMoney } from './utils.js';
+import { formatMoney, formatPrice, sanitizeText } from './utils.js';
 import { state } from './logic.js';
 
 let allocationChart = null;
 let pnlChart = null;
+let chartInstance = null; // Grafiko objektas
 const celebratedGoals = new Set();
-let currentExchangeFilter = null; // ✅ NEW: Track active filter
+let currentExchangeFilter = null;
 
 const CHART_COLORS = { 
     KAS: '#2dd4bf', ASTER: '#eec25e', BTC: '#f89907', ETH: '#3b82f6', 
     SOL: '#8b5cf6', BNB: '#eab308', PEPE: '#097a22', USDT: '#26a17b', 
     USDC: '#2775ca', MON: '#6f32e4', default: '#6b7280'
 };
+
+// --- PAGRINDINĖS FUNKCIJOS ---
 
 export function setupThemeHandlers() {
     const btn = document.getElementById('btn-toggle-theme');
@@ -25,6 +28,12 @@ export function setupThemeHandlers() {
             
             if(allocationChart) renderAllocationChart();
             if(pnlChart) renderPnLChart(document.getElementById('tf-indicator')?.textContent || 'ALL');
+            // Jei atidarytas modalas, perpiešiam ir jo grafiką
+            const modal = document.getElementById('coin-detail-modal');
+            if (modal && !modal.classList.contains('hidden') && chartInstance) {
+                // TradingView grafikas pats pasiims naujas spalvas per renderCandleChart, jei perkviesime, 
+                // arba galime palikti kaip yra iki kito atidarymo.
+            }
         };
     }
 }
@@ -46,6 +55,238 @@ export function updateDashboardUI(totals) {
     setStat('header-30d-change', totals.change30dUsd);
     setStat('header-total-pnl', totals.totalPnL);
 }
+
+// --- GRAFIKŲ LOGIKA (TRADINGVIEW) ---
+
+export async function renderCandleChart(coinId) {
+    const container = document.getElementById('coin-chart-container');
+    const loader = document.getElementById('chart-loader');
+    if (!container) return;
+
+    // Išvalome seną grafiką
+    if (chartInstance) {
+        chartInstance.remove();
+        chartInstance = null;
+    }
+    container.innerHTML = '';
+    loader.classList.remove('hidden');
+
+    try {
+        // 14 dienų duomenys
+        const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=14`);
+        if (!res.ok) throw new Error('API Error');
+        const data = await res.json();
+
+        const candleData = data.map(d => ({
+            time: d[0] / 1000,
+            open: d[1],
+            high: d[2],
+            low: d[3],
+            close: d[4]
+        }));
+
+        const isDark = document.documentElement.classList.contains('dark');
+        const chartOptions = {
+            layout: {
+                background: { type: 'solid', color: isDark ? '#0b0f19' : '#ffffff' },
+                textColor: isDark ? '#9ca3af' : '#374151',
+            },
+            grid: {
+                vertLines: { color: isDark ? 'rgba(45, 212, 191, 0.1)' : '#f0f3fa' },
+                horzLines: { color: isDark ? 'rgba(45, 212, 191, 0.1)' : '#f0f3fa' },
+            },
+            width: container.clientWidth,
+            height: 250,
+            timeScale: { timeVisible: true, secondsVisible: false },
+        };
+
+        chartInstance = LightweightCharts.createChart(container, chartOptions);
+        
+        const candlestickSeries = chartInstance.addCandlestickSeries({
+            upColor: '#2dd4bf',
+            downColor: '#ef4444',
+            borderVisible: false,
+            wickUpColor: '#2dd4bf',
+            wickDownColor: '#ef4444',
+        });
+
+        candlestickSeries.setData(candleData);
+        chartInstance.timeScale().fitContent();
+
+        new ResizeObserver(entries => {
+            if (entries.length === 0 || entries[0].target !== container) return;
+            const newRect = entries[0].contentRect;
+            chartInstance.applyOptions({ height: newRect.height, width: newRect.width });
+        }).observe(container);
+
+    } catch (e) {
+        console.error("Chart error:", e);
+        container.innerHTML = '<div class="flex items-center justify-center h-full text-xs text-gray-500">Grafikas neprieinamas</div>';
+    } finally {
+        loader.classList.add('hidden');
+    }
+}
+
+// --- MODALŲ LOGIKA ---
+
+export async function openCoinDetail(symbol) {
+    const modal = document.getElementById('coin-detail-modal');
+    if (!modal) return;
+    
+    const coin = state.coins.find(c => c.symbol === symbol);
+    const holding = state.holdings[symbol];
+    if (!coin || !holding) return;
+    
+    document.getElementById('coin-detail-symbol').textContent = symbol;
+    document.getElementById('coin-detail-qty').textContent = holding.qty.toLocaleString(undefined, {maximumFractionDigits: 4});
+    document.getElementById('coin-detail-value').textContent = `$${holding.currentValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('coin-detail-invested').textContent = `$${holding.invested.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    
+    const pnlEl = document.getElementById('coin-detail-pnl');
+    pnlEl.textContent = `${holding.pnl >= 0 ? '+' : ''}$${Math.abs(holding.pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    pnlEl.className = `text-xl font-bold ${holding.pnl >= 0 ? 'text-primary-500' : 'text-red-500'}`;
+    
+    // Piešiame grafiką
+    renderCandleChart(coin.coingecko_id);
+    
+    // Filtrai ir transakcijos
+    const coinTxs = state.transactions.filter(tx => tx.coin_symbol === symbol);
+    const exchanges = [...new Set(coinTxs.map(tx => tx.exchange).filter(Boolean))].sort();
+    
+    const exchangesContainer = document.getElementById('coin-detail-exchanges');
+    if (exchangesContainer) {
+        exchangesContainer.innerHTML = '';
+        
+        const setActiveBtn = (activeBtn) => {
+            Array.from(exchangesContainer.children).forEach(child => {
+                child.className = 'px-3 py-1 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700';
+            });
+            activeBtn.className = 'px-3 py-1 text-xs font-bold rounded-lg bg-primary-500 text-white shadow-md transition-transform active:scale-95';
+        };
+
+        const allBtn = document.createElement('button');
+        allBtn.textContent = 'Visos';
+        allBtn.onclick = () => {
+            renderCoinTransactions(coinTxs);
+            setActiveBtn(allBtn);
+        };
+        exchangesContainer.appendChild(allBtn);
+        setActiveBtn(allBtn);
+
+        exchanges.forEach(ex => {
+            const btn = document.createElement('button');
+            btn.textContent = ex;
+            btn.onclick = () => {
+                const filtered = coinTxs.filter(tx => tx.exchange === ex);
+                renderCoinTransactions(filtered);
+                setActiveBtn(btn);
+            };
+            exchangesContainer.appendChild(btn);
+        });
+    }
+    
+    renderCoinTransactions(coinTxs);
+    modal.classList.remove('hidden');
+}
+
+// Būtina priskirti globaliam objektui, nes HTML onclick kviečia window.openCoinDetail
+window.openCoinDetail = openCoinDetail; 
+
+function renderCoinTransactions(txs) {
+    const container = document.getElementById('coin-detail-transactions');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (txs.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-gray-500 text-xs">Nėra transakcijų</div>`;
+        return;
+    }
+
+    const sorted = txs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    sorted.forEach(tx => {
+        const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
+        const typeColor = isBuy ? 'text-primary-500' : 'text-red-500';
+        
+        let methodDisplay = tx.method || '';
+        methodDisplay = methodDisplay
+            .replace('Transfer to ', '→ ')
+            .replace('Transfer from ', '← ')
+            .replace(' (Card)', '')
+            .replace(' (DCA)', '');
+            
+        if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
+        if (methodDisplay === 'Market Buy') methodDisplay = ''; 
+
+        const row = document.createElement('div');
+        row.className = 'flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 mb-2 cursor-pointer hover:border-primary-500 transition-colors';
+        
+        row.onclick = () => window.onEditTx(tx.id);
+
+        row.innerHTML = `
+            <div>
+                <div class="flex items-center gap-2">
+                    <p class="font-bold text-sm ${typeColor}">${tx.type}</p>
+                    ${methodDisplay ? `<span class="text-[9px] bg-gray-200 dark:bg-gray-700 px-1.5 rounded text-gray-600 dark:text-gray-300">${methodDisplay}</span>` : ''}
+                </div>
+                <p class="text-xs text-gray-500">${new Date(tx.date).toLocaleDateString()}</p>
+            </div>
+            <div class="text-right">
+                <p class="font-bold text-sm text-gray-900 dark:text-white">${isBuy ? '+' : ''}${Number(tx.amount).toFixed(4)}</p>
+                <p class="text-xs font-bold text-gray-700 dark:text-gray-300">$${Number(tx.total_cost_usd).toFixed(2)}</p>
+            </div>`;
+        container.appendChild(row);
+    });
+}
+
+// --- PAGRINDINIO SĄRAŠO FUNKCIJOS ---
+
+export function renderExchangeFilters() {
+    const container = document.getElementById('exchange-filters-container');
+    if (!container) return;
+    
+    const exchanges = [...new Set(state.transactions.map(tx => tx.exchange).filter(Boolean))].sort();
+    
+    if (exchanges.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'exchange-filter-btn px-2 py-1 rounded text-[9px] font-bold transition-colors bg-primary-500 text-white';
+    allBtn.textContent = 'All';
+    allBtn.dataset.exchange = 'All';
+    allBtn.onclick = () => window.filterByExchange('All');
+    container.appendChild(allBtn);
+    
+    exchanges.forEach(exchange => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'exchange-filter-btn px-2 py-1 rounded text-[9px] font-bold transition-colors bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white';
+        btn.textContent = exchange;
+        btn.dataset.exchange = exchange;
+        btn.onclick = () => window.filterByExchange(exchange);
+        container.appendChild(btn);
+    });
+}
+
+window.filterByExchange = (exchange) => {
+    currentExchangeFilter = exchange;
+    renderTransactionJournal();
+    
+    document.querySelectorAll('.exchange-filter-btn').forEach(btn => {
+        if (btn.dataset.exchange === exchange) {
+            btn.classList.add('bg-primary-500', 'text-white');
+            btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-300');
+        } else {
+            btn.classList.remove('bg-primary-500', 'text-white');
+            btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-300');
+        }
+    });
+};
 
 export function renderGoals() {
     const container = document.getElementById('goals-container');
@@ -157,29 +398,11 @@ export function renderCoinCards() {
     container.appendChild(fragment);
 }
 
-// ✅ NEW: Filter transactions by exchange
-window.filterByExchange = (exchange) => {
-    currentExchangeFilter = exchange;
-    renderTransactionJournal();
-    
-    // Update button styles
-    document.querySelectorAll('.exchange-filter-btn').forEach(btn => {
-        if (btn.dataset.exchange === exchange) {
-            btn.classList.add('bg-primary-500', 'text-white');
-            btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-300');
-        } else {
-            btn.classList.remove('bg-primary-500', 'text-white');
-            btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-300');
-        }
-    });
-};
-
 export function renderTransactionJournal() {
     const container = document.getElementById('journal-accordion');
     if (!container) return;
     container.innerHTML = '';
     
-    // ✅ Apply exchange filter
     let filteredTxs = state.transactions.slice();
     if (currentExchangeFilter && currentExchangeFilter !== 'All') {
         filteredTxs = filteredTxs.filter(tx => tx.exchange === currentExchangeFilter);
@@ -329,7 +552,6 @@ function calculateGroupStats(txs) {
     return { pnl, pct, totalVal };
 }
 
-// ✅ UPDATED: Clean Badges + Transfer Icons
 function createTransactionCard(tx) {
     const isBuy = ['Buy', 'Instant Buy', 'Market Buy', 'Limit Buy', 'Recurring Buy'].includes(tx.type);
     const color = isBuy ? 'text-primary-500' : 'text-red-500';
@@ -348,12 +570,10 @@ function createTransactionCard(tx) {
 
     let badgesHTML = '';
     
-    // 1. ✅ Clickable Exchange Badge
     if (tx.exchange) {
         badgesHTML += `<span onclick="window.filterByExchange('${tx.exchange}')" class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-primary-500 hover:text-white transition-colors">${tx.exchange}</span>`;
     }
 
-    // 2. ✅ Transfer Badge with Icons
     if (tx.type === 'Transfer') {
         let transferText = tx.method || 'Transfer';
         let icon = '⇄';
@@ -368,13 +588,8 @@ function createTransactionCard(tx) {
         
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/30">${icon} ${transferText}</span>`;
     } else {
-        // 2b. Method Badge (for non-Transfer)
         let methodDisplay = tx.method || '';
-        
-        methodDisplay = methodDisplay
-            .replace(' (Card)', '')
-            .replace(' (DCA)', '');
-            
+        methodDisplay = methodDisplay.replace(' (Card)', '').replace(' (DCA)', '');
         if (methodDisplay === 'Staking Reward') methodDisplay = 'Reward';
         if (methodDisplay === 'Market Buy') methodDisplay = '';
 
@@ -383,7 +598,6 @@ function createTransactionCard(tx) {
         }
     }
     
-    // 3. ✅ Fee Badge WITHOUT "Fee:" word
     if (tx.fee_usd && Number(tx.fee_usd) > 0) {
         badgesHTML += `<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30">$${Number(tx.fee_usd).toFixed(2)}</span>`;
     }
@@ -596,39 +810,3 @@ export function renderPnLChart(timeframe = 'ALL') {
         }
     });
 }
-
-// ✅ NEW: Render exchange filter buttons
-export function renderExchangeFilters() {
-    const container = document.getElementById('exchange-filters-container');
-    if (!container) return;
-    
-    // Get unique exchanges from transactions
-    const exchanges = [...new Set(state.transactions.map(tx => tx.exchange).filter(Boolean))].sort();
-    
-    if (exchanges.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-    
-    container.innerHTML = '';
-    
-    // Add "All" button
-    const allBtn = document.createElement('button');
-    allBtn.type = 'button';
-    allBtn.className = 'exchange-filter-btn px-2 py-1 rounded text-[9px] font-bold transition-colors bg-primary-500 text-white';
-    allBtn.textContent = 'All';
-    allBtn.dataset.exchange = 'All';
-    allBtn.onclick = () => window.filterByExchange('All');
-    container.appendChild(allBtn);
-    
-    // Add exchange buttons
-    exchanges.forEach(exchange => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'exchange-filter-btn px-2 py-1 rounded text-[9px] font-bold transition-colors bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-primary-500 hover:text-white';
-        btn.textContent = exchange;
-        btn.dataset.exchange = exchange;
-        btn.onclick = () => window.filterByExchange(exchange);
-        container.appendChild(btn);
-    });
-    }
