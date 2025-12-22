@@ -1,4 +1,4 @@
-// js/logic.js - v3.9.0 (Dual Stats: 24H & 30D)
+// js/logic.js - v4.1.0 (Fee Integration + Infinity Bug Fix + Transfer Support)
 
 const CACHE_DURATION = 60000; 
 const safeFloat = (num) => parseFloat(Number(num).toFixed(8));
@@ -37,7 +37,6 @@ export async function loadInitialData() {
     }
 }
 
-// ✅ ATNAUJINTA: Imame ir 24h, ir 30d
 export async function fetchPrices() {
     if (state.coins.length === 0) return;
     
@@ -49,7 +48,6 @@ export async function fetchPrices() {
     const ids = state.coins.map(c => c.coingecko_id).join(',');
     
     try {
-        // Prašome 30d. 24h CoinGecko 'markets' endpointas duoda pagal nutylėjimą.
         const res = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=30d`);
         
         if (!res.ok) {
@@ -85,14 +83,25 @@ export function calculateHoldings() {
         
         const amount = safeFloat(tx.amount);
         const cost = safeFloat(tx.total_cost_usd);
+        const fee = safeFloat(tx.fee_usd || 0); // ✅ MOKESČIAI
 
-        if (['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy'].includes(tx.type)) {
+        if (['Buy', 'Instant Buy', 'Recurring Buy', 'Limit Buy', 'Market Buy', 'Staking Reward', 'Gift/Airdrop'].includes(tx.type)) {
+            // Pirkimas: Didėja kiekis, didėja investuota suma (kaina + mokesčiai)
             state.holdings[sym].qty = safeFloat(state.holdings[sym].qty + amount);
-            state.holdings[sym].invested = safeFloat(state.holdings[sym].invested + cost);
-        } else if (['Sell', 'Withdraw'].includes(tx.type)) {
+            state.holdings[sym].invested = safeFloat(state.holdings[sym].invested + cost + fee);
+            
+        } else if (['Sell', 'Withdraw', 'Market Sell', 'Limit Sell', 'Instant Sell', 'Stop Loss'].includes(tx.type)) {
+            // Pardavimas: Mažėja kiekis, mažėja investuota suma proporcingai
             const currentAvgPrice = state.holdings[sym].qty > 0 ? state.holdings[sym].invested / state.holdings[sym].qty : 0;
             state.holdings[sym].qty = safeFloat(state.holdings[sym].qty - amount);
+            // Pastaba: Pardavus, fee mažina jūsų gautą pelną, bet čia mažiname cost basis, kad liktų teisinga likusių monetų savikaina
             state.holdings[sym].invested = Math.max(0, safeFloat(state.holdings[sym].invested - safeFloat(amount * currentAvgPrice)));
+            
+        } else if (['Transfer'].includes(tx.type)) {
+            // ✅ TRANSFER LOGIKA:
+            // Kiekis nesikeičia (nes pervedate sau), bet sumokate mokestį.
+            // Mokestis prisideda prie investuotos sumos (cost basis), nes tai išlaidos.
+            state.holdings[sym].invested = safeFloat(state.holdings[sym].invested + fee);
         }
     });
 
@@ -107,20 +116,44 @@ export function calculateHoldings() {
         const coin = state.coins.find(c => c.symbol === sym);
         
         const priceData = (coin && state.prices[coin.coingecko_id]) || { usd: 0, change_24h: 0, change_30d: 0 };
-        const price = priceData.usd;
+        let price = priceData.usd;
+        
+        // 
+        // ✅ INFINITY BUG FIX - Handle Airdrop/Gift with 0 price
+        if (price === 0 && h.qty > 0) {
+            const hasAirdrop = state.transactions.some(tx => 
+                tx.coin_symbol === sym && 
+                (tx.type === 'Gift/Airdrop' || parseFloat(tx.price_per_coin) === 0)
+            );
+            
+            if (hasAirdrop) {
+                if (coin && state.prices[coin.coingecko_id]?.usd > 0) {
+                    price = state.prices[coin.coingecko_id].usd;
+                } else {
+                    price = h.invested > 0 ? h.invested / h.qty : 0;
+                }
+            }
+        }
         
         h.currentValue = safeFloat(h.qty * price);
         h.currentPrice = price;
         h.pnl = safeFloat(h.currentValue - h.invested);
-        h.pnlPercent = h.invested > 0 ? (h.pnl / h.invested) * 100 : 0;
+        
+        // ✅ PnL Percent Fix
+        if (h.invested > 0) {
+            h.pnlPercent = (h.pnl / h.invested) * 100;
+        } else if (h.currentValue > 0) {
+            h.pnlPercent = 100; // Pure profit (Airdrop)
+        } else {
+            h.pnlPercent = 0;
+        }
 
-        // 24H Change USD
+        // 24H & 30D Change USD
         if (price > 0 && h.qty > 0) {
             const pct24 = priceData.change_24h || 0;
             const val24 = h.currentValue / (1 + (pct24 / 100));
             total24hChangeUsd += (h.currentValue - val24);
 
-            // 30D Change USD
             const pct30 = priceData.change_30d || 0;
             const val30 = h.currentValue / (1 + (pct30 / 100));
             total30dChangeUsd += (h.currentValue - val30);
