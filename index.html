@@ -187,19 +187,19 @@
             </section>
 
             <section>
-                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Turto Paskirstymas</h3>
+                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Turto paskirstymas</h3>
                 <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-lg transition-colors duration-300">
                     <div style="max-height: 250px; position: relative;"><canvas id="allocationChart"></canvas></div>
                 </div>
             </section>
 
             <section>
-                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Turimas Turtas</h3>
+                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Turimas turtas</h3>
                 <div id="coin-cards-container" class="grid grid-cols-1 gap-3"></div>
             </section>
 
             <section id="goals-section" class="hidden">
-                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Tikslų Progresas</h3>
+                <h3 class="text-gray-500 text-xs uppercase font-bold ml-1 mb-2">Tikslų progresas</h3>
                 <div id="goals-container" class="space-y-3"></div>
             </section>
 
@@ -254,7 +254,7 @@
     <div id="add-modal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/80 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm">
         <div class="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl border-t sm:border border-gray-200 dark:border-gray-800 p-5 space-y-5 animate-slide-up sm:animate-none max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center text-gray-900 dark:text-white">
-                <h3 class="font-bold text-lg" id="modal-title">Nauja Transakcija</h3>
+                <h3 class="font-bold text-lg" id="modal-title">Nauja transakcija</h3>
                 <button type="button" onclick="document.getElementById('add-modal').classList.add('hidden')" aria-label="Close modal" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </div>
             <form id="add-tx-form" class="space-y-4">
@@ -286,7 +286,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div class="relative">
                         <select id="tx-exchange" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold">
-                            <option value="">Pasirinkti biržą...</option>
+                            <option value="">Birža...</option>
                             <optgroup label="🔥 Populiariausios">
                                 <option value="Binance">Binance</option>
                                 <option value="Coinbase">Coinbase</option>
@@ -296,22 +296,22 @@
                             <optgroup label="📱 Piniginės">
                                 <option value="Phantom Wallet">Phantom Wallet</option>
                                 <option value="Rabby Wallet">Rabby Wallet</option>
-                                <option value="Ledger">Ledger (Cold)</option>
-                                <option value="Tangem">Tangem (Cold)</option>
+                                <option value="Ledger">Ledger</option>
+                                <option value="Tangem">Tangem</option>
                                 <option value="Solflare">Solflare</option>
                                 <option value="Jupiter Wallet">Jupiter Wallet</option>
                             </optgroup>
-                            <optgroup label="🌐 Kitos Biržos">
+                            <optgroup label="🌐 Kitos biržos">
                                 <option value="Crypto.com">Crypto.com</option>
                                 <option value="KuCoin">KuCoin</option>
                                 <option value="MEXC">MEXC</option>
                                 <option value="Nexo">Nexo</option>
-                                <option value="Strike">Strike (BTC)</option>
+                                <option value="Strike">Strike</option>
                             </optgroup>
-                            <optgroup label="⚡ DeFi / DEX">
-                                <option value="Jupiter">Jupiter (Solana)</option>
-                                <option value="Uniswap">Uniswap (Ethereum)</option>
-                                <option value="PancakeSwap">PancakeSwap (BSC)</option>
+                            <optgroup label="⚡ DeFi/DEX">
+                                <option value="Jupiter">Jupiter</option>
+                                <option value="Uniswap">Uniswap</option>
+                                <option value="PancakeSwap">PancakeSwap</option>
                             </optgroup>
                         </select>
                         <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
@@ -380,7 +380,7 @@
                         <div class="flex items-center gap-3">
                             <i class="fa-solid fa-fingerprint text-primary-500 text-2xl"></i>
                             <div>
-                                <p class="text-sm font-bold text-gray-900 dark:text-white">Face ID / Touch ID</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">Face ID/Touch ID</p>
                                 <p class="text-xs text-gray-500">Greitas prisijungimas</p>
                             </div>
                         </div>
@@ -397,7 +397,7 @@
                         <i class="fa-solid fa-circle-half-stroke text-primary-500 text-xl"></i>
                         <div>
                             <p class="text-sm font-bold text-gray-900 dark:text-white">Išvaizda</p>
-                            <p class="text-xs text-gray-500">Tamsi / Šviesi tema</p>
+                            <p class="text-xs text-gray-500">Tamsi/Šviesi tema</p>
                         </div>
                     </div>
                     <button id="btn-toggle-theme" type="button" class="text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-3 py-1.5 rounded-lg font-bold transition-colors text-gray-700 dark:text-gray-200">
@@ -410,7 +410,7 @@
 
     <div id="new-coin-modal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
-            <h3 class="font-bold text-gray-900 dark:text-white">Pridėti Monetą</h3>
+            <h3 class="font-bold text-gray-900 dark:text-white">Pridėti monetą</h3>
             <input type="text" id="new-coin-symbol" placeholder="Simbolis (pvz. KAS)" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-lg p-3 text-sm uppercase">
             <input type="text" id="new-coin-id" placeholder="CoinGecko ID (pvz. kaspa)" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-lg p-3 text-sm">
             <input type="number" id="new-coin-target" placeholder="Tikslas (pvz. 100000)" inputmode="decimal" class="w-full bg-gray-50 dark:bg-gray-800 border border-primary-500/30 text-gray-900 dark:text-white rounded-lg p-3 text-sm focus:border-primary-500">
@@ -423,7 +423,7 @@
 
     <div id="delete-coin-modal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
-            <h3 class="font-bold text-red-500 dark:text-red-400">Ištrinti Monetą</h3>
+            <h3 class="font-bold text-red-500 dark:text-red-400">Ištrinti monetą</h3>
             <div class="relative">
                 <select id="delete-coin-select" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl p-3 outline-none appearance-none font-bold uppercase"></select>
                 <i class="fa-solid fa-chevron-down absolute right-3 top-3.5 text-xs text-gray-500 pointer-events-none"></i>
@@ -437,14 +437,14 @@
 
     <div id="edit-goal-modal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
-            <h3 class="font-bold text-gray-900 dark:text-white">Redaguoti Tikslą</h3>
+            <h3 class="font-bold text-gray-900 dark:text-white">Redaguoti tikslą</h3>
             <input type="hidden" id="edit-goal-id">
             <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                 <p class="text-xs text-gray-500 mb-1">Moneta</p>
                 <p id="edit-goal-coin" class="text-lg font-bold text-gray-900 dark:text-white">BTC</p>
             </div>
             <div>
-                <label class="text-xs text-gray-500 font-bold uppercase ml-1">Naujas Tikslas</label>
+                <label class="text-xs text-gray-500 font-bold uppercase ml-1">Naujas tikslas</label>
                 <input type="number" id="edit-goal-target" placeholder="pvz. 150000" inputmode="decimal" class="w-full bg-gray-50 dark:bg-gray-800 border border-primary-500/30 text-gray-900 dark:text-white rounded-lg p-3 text-sm focus:border-primary-500 mt-1">
             </div>
             <div class="flex gap-2">
@@ -466,7 +466,7 @@
                     </div>
                     <div>
                         <h2 id="coin-detail-symbol" class="text-2xl font-bold text-gray-900 dark:text-white">BTC</h2>
-                        <p class="text-xs text-gray-500">Detali Peržiūra</p>
+                        <p class="text-xs text-gray-500">Detali peržiūra</p>
                     </div>
                 </div>
                 <button onclick="document.getElementById('coin-detail-modal').classList.add('hidden')" 
@@ -477,11 +477,11 @@
             
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
-                    <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Turimas Kiekis</p>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Turimas kiekis</p>
                     <p id="coin-detail-qty" class="text-xl font-bold text-gray-900 dark:text-white">0.5234</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
-                    <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Dabartinė Vertė</p>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Dabartinė vertė</p>
                     <p id="coin-detail-value" class="text-xl font-bold text-gray-900 dark:text-white">$45,280</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
