@@ -3,392 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Kraken Pulse (MON + KAS)</title>
+    <title>Kraken DIAGNOSTICS</title>
     <style>
-        /* --- KASLENS STILIUS --- */
-        :root {
-            --bg-color: #0d0e12;
-            --card-bg: #15171e;
-            --text-main: #ececec;
-            --text-sub: #9ca3af;
-            --accent-green: #00c853;
-            --accent-red: #ff3d00;
-            --accent-purple: #7c4dff; /* Kraken violetinė */
-            --border: #2a2e39;
-        }
-
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #000; color: #fff; font-family: monospace; padding: 10px; }
         
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: -apple-system, BlinkMacSystemFont, "Inter", Roboto, sans-serif;
-            margin: 0; padding: 0;
-            height: 100dvh; 
-            display: flex; flex-direction: column; 
-            overflow: hidden;
-        }
-
-        /* --- HEADER --- */
-        header {
-            flex: 0 0 auto;
-            padding: 12px 16px;
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .app-title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 6px; }
-        .kraken-badge { background: var(--accent-purple); color: #fff; font-size: 9px; padding: 2px 5px; border-radius: 4px; }
-
-        .status-badge { 
-            font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 12px; 
-            background: rgba(124, 77, 255, 0.1); color: var(--accent-purple); display: flex; align-items: center; gap: 5px;
-        }
-        .dot { width: 6px; height: 6px; background: currentColor; border-radius: 50%; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-
-        select {
-            background: #252a35; color: #fff; border: 1px solid var(--border);
-            padding: 6px 10px; border-radius: 6px; font-size: 13px; font-weight: 700;
-        }
-
-        /* --- STATS GRID --- */
-        .stats-grid {
-            flex: 0 0 auto;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
+        /* DIAGNOSTIKOS LANGAS */
+        #debug-console {
+            width: 100%;
+            height: 300px;
+            background: #220000;
+            border: 2px solid #ff0000;
+            color: #ffaaaa;
             padding: 10px;
+            overflow-y: scroll;
+            font-size: 11px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
         }
 
-        .stat-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 10px;
-            display: flex; flex-direction: column;
-        }
-
-        .stat-label { font-size: 10px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .stat-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .green { color: var(--accent-green); }
-        .red { color: var(--accent-red); }
-
-        /* --- CHARTS AREA --- */
-        .charts-area {
-            flex: 1;
-            display: flex; flex-direction: column;
-            gap: 10px;
-            padding: 0 10px 10px 10px;
-            overflow-y: auto;
-        }
-
-        .chart-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            display: flex; flex-direction: column;
-            position: relative;
-        }
-
-        .chart-header {
-            padding: 8px 12px; border-bottom: 1px solid var(--border);
-            font-size: 11px; font-weight: 600; color: var(--text-sub);
-            display: flex; justify-content: space-between;
-        }
-
-        #price-card { height: 180px; flex-shrink: 0; }
-        #cvd-card { flex: 2; min-height: 150px; }
-        #vol-card { height: 100px; flex-shrink: 0; }
-
-        .chart-element { width: 100%; height: 100%; }
-
+        .status { font-size: 14px; font-weight: bold; margin-bottom: 10px; }
+        .green { color: #00ff00; }
+        .red { color: #ff0000; }
+        .yellow { color: #ffff00; }
     </style>
-    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 
-    <header>
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div class="app-title"><span class="kraken-badge">KRAKEN</span></div>
-            <select id="coinSelect" onchange="changeSymbol(this.value)">
-                <option value="MON/USD" selected>MON</option>
-                <option value="XBT/USD">BTC</option>
-                <option value="KAS/USD">KAS</option>
-                <option value="ETH/USD">ETH</option>
-                <option value="SOL/USD">SOL</option>
-                <option value="XRP/USD">XRP</option>
-                <option value="DOGE/USD">DOGE</option>
-                <option value="PEPE/USD">PEPE</option>
-            </select>
-        </div>
-        <div class="status-badge" id="status-badge"><div class="dot"></div> LIVE</div>
-    </header>
+    <h3>🕵️‍♂️ Kraken Diagnostika</h3>
+    <div class="status" id="status">● Laukiama...</div>
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-label">Session Volume</div>
-            <div class="stat-value" id="val-vol">$0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Buy / Sell Skew</div>
-            <div class="stat-value" id="val-skew">50% / 50%</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Current CVD</div>
-            <div class="stat-value" id="val-cvd">0.00</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Trades</div>
-            <div class="stat-value" id="val-trades">0</div>
-        </div>
-    </div>
+    <div id="debug-console">-- Žurnalas tuščias --</div>
 
-    <div class="charts-area">
-        <div class="chart-card" id="price-card">
-            <div class="chart-header">
-                <span>PRICE ACTION</span>
-                <span style="color:#fff" id="price-display">--</span>
-            </div>
-            <div id="chart-price" class="chart-element"></div>
-        </div>
-
-        <div class="chart-card" id="cvd-card">
-            <div class="chart-header">
-                <span>CUMULATIVE VOLUME DELTA (CVD)</span>
-            </div>
-            <div id="chart-cvd" class="chart-element"></div>
-        </div>
-
-        <div class="chart-card" id="vol-card">
-            <div class="chart-header">
-                <span>BUY vs SELL VOLUME</span>
-            </div>
-            <div id="chart-vol" class="chart-element"></div>
-        </div>
-    </div>
+    <p>Pasirinkta moneta: <strong id="current-coin">--</strong></p>
 
     <script>
-        // --- NUSTATYMAI ---
-        const theme = {
-            bg: '#15171e', grid: '#2a2e39', text: '#9ca3af',
-            green: '#00c853', red: '#ff3d00', purple: '#7c4dff'
-        };
+        // Pakeiskite šią kintamąją, kad ištestuotumėte kitas monetas
+        // Bandome MON/USD, nes ji kėlė problemų
+        const TEST_SYMBOL = "MON/USD"; 
 
-        const chartOpts = {
-            layout: { background: { color: theme.bg }, textColor: theme.text },
-            grid: { vertLines: { color: theme.grid }, horzLines: { color: theme.grid } },
-            timeScale: { timeVisible: true, secondsVisible: true, borderColor: theme.grid },
-            rightPriceScale: { borderColor: theme.grid, scaleMargins: { top: 0.1, bottom: 0.1 } },
-            crosshair: { vertLine: { color: '#444', labelBackgroundColor: '#444' } }
-        };
+        const logBox = document.getElementById('debug-console');
+        const statusEl = document.getElementById('status');
+        document.getElementById('current-coin').innerText = TEST_SYMBOL;
 
-        // --- GRAFIKAI ---
-        const priceChart = LightweightCharts.createChart(document.getElementById('chart-price'), chartOpts);
-        const priceSeries = priceChart.addAreaSeries({ lineColor: theme.purple, topColor: 'rgba(124, 77, 255, 0.2)', bottomColor: 'rgba(124, 77, 255, 0)', lineWidth: 2 });
-
-        const cvdChart = LightweightCharts.createChart(document.getElementById('chart-cvd'), chartOpts);
-        const cvdSeries = cvdChart.addAreaSeries({ lineColor: '#2962ff', topColor: 'rgba(41, 98, 255, 0.2)', bottomColor: 'rgba(41, 98, 255, 0)', lineWidth: 2 });
-
-        const volChart = LightweightCharts.createChart(document.getElementById('chart-vol'), chartOpts);
-        const volSeries = volChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
-
-        // Auto-Resize
-        function resize() {
-            ['chart-price', 'chart-cvd', 'chart-vol'].forEach(id => {
-                const el = document.getElementById(id);
-                if(el) {
-                    const chart = id === 'chart-price' ? priceChart : (id === 'chart-cvd' ? cvdChart : volChart);
-                    chart.resize(el.clientWidth, el.clientHeight);
-                }
-            });
+        function log(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            let color = '#fff';
+            if(type === 'error') color = '#ff5555';
+            if(type === 'success') color = '#55ff55';
+            
+            logBox.innerHTML = `<div style="color:${color}">[${time}] ${msg}</div>` + logBox.innerHTML;
         }
-        window.addEventListener('resize', resize);
-        setTimeout(resize, 100);
 
-        // --- LOGIKA (KRAKEN) ---
-        let ws;
-        let currentSymbol = "MON/USD"; // Pradedam nuo MON!
-        
-        let sessionData = {
-            buyVol: 0, sellVol: 0, trades: 0, cvd: 0,
-            currentVolBar: { time: 0, value: 0, color: '' }
-        };
+        log("1. Pradedame diagnostiką...", 'info');
 
-        function connect() {
-            const statusEl = document.getElementById('status-badge');
-            statusEl.innerHTML = `CONNECTING...`;
-            statusEl.style.color = theme.text;
-
-            // KRAKEN WEBSOCKET
-            ws = new WebSocket('wss://ws.kraken.com');
+        try {
+            log("2. Jungiamės prie wss://ws.kraken.com ...", 'info');
+            const ws = new WebSocket('wss://ws.kraken.com');
 
             ws.onopen = () => {
-                statusEl.innerHTML = `<div class="dot"></div> LIVE`;
-                statusEl.style.color = theme.purple;
-                subscribe(currentSymbol);
+                log("3. WebSocket TIESIOGIAI! Ryšys atidarytas.", 'success');
+                statusEl.innerText = "● PRISIJUNGTA";
+                statusEl.className = "status green";
+
+                // Siunčiame prenumeratą
+                const payload = {
+                    "event": "subscribe",
+                    "pair": [TEST_SYMBOL],
+                    "subscription": { "name": "trade" }
+                };
+                
+                log("4. Siunčiame užklausą: " + JSON.stringify(payload), 'yellow');
+                ws.send(JSON.stringify(payload));
             };
 
-            ws.onmessage = (e) => {
-                const msg = JSON.parse(e.data);
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
                 
-                // Kraken siunčia duomenis masyve
-                if (Array.isArray(msg)) {
-                    const channelName = msg[msg.length - 2];
-                    if (channelName === 'trade') {
-                        processTrades(msg[0]); // msg[0] yra sandorių masyvas
+                // Jei tai klaidos pranešimas
+                if (msg.errorMessage) {
+                    log("❌ KRAKEN KLAIDA: " + msg.errorMessage, 'error');
+                } 
+                // Jei tai statuso pranešimas
+                else if (msg.event === 'subscriptionStatus') {
+                    if (msg.status === 'error') {
+                        log("❌ PRENUMERATOS KLAIDA: " + msg.errorMessage, 'error');
+                    } else {
+                        log("✅ Prenumerata Sėkminga! Poros ID: " + msg.pair, 'success');
                     }
                 }
-            };
-
-            ws.onclose = () => {
-                statusEl.innerHTML = `OFFLINE`;
-                statusEl.style.color = theme.red;
-                setTimeout(connect, 3000);
-            };
-        }
-
-        function processTrades(trades) {
-            trades.forEach(trade => {
-                // Kraken: [price, volume, time, side, type, misc]
-                const price = parseFloat(trade[0]);
-                const qty = parseFloat(trade[1]);
-                const time = parseFloat(trade[2]);
-                const side = trade[3]; // 'b' (buy) arba 's' (sell)
-                const isBuy = side === 'b';
-                
-                const volUsd = price * qty;
-
-                // 1. Stats
-                sessionData.trades++;
-                if (isBuy) {
-                    sessionData.buyVol += volUsd;
-                    sessionData.cvd += qty;
-                } else {
-                    sessionData.sellVol += volUsd;
-                    sessionData.cvd -= qty;
+                // Jei tai širdies dūžis (Heartbeat)
+                else if (msg.event === 'heartbeat') {
+                    log("❤️ Heartbeat (Ryšys geras)", 'info');
                 }
+                // Jei tai duomenys
+                else if (Array.isArray(msg)) {
+                    log("📊 GAUTI DUOMENYS (Viskas veikia!)", 'success');
+                    // Sustabdome logus po pirmo gauto duomenų paketo, kad neužkimštų
+                    ws.close(); 
+                    log("Testas baigtas. Ryšys veikia.", 'success');
+                }
+                else {
+                    log("Gauta žinutė: " + JSON.stringify(msg));
+                }
+            };
 
-                // 2. Grafikai
-                priceSeries.update({ time: time, value: price });
-                cvdSeries.update({ time: time, value: sessionData.cvd });
-                
-                // Formatuojam kainą pagal jos dydį
-                const decimals = price < 1 ? 5 : (price < 10 ? 4 : 2);
-                document.getElementById('price-display').innerText = price.toFixed(decimals);
+            ws.onerror = (err) => {
+                log("KRITINĖ KLAIDA (Tinklas/WebSocket): " + JSON.stringify(err), 'error');
+                statusEl.innerText = "● KLAIDA";
+                statusEl.className = "status red";
+            };
 
-                // 3. Histograma
-                updateVolumeHistogram(time, volUsd, isBuy);
-            });
-            
-            updateUI();
+            ws.onclose = (e) => {
+                log(`RYŠYS UŽDARYTAS. Kodas: ${e.code}, Priežastis: ${e.reason}`, 'error');
+                statusEl.innerText = "● ATSUJUNGTAS";
+                statusEl.className = "status red";
+            };
+
+        } catch (e) {
+            log("SISTEMOS KLAIDA: " + e.message, 'error');
         }
-
-        function updateVolumeHistogram(time, vol, isBuy) {
-            const roundedTime = Math.floor(time);
-            if (roundedTime > sessionData.currentVolBar.time) {
-                sessionData.currentVolBar = { 
-                    time: roundedTime, value: vol, color: isBuy ? theme.green : theme.red 
-                };
-            } else {
-                sessionData.currentVolBar.value += vol;
-                if (isBuy && sessionData.currentVolBar.color === theme.red) sessionData.currentVolBar.color = theme.green;
-            }
-            volSeries.update(sessionData.currentVolBar);
-        }
-
-        function updateUI() {
-            const totalVol = sessionData.buyVol + sessionData.sellVol;
-            document.getElementById('val-vol').innerText = '$' + formatCompact(totalVol);
-            document.getElementById('val-trades').innerText = sessionData.trades;
-            
-            const cvdEl = document.getElementById('val-cvd');
-            cvdEl.innerText = formatCompact(sessionData.cvd);
-            cvdEl.className = 'stat-value ' + (sessionData.cvd >= 0 ? 'green' : 'red');
-
-            if (totalVol > 0) {
-                const buyPct = ((sessionData.buyVol / totalVol) * 100).toFixed(0);
-                const sellPct = (100 - buyPct);
-                const skewEl = document.getElementById('val-skew');
-                skewEl.innerHTML = `<span class="green">${buyPct}%</span> / <span class="red">${sellPct}%</span>`;
-            }
-        }
-
-        function subscribe(sym) {
-            if(ws && ws.readyState === WebSocket.OPEN) {
-                const msg = {
-                    "event": "subscribe",
-                    "pair": [sym],
-                    "subscription": { "name": "trade" }
-                };
-                ws.send(JSON.stringify(msg));
-            }
-        }
-
-        function unsubscribe(sym) {
-            if(ws && ws.readyState === WebSocket.OPEN) {
-                const msg = {
-                    "event": "unsubscribe",
-                    "pair": [sym],
-                    "subscription": { "name": "trade" }
-                };
-                ws.send(JSON.stringify(msg));
-            }
-        }
-
-        window.changeSymbol = (sym) => {
-            if(sym === currentSymbol) return;
-            unsubscribe(currentSymbol);
-            currentSymbol = sym;
-            
-            sessionData = { buyVol: 0, sellVol: 0, trades: 0, cvd: 0, currentVolBar: { time: 0, value: 0, color: '' } };
-            priceSeries.setData([]);
-            cvdSeries.setData([]);
-            volSeries.setData([]);
-            document.getElementById('price-display').innerText = '--';
-            updateUI();
-            
-            subscribe(sym);
-        };
-
-        function formatCompact(num) {
-            return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
-        }
-
-        // --- URL PARAMETRŲ VALDYMAS ---
-        const urlParams = new URLSearchParams(window.location.search);
-        const paramCoin = urlParams.get('coin');
-
-        if(paramCoin) {
-            // Mums reikia paversti pvz "BTC" į "XBT/USD" arba "MON" į "MON/USD"
-            let target = paramCoin.toUpperCase();
-            
-            // Žemėlapis specialiems Kraken pavadinimams
-            if (target === 'BTC') target = 'XBT/USD';
-            else if (target === 'MON') target = 'MON/USD';
-            else if (target === 'KAS') target = 'KAS/USD';
-            else target = target + '/USD'; // Defaultas kitiems
-
-            const select = document.getElementById('coinSelect');
-            // Jei sąraše nėra - pridedam laikinai (kad veiktų nuoroda)
-            let exists = false;
-            for(let i=0; i<select.options.length; i++) {
-                if(select.options[i].value === target) { exists = true; break; }
-            }
-            if (!exists) {
-                const opt = document.createElement('option');
-                opt.value = target;
-                opt.text = paramCoin.toUpperCase();
-                select.add(opt);
-            }
-            
-            currentSymbol = target;
-            select.value = target;
-        }
-
-        connect();
-
     </script>
 </body>
 </html>
