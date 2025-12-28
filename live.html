@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Kraken Ultimate (MON Fix)</title>
+    <title>Kraken Ultimate Live Prices</title>
     <style>
         :root {
             --bg-color: #0d0e12;
@@ -82,15 +82,9 @@
         }
 
         @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.4;
-            }
-            100% {
-                opacity: 1;
-            }
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
         }
 
         select {
@@ -134,13 +128,8 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .green {
-            color: var(--accent-green);
-        }
-
-        .red {
-            color: var(--accent-red);
-        }
+        .green { color: var(--accent-green); }
+        .red   { color: var(--accent-red); }
 
         .charts-area {
             flex: 1;
@@ -171,26 +160,16 @@
             justify-content: space-between;
         }
 
-        #price-card {
-            height: 180px;
-            flex-shrink: 0;
-        }
-
-        #cvd-card {
-            flex: 2;
-            min-height: 150px;
-        }
-
-        #vol-card {
-            height: 100px;
-            flex-shrink: 0;
-        }
+        #price-card { height: 180px; flex-shrink: 0; }
+        #cvd-card   { flex: 2; min-height: 150px; }
+        #vol-card   { height: 100px; flex-shrink: 0; }
 
         .chart-element {
             width: 100%;
             height: 100%;
         }
     </style>
+
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -201,19 +180,18 @@
             <span class="kraken-badge">KRAKEN</span>
         </div>
         <select id="coinSelect" onchange="changeSymbol(this.value)">
-            <option value="XXBTZUSD" selected>BTC</option>
-            <option value="MON/USD">MON</option>
+            <option value="MON/USD" selected>MON</option>
+            <option value="XBT/USD">BTC</option>
             <option value="KAS/USD">KAS</option>
-            <option value="XETHZUSD">ETH</option>
+            <option value="ETH/USD">ETH</option>
             <option value="SOL/USD">SOL</option>
-            <option value="XXRPZUSD">XRP</option>
+            <option value="XRP/USD">XRP</option>
             <option value="DOGE/USD">DOGE</option>
             <option value="PEPE/USD">PEPE</option>
         </select>
     </div>
     <div class="status-badge" id="status-badge">
-        <div class="dot"></div>
-        LIVE
+        <div class="dot"></div> LIVE
     </div>
 </header>
 
@@ -271,11 +249,11 @@
     };
 
     const chartOpts = {
-        layout: {background: {color: theme.bg}, textColor: theme.text},
-        grid: {vertLines: {color: theme.grid}, horzLines: {color: theme.grid}},
-        timeScale: {timeVisible: true, secondsVisible: true, borderColor: theme.grid},
-        rightPriceScale: {borderColor: theme.grid, scaleMargins: {top: 0.1, bottom: 0.1}},
-        crosshair: {vertLine: {color: '#444', labelBackgroundColor: '#444'}}
+        layout: { background: { color: theme.bg }, textColor: theme.text },
+        grid: { vertLines: { color: theme.grid }, horzLines: { color: theme.grid } },
+        timeScale: { timeVisible: true, secondsVisible: true, borderColor: theme.grid },
+        rightPriceScale: { borderColor: theme.grid, scaleMargins: { top: 0.1, bottom: 0.1 } },
+        crosshair: { vertLine: { color: '#444', labelBackgroundColor: '#444' } }
     };
 
     const priceChart = LightweightCharts.createChart(
@@ -304,7 +282,7 @@
         document.getElementById('chart-vol'),
         chartOpts
     );
-    const volSeries = volChart.addHistogramSeries({priceFormat: {type: 'volume'}});
+    const volSeries = volChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
 
     function resize() {
         ['chart-price', 'chart-cvd', 'chart-vol'].forEach(id => {
@@ -323,22 +301,22 @@
     setTimeout(resize, 100);
 
     let ws;
-    let currentSymbol = 'XXBTZUSD';
+    let currentSymbol = 'MON/USD';
 
     let sessionData = {
         buyVol: 0,
         sellVol: 0,
         trades: 0,
         cvd: 0,
-        currentVolBar: {time: 0, value: 0, color: ''}
+        currentVolBar: { time: 0, value: 0, color: '' }
     };
 
     function connect() {
         const statusEl = document.getElementById('status-badge');
-        statusEl.innerHTML = '<div class="dot"></div> CONNECTING…';
+        statusEl.innerHTML = 'CONNECTING...';
         statusEl.style.color = theme.text;
 
-        ws = new WebSocket('wss://ws.kraken.com/v2');
+        ws = new WebSocket('wss://ws.kraken.com');
 
         ws.onopen = () => {
             statusEl.innerHTML = '<div class="dot"></div> LIVE';
@@ -349,18 +327,19 @@
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
 
-            // v2 trade updates
-            if (msg && msg.channel === 'trade' && msg.type === 'update') {
-                if (msg.data && Array.isArray(msg.data)) {
-                    processTrades(msg.data);
-                }
-            }
+            if (Array.isArray(msg)) {
+                const channelName = msg[msg.length - 2];
 
-            // v2 ticker updates
-            if (msg && msg.channel === 'ticker' && msg.type === 'update') {
-                const t = msg.data && msg.data[0];
-                if (t && t.last != null) {
-                    processTicker({c: [String(t.last)]});
+                // TRADE – CVD ir volume
+                if (channelName === 'trade') {
+                    const trades = msg[1]; // v1: [channelID, trades, pair, "trade"][web:25]
+                    processTrades(trades);
+                }
+
+                // TICKER – kaina
+                if (channelName === 'ticker') {
+                    const data = msg[1]; // v1: [channelID, data, pair, "ticker"][web:24]
+                    processTicker(data);
                 }
             }
         };
@@ -373,35 +352,36 @@
     }
 
     function processTicker(data) {
+        // v1 ticker: c: [price, volume][web:24]
         if (data.c && data.c[0]) {
             const price = parseFloat(data.c[0]);
             updatePriceDisplay(price);
-            priceSeries.update({time: Date.now() / 1000, value: price});
+            priceSeries.update({ time: Date.now() / 1000, value: price });
         }
     }
 
     function processTrades(trades) {
         trades.forEach(trade => {
-            // v2 trade object: symbol, side, price, qty, timestamp, etc.[web:23]
-            const price = parseFloat(trade.price);
-            const qty = parseFloat(trade.qty);
-            const time = Date.parse(trade.timestamp) / 1000;
-            const side = trade.side; // "buy" / "sell"
-            const isBuy = side === 'buy';
+            // v1 trade element: [price, volume, time, side, orderType, misc][web:25]
+            const price = parseFloat(trade[0]);
+            const qty   = parseFloat(trade[1]);
+            const time  = parseFloat(trade[2]);
+            const side  = trade[3]; // 'b' / 's'
+            const isBuy = side === 'b';
 
             const volUsd = price * qty;
 
             sessionData.trades++;
             if (isBuy) {
                 sessionData.buyVol += volUsd;
-                sessionData.cvd += qty;
+                sessionData.cvd    += qty;
             } else {
                 sessionData.sellVol += volUsd;
-                sessionData.cvd -= qty;
+                sessionData.cvd    -= qty;
             }
 
-            priceSeries.update({time, value: price});
-            cvdSeries.update({time, value: sessionData.cvd});
+            priceSeries.update({ time, value: price });
+            cvdSeries.update({ time, value: sessionData.cvd });
             updatePriceDisplay(price);
 
             const roundedTime = Math.floor(time);
@@ -419,6 +399,7 @@
             }
             volSeries.update(sessionData.currentVolBar);
         });
+
         updateUI();
     }
 
@@ -437,10 +418,11 @@
         cvdEl.className = 'stat-value ' + (sessionData.cvd >= 0 ? 'green' : 'red');
 
         if (totalVol > 0) {
-            const buyPct = ((sessionData.buyVol / totalVol) * 100).toFixed(0);
+            const buyPct  = ((sessionData.buyVol / totalVol) * 100).toFixed(0);
             const sellPct = 100 - buyPct;
-            const skewEl = document.getElementById('val-skew');
-            skewEl.innerHTML = `<span class="green">${buyPct}%</span> / <span class="red">${sellPct}%</span>`;
+            const skewEl  = document.getElementById('val-skew');
+            skewEl.innerHTML =
+                `<span class="green">${buyPct}%</span> / <span class="red">${sellPct}%</span>`;
         } else {
             document.getElementById('val-skew').innerHTML = '50% / 50%';
         }
@@ -450,13 +432,13 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
                 event: 'subscribe',
-                channel: 'trade',
-                symbol: [sym]
+                pair: [sym],
+                subscription: { name: 'trade' }
             }));
             ws.send(JSON.stringify({
                 event: 'subscribe',
-                channel: 'ticker',
-                symbol: [sym]
+                pair: [sym],
+                subscription: { name: 'ticker' }
             }));
         }
     }
@@ -465,13 +447,13 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
                 event: 'unsubscribe',
-                channel: 'trade',
-                symbol: [sym]
+                pair: [sym],
+                subscription: { name: 'trade' }
             }));
             ws.send(JSON.stringify({
                 event: 'unsubscribe',
-                channel: 'ticker',
-                symbol: [sym]
+                pair: [sym],
+                subscription: { name: 'ticker' }
             }));
         }
     }
@@ -486,7 +468,7 @@
             sellVol: 0,
             trades: 0,
             cvd: 0,
-            currentVolBar: {time: 0, value: 0, color: ''}
+            currentVolBar: { time: 0, value: 0, color: '' }
         };
         priceSeries.setData([]);
         cvdSeries.setData([]);
@@ -504,15 +486,14 @@
         }).format(num);
     }
 
-    // URL param support: ?coin=BTC, ?coin=XXBTZUSD, etc.[web:25]
+    // URL param: ?coin=BTC, ?coin=XBT/USD ir pan.[web:25]
     const urlParams = new URLSearchParams(window.location.search);
     const paramCoin = urlParams.get('coin');
     if (paramCoin) {
         let target = paramCoin.toUpperCase();
-        if (target === 'BTC') target = 'XXBTZUSD';
-        if (!target.includes('/USD') && !target.endsWith('USD') && !target.includes('ZUSD')) {
-            target = target + 'USD';
-        }
+        if (target === 'BTC') target = 'XBT/USD';
+        else if (target === 'MON') target = 'MON/USD';
+        else target = target.includes('/') ? target : target + '/USD';
 
         const select = document.getElementById('coinSelect');
         let exists = false;
@@ -523,7 +504,7 @@
         if (!exists) {
             const opt = document.createElement('option');
             opt.value = target;
-            opt.text = paramCoin.toUpperCase();
+            opt.text  = paramCoin.toUpperCase();
             select.add(opt);
         }
 
