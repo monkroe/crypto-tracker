@@ -2,7 +2,7 @@
 
 Visa projekto pakeitimų istorija.
 
-## [v3.0.0] - 2025-12-20 (Architecture Overhaul)
+## [v4.4.0] - 2025-12-20 (Architecture Overhaul)
 Esminis kodo perrašymas ir logikos taisymas. Perėjimas prie modulinės sistemos.
 
 ### 🏗️ Architektūra
