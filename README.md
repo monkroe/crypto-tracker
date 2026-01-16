@@ -1,8 +1,8 @@
-# 🚀 Crypto Tracker v3.0.0
+# 🚀 Crypto Tracker v4.4.0
 
 Profesionalus kriptovaliutų portfelio valdymo įrankis su **Modular JS** architektūra, tikslia PnL matematika ir Supabase integracija.
 
-## ✨ Naujienos v3.0.3
+## ✨ Naujienos v4.4.0
 
 - **🔧 Config Validation:** Supabase.js dabar automatiškai tikrina konfigūraciją ir rodo aiškias klaidas
 - **🧮 Calculator Fix:** Pataisytas skaičiuotuvo timing bug'as modaluose
